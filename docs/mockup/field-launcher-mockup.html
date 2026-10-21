@@ -326,44 +326,102 @@ h2 { font-family: var(--serif); font-weight: 700; letter-spacing: -0.01em; font-
 
   const state = { chip: 'all', r: 2, c: 0, scrollX: {}, ambient: false, slides: false, recentOpen: false, light: false, reduced: matchMedia('(prefers-reduced-motion: reduce)').matches, owners: false, solo: null };
 
-  /* Interface sounds: quiet, short, woody. Synthesized here; the app ships the same set as rendered OGGs. */
+  /* Interface sounds: detuned supersaw through saturation + amplitude bitcrush, with a noise
+     transient on the attack. Industrial but short and quiet. The app pre-renders the same recipe. */
   const sfx = (() => {
-    let ctx = null, last = 0;
+    let ctx = null, bus = null, noiseBuf = null, last = 0;
     const api = { on: false };
+    const curves = {};
+    // soft-clip with drive k, then quantize to `levels` steps (bitcrush in amplitude)
+    function curve(k, levels) {
+      const key = k + ':' + levels;
+      if (curves[key]) return curves[key];
+      const n = 2048, c = new Float32Array(n);
+      for (let i = 0; i < n; i++) {
+        const x = (i / (n - 1)) * 2 - 1;
+        let y = Math.tanh(k * x) / Math.tanh(k);
+        if (levels) y = Math.round(y * levels) / levels;
+        c[i] = y;
+      }
+      return (curves[key] = c);
+    }
     const audio = () => {
-      if (!ctx) { try { ctx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { return null; } }
+      if (!ctx) {
+        try { ctx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { return null; }
+        // master: high-pass (no mud) -> compressor (tames the distortion) -> output trim
+        const hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 70;
+        const comp = ctx.createDynamicsCompressor(); comp.threshold.value = -20; comp.ratio.value = 6; comp.attack.value = 0.002; comp.release.value = 0.12;
+        const out = ctx.createGain(); out.gain.value = 0.8;
+        hp.connect(comp); comp.connect(out); out.connect(ctx.destination);
+        bus = hp;
+        noiseBuf = ctx.createBuffer(1, ctx.sampleRate * 0.05, ctx.sampleRate);
+        const d = noiseBuf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+      }
       if (ctx.state === 'suspended') ctx.resume();
       return ctx;
     };
-    // one enveloped partial through a gentle low-pass
-    function tone(f, { at = 0, dur = 0.08, gain = 0.04, type = 'sine', glide = null, lp = 3200 } = {}) {
+    const SPREAD = [-1, -0.62, -0.28, 0, 0.28, 0.62, 1];
+    function saw(f, { at = 0, dur = 0.1, gain = 0.03, voices = 7, detune = 22, glide = null,
+                      lpFrom = 3500, lpTo = 900, q = 2, drive = 4, crush = 0, click = 0 } = {}) {
       const c = audio(); if (!c) return;
       const t = c.currentTime + at;
-      const o = c.createOscillator(), g = c.createGain(), flt = c.createBiquadFilter();
-      o.type = type; o.frequency.setValueAtTime(f, t);
-      if (glide) o.frequency.exponentialRampToValueAtTime(glide, t + dur);
-      flt.type = 'lowpass'; flt.frequency.value = lp;
-      g.gain.setValueAtTime(0.0001, t);
-      g.gain.exponentialRampToValueAtTime(gain, t + 0.004);
-      g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-      o.connect(flt); flt.connect(g); g.connect(c.destination);
-      o.start(t); o.stop(t + dur + 0.02);
+      const sum = c.createGain(); sum.gain.value = 1 / Math.sqrt(voices);
+      const idx = voices === 7 ? SPREAD : SPREAD.filter((_, i) => i % Math.ceil(7 / voices) === 0).slice(0, voices);
+      idx.forEach(s => {
+        const o = c.createOscillator(); o.type = 'sawtooth';
+        o.frequency.setValueAtTime(f, t); o.detune.value = s * detune;
+        if (glide) o.frequency.exponentialRampToValueAtTime(glide, t + dur);
+        o.connect(sum);
+        const jitter = Math.random() * 0.002;            // staggered starts = varied phases
+        o.start(t + jitter); o.stop(t + dur + 0.03);
+      });
+      const flt = c.createBiquadFilter(); flt.type = 'lowpass'; flt.Q.value = q;
+      flt.frequency.setValueAtTime(lpFrom, t); flt.frequency.exponentialRampToValueAtTime(Math.max(60, lpTo), t + dur);
+      const shaper = c.createWaveShaper(); shaper.curve = curve(drive, crush); shaper.oversample = '2x';
+      const env = c.createGain();
+      env.gain.setValueAtTime(0.0001, t);
+      env.gain.exponentialRampToValueAtTime(gain, t + 0.003);
+      env.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      sum.connect(flt); flt.connect(shaper); shaper.connect(env); env.connect(bus);
+      if (click) {
+        const n = c.createBufferSource(); n.buffer = noiseBuf;
+        const nf = c.createBiquadFilter(); nf.type = 'bandpass'; nf.frequency.value = 3200; nf.Q.value = 1.2;
+        const ng = c.createGain();
+        ng.gain.setValueAtTime(click, t); ng.gain.exponentialRampToValueAtTime(0.0001, t + 0.012);
+        n.connect(nf); nf.connect(ng); ng.connect(bus); n.start(t); n.stop(t + 0.02);
+      }
     }
-    // focus: a pencil-tap tick; pitch steps down slightly per row so rows have a "height"
+    // focus: a tight distorted tick; pitch steps down per row so rows have a "height"
     api.tick = row => {
       if (!api.on) return;
       const now = performance.now();
       const held = now - last < 90;          // key-repeat: thinner and quieter
       last = now;
-      tone(1900 - (row || 0) * 70, { dur: held ? 0.018 : 0.028, gain: held ? 0.012 : 0.022, type: 'triangle', lp: 5000 });
+      saw(880 - (row || 0) * 40, { dur: held ? 0.02 : 0.032, gain: held ? 0.012 : 0.02, voices: 3, detune: 12,
+        lpFrom: 5000, lpTo: 1500, drive: 6, crush: 12, click: held ? 0.01 : 0.025 });
     };
-    api.edge = () => { if (api.on) tone(150, { dur: 0.09, gain: 0.05, glide: 110, lp: 800 }); };
-    api.select = () => { if (!api.on) return; tone(660, { dur: 0.07, gain: 0.035, type: 'triangle' }); tone(990, { at: 0.045, dur: 0.1, gain: 0.03, type: 'triangle' }); };
-    api.back = () => { if (!api.on) return; tone(880, { dur: 0.06, gain: 0.03, type: 'triangle' }); tone(587, { at: 0.04, dur: 0.09, gain: 0.03, type: 'triangle' }); };
-    api.launch = () => { if (!api.on) return; [523.3, 659.3, 784].forEach((f, i) => tone(f, { at: i * 0.045, dur: 0.28, gain: 0.03, type: 'triangle', lp: 2600 })); };
-    // screensaver in: a slow resonance swell (a nod to EPR); wake: short rising breath
-    api.sleep = () => { if (!api.on) return; tone(220, { dur: 1.6, gain: 0.03, glide: 330, lp: 1200 }); tone(331, { at: 0.15, dur: 1.5, gain: 0.018, glide: 495, lp: 1200 }); };
-    api.wake = () => { if (!api.on) return; tone(392, { dur: 0.22, gain: 0.03, glide: 587, lp: 2000 }); };
+    // edge: a crushed sub thud
+    api.edge = () => { if (api.on) saw(55, { dur: 0.13, gain: 0.06, voices: 3, detune: 30, glide: 41, lpFrom: 700, lpTo: 200, drive: 10, crush: 10, click: 0.02 }); };
+    api.select = () => {
+      if (!api.on) return;
+      saw(220, { dur: 0.09, gain: 0.03, lpFrom: 3200, lpTo: 500, drive: 4, crush: 24, click: 0.02 });
+      saw(330, { at: 0.05, dur: 0.11, gain: 0.028, lpFrom: 3200, lpTo: 500, drive: 4, crush: 24 });
+    };
+    api.back = () => {
+      if (!api.on) return;
+      saw(330, { dur: 0.08, gain: 0.028, lpFrom: 2800, lpTo: 500, drive: 4, crush: 24, click: 0.02 });
+      saw(220, { at: 0.045, dur: 0.11, gain: 0.03, lpFrom: 2400, lpTo: 400, drive: 4, crush: 24 });
+    };
+    // launch: stacked rising supersaw stabs, filter opening as it climbs, plus a sub
+    api.launch = () => {
+      if (!api.on) return;
+      [130.8, 164.8, 196, 261.6].forEach((f, i) =>
+        saw(f, { at: i * 0.045, dur: 0.3 - i * 0.03, gain: 0.026, lpFrom: 500 + i * 400, lpTo: 2600 + i * 600, q: 4, drive: 5, crush: 20, click: i === 0 ? 0.03 : 0 }));
+      saw(65.4, { dur: 0.3, gain: 0.03, voices: 1, detune: 0, lpFrom: 300, lpTo: 120, drive: 3 });
+    };
+    // screensaver in: a slow detuned swell with the filter creeping open; wake: short rising sweep
+    api.sleep = () => { if (!api.on) return; saw(110, { dur: 1.7, gain: 0.024, detune: 30, glide: 165, lpFrom: 250, lpTo: 1600, q: 5, drive: 3, crush: 32 }); };
+    api.wake = () => { if (!api.on) return; saw(196, { dur: 0.26, gain: 0.028, glide: 294, lpFrom: 400, lpTo: 3000, q: 4, drive: 5, crush: 20, click: 0.02 }); };
     return api;
   })();
 
