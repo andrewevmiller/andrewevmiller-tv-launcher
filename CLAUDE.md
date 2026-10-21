@@ -22,7 +22,7 @@ A personal Android TV launcher for one Hisense TV, in the andrewevmiller.com
 - Waveform is a user setting (Settings → Sound → Waveform), default Saw. Options:
   Sine, Triangle, Saw, Square, Supersaw (7 detuned saws, ±22 cents), White noise, Pink noise.
   Noise voices are pitched by a narrow resonant band-pass (Q≈30) at each note's frequency with
-  make-up gain. Changing the setting re-renders the cached sound set and all launch motifs, then
+  make-up gain (~24x white, ~36x pink) and +5dB output level. Changing the setting re-renders the cached sound set and all launch motifs, then
   plays a short preview (two ticks, select, a launch motif). The mockup's waveform picker is the reference.
 - Per-app launch motifs: FNV-1a of the package name seeds mulberry32; 3–4 always-rising notes in
   A minor pentatonic from A3, 35–70ms apart, optional held last note, timbre by `AppCategory`, plus a

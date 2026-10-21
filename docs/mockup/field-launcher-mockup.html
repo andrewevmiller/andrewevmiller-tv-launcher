@@ -402,13 +402,14 @@ h2 { font-family: var(--serif); font-weight: 700; letter-spacing: -0.01em; font-
       const c = audio(); if (!c) return;
       const t = c.currentTime + at;
       const sum = c.createGain();
-      if (wave === 'white' || wave === 'pink') {
+      const isNoise = wave === 'white' || wave === 'pink';
+      if (isNoise) {
         // noise voices: a narrow resonant band-pass at the note's pitch makes the noise "sing" the note
         const n = c.createBufferSource(); n.buffer = wave === 'white' ? whiteBuf : pinkBuf; n.loop = true;
         const bp = c.createBiquadFilter(); bp.type = 'bandpass'; bp.Q.value = 30;
         bp.frequency.setValueAtTime(f, t);
         if (glide) bp.frequency.exponentialRampToValueAtTime(glide, t + dur);
-        sum.gain.value = wave === 'white' ? 9 : 14;     // make-up gain for the narrow band
+        sum.gain.value = wave === 'white' ? 24 : 36;    // make-up gain for the narrow band
         n.connect(bp); bp.connect(sum);
         n.start(t, Math.random() * 0.5); n.stop(t + dur + 0.03);
       } else {
@@ -431,7 +432,8 @@ h2 { font-family: var(--serif); font-weight: 700; letter-spacing: -0.01em; font-
       flt.frequency.setValueAtTime(lpFrom, t); flt.frequency.exponentialRampToValueAtTime(Math.max(60, lpTo), t + dur);
       const env = c.createGain();
       env.gain.setValueAtTime(0.0001, t);
-      env.gain.exponentialRampToValueAtTime(gain, t + 0.003);
+      // noise voices lose energy in the band-pass and saturate flat, so they get extra output level
+      env.gain.exponentialRampToValueAtTime(isNoise ? gain * 1.8 : gain, t + 0.003);
       env.gain.exponentialRampToValueAtTime(0.0001, t + dur);
       sum.connect(shaper); shaper.connect(flt); flt.connect(env); env.connect(bus);
       if (click) {
