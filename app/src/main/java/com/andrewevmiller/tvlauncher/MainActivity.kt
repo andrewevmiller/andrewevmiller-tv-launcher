@@ -10,6 +10,13 @@ import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.addCallback
 import androidx.activity.compose.setContent
+import androidx.compose.ui.text.font.createFontFamilyResolver
+import androidx.lifecycle.lifecycleScope
+import com.andrewevmiller.tvlauncher.theme.Geist
+import com.andrewevmiller.tvlauncher.theme.PlexMono
+import com.andrewevmiller.tvlauncher.theme.PlexSerif
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -65,6 +72,7 @@ class MainActivity : ComponentActivity() {
                 chip = Chip.ALL
             }
         }
+        preloadFonts()
         sound = FieldSound(this)
         loader = AppLoader(this) {
             apps = it
@@ -125,6 +133,18 @@ class MainActivity : ComponentActivity() {
                     },
                 )
               }
+            }
+        }
+    }
+
+    /** Reads the font files on a background thread now, so the first frame doesn't wait for them on the main thread. */
+    private fun preloadFonts() {
+        val resolver = createFontFamilyResolver(this)
+        lifecycleScope.launch(Dispatchers.Default) {
+            runCatching {
+                resolver.preload(PlexSerif)
+                resolver.preload(Geist)
+                resolver.preload(PlexMono)
             }
         }
     }
