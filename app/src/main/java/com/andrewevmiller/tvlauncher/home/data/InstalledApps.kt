@@ -1,45 +1,20 @@
 package com.andrewevmiller.tvlauncher.home.data
 
-import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ActivityInfo
 import android.content.pm.ApplicationInfo
-import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.drawable.Drawable
-import androidx.compose.ui.graphics.asImageBitmap
-import androidx.core.graphics.drawable.toBitmap
 
-/** Reads every launchable app on the device (leanback first, then regular launcher activities). */
+/**
+ * Shared helpers for turning an installed app into a tile (artwork, category) and for launching it.
+ * Listing and caching the apps is [AppLoader]'s job.
+ */
 object InstalledApps {
-    fun load(context: Context): List<LauncherApp> {
-        val pm = context.packageManager
-        val self = context.packageName
-        val seen = HashSet<String>()
-        val result = ArrayList<LauncherApp>()
-        for ((pass, category) in listOf(Intent.CATEGORY_LEANBACK_LAUNCHER, Intent.CATEGORY_LAUNCHER).withIndex()) {
-            val intent = Intent(Intent.ACTION_MAIN).addCategory(category)
-            for (info in pm.queryIntentActivities(intent, 0)) {
-                val ai = info.activityInfo
-                if (ai.packageName == self || !seen.add(ai.packageName)) continue
-                val banner = runCatching { ai.loadBanner(pm) }.getOrNull()
-                val drawable = banner ?: runCatching { info.loadIcon(pm) }.getOrNull()
-                result += LauncherApp(
-                    component = ComponentName(ai.packageName, ai.name),
-                    label = info.loadLabel(pm).toString(),
-                    category = categoryOf(ai),
-                    pinned = pass == 0,
-                    artwork = drawable?.let { toBitmap(it, banner != null) }?.asImageBitmap(),
-                    artworkIsBanner = banner != null,
-                )
-            }
-        }
-        return result.sortedBy { it.label.lowercase() }
-    }
-
-    private fun toBitmap(d: Drawable, banner: Boolean): Bitmap {
+    /** Rasterizes [d] at the size its tile needs: 16:9 for a banner, square for an icon. */
+    internal fun toBitmap(d: Drawable, banner: Boolean): Bitmap {
         val w = if (banner) 384 else 192
         val h = if (banner) 216 else 192
         return Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888).also {
@@ -55,7 +30,7 @@ object InstalledApps {
 
     /** The manifest category when the app set one, else a guess from the package name. */
     @Suppress("DEPRECATION")
-    private fun categoryOf(ai: ActivityInfo): AppCategory {
+    internal fun categoryOf(ai: ActivityInfo): AppCategory {
         when (ai.applicationInfo.category) {
             ApplicationInfo.CATEGORY_VIDEO -> return AppCategory.VIDEO
             ApplicationInfo.CATEGORY_AUDIO -> return AppCategory.MUSIC

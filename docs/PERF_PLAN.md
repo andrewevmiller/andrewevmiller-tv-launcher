@@ -11,6 +11,36 @@ check and a rollback.
 
 ---
 
+## Building in the cloud
+
+When `dl.google.com` is reachable, the cloud session can compile, run JVM unit tests and build the
+release variant with R8. It cannot run the app (no emulator without KVM), so everything on-device stays
+an owner check. Setup used so far (SDK kept outside the repo; accepting the SDK licenses is part of it):
+
+```bash
+SDK=<a scratch dir>/android-sdk && mkdir -p $SDK/cmdline-tools
+curl -o tools.zip https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
+unzip tools.zip -d $SDK/cmdline-tools && mv $SDK/cmdline-tools/cmdline-tools $SDK/cmdline-tools/latest
+yes | $SDK/cmdline-tools/latest/bin/sdkmanager --sdk_root=$SDK --licenses
+$SDK/cmdline-tools/latest/bin/sdkmanager --sdk_root=$SDK "platforms;android-34" "build-tools;34.0.0" "platform-tools"
+export ANDROID_HOME=$SDK
+./gradlew :app:testDebugUnitTest :app:assembleRelease
+```
+
+`repo.maven.apache.org` can answer Gradle's parallel downloads with HTTP 429. Single requests succeed,
+so this is rate limiting, not a block. A user-level init script (`~/.gradle/init.d/*.init.gradle.kts`, not
+part of the project) that tries Google's Maven Central mirror first fixes it:
+
+```kotlin
+val mirror = "https://maven-central.storage-download.googleapis.com/maven2/"
+beforeSettings {
+    pluginManagement.repositories { maven { url = uri(mirror) } }
+    dependencyResolutionManagement.repositories { maven { url = uri(mirror) } }
+}
+```
+
+---
+
 ## 1. Approach
 
 1. Measure first (PF0). Decide from numbers, not from this document.
@@ -134,9 +164,10 @@ on, move focus across tiles. Note how many times `AppTile` recomposes per focus 
 mostly interpreted or JIT-compiled until it warms up, and a launcher process is often cold. Release
 builds also merge the Compose libraries' own baseline profiles.
 
-**Status:** implemented (R8 config, `proguard-rules.pro`, README install and compile steps) but not yet
-built or run. Waiting on the owner-side build and the checks under Acceptance. `deploy.sh` still does not
-exist on `main`, so its half of step 3 is open.
+**Status:** implemented. `assembleRelease` with R8 and resource shrinking builds cleanly on current `main`
+(no missing-class warnings; `mapping.txt` produced; Compose's baseline profiles merged by
+`compileReleaseArtProfile`). Not yet run on the TV: the smoke test and the numbers under Acceptance are
+still the owner's. `deploy.sh` does not exist on `main`, so its half of step 3 is open.
 
 **Files:** `app/build.gradle.kts` (integrator), new `app/proguard-rules.pro` (integrator),
 `scripts/deploy.sh` (agent A; `scripts/` is not in this checkout yet, so until it lands put the
@@ -175,56 +206,67 @@ workflow; revisit only if `speed` compile alone is not enough.
 
 ## PF2: App list cache and event-driven reload
 
-**Why.** `MainActivity.onResume` runs `thread { apps = InstalledApps.load(this) }` every time the
-launcher resumes (`MainActivity.kt:80-84`). Each run queries the package manager twice, loads every
-label, banner and icon from other APKs, and rasterizes each into a fresh bitmap
-(`InstalledApps.kt:17-40`). The thread has default priority and nothing cancels overlapping runs. The
-new bitmaps are different objects, so every tile recomposes and re-uploads its texture just as the
-user lands on Home. On cold start the grid is empty until the whole scan finishes.
+**Why.** `MainActivity.onResume` ran `thread { apps = InstalledApps.load(this) }` every time the
+launcher resumed. Each run queried the package manager twice, loaded every label, banner and icon from
+other APKs, and rasterized each into a fresh bitmap. The thread had default priority and nothing
+cancelled overlapping runs. The new bitmaps were different objects, so every tile recomposed and
+re-uploaded its texture just as the user landed on Home. On cold start the grid was empty until the
+whole scan finished.
 
-**Files:** `home/data/` except `AppsRepository.kt` (agent B). Wiring in `MainActivity.kt` is a
-requested shared change (integrator applies).
+**Status:** implemented and building (debug unit tests and release/R8). The loader's device behavior is
+not verified yet; see Acceptance.
 
-**Design**
-- **Stamp check instead of a scan.** One call to `pm.getInstalledPackages(0)` (suppress the API 33
-  deprecation, as `categoryOf` already does) gives each package's `lastUpdateTime` and enabled state.
-  Build a signature from the sorted `(package, lastUpdateTime, enabled)` triples. On resume, compute
-  it on the loader thread and rescan **only if it differs** from the last one. No broadcast receiver
-  is needed, so there is nothing to miss when the Activity is destroyed.
-- **Phased load.**
-  1. Emit the list from the on-disk snapshot immediately (labels, components, categories, pinned flags).
-  2. Reconcile in the background (signature check, then rescan only changed packages).
-  3. Fill artwork pinned-first, then the rest, emitting in batches of about 8.
-  `LauncherApp.artwork` is already documented as null while loading.
-- **Keep object identity.** Cache `ImageBitmap` per `package:lastUpdateTime` in memory (an `LruCache`).
-  A rescan reuses the same instances for unchanged apps, so `LauncherApp` equality holds and Compose
-  skips their tiles.
-- **Disk snapshot.** `filesDir/apps.json` (via `org.json`, no new dependency) for the list, and
-  `cacheDir/art/<package>-<lastUpdateTime>.png` for artwork. Delete art files whose stamp no longer matches.
-- **Threading.** One background-priority single-thread dispatcher (or executor). A new load cancels the
-  previous one (generation counter checked between apps). Replace `thread {}` in `onResume`.
-- Wrap scan and artwork phases in `android.os.Trace.beginSection` so they show up in Perfetto.
+**Files:** new `home/data/AppLoader.kt` (Android side), `AppStamps.kt` and `AppSnapshot.kt` (pure
+logic), `InstalledApps.kt` (`load()` removed; `toBitmap` and `categoryOf` now `internal` and shared),
+`MainActivity.kt` (wiring: create the loader, `refresh()` in `onResume`, `close()` in `onDestroy`).
+Tests: `AppStampsTest`, `SnapshotCodecTest` (29 cases).
 
-**Steps**
-1. Add `AppStamp(pkg, lastUpdateTime, enabled)` plus a pure `signature(List<AppStamp>)` function.
-2. Add snapshot read/write with a version field; a version mismatch means "ignore snapshot".
-3. Split `InstalledApps.load` into `scan()` (list without artwork) and `loadArtwork(app)`.
-4. Add the loader (cancel, priority, batching) behind one function the Activity can call.
-5. Requested shared change for `MainActivity.kt`: call the loader from `onResume`; show the snapshot
-   result in `onCreate`.
+**Design (as built)**
+- **Stamp check instead of a scan.** One `getInstalledPackages(0)` call gives each package's
+  `lastUpdateTime` and enabled state. `AppStamps.signature` digests them (sorted, plus the locale, since
+  labels depend on it). If the digest matches the last scan and the scan is under 12 hours old
+  (`MAX_AGE_MS`, a safety net for launcher aliases toggled inside an app), nothing else runs.
+  No broadcast receiver, so nothing is missed when the Activity is destroyed.
+- **Incremental rescan.** When the digest differs, `queryIntentActivities` still runs, but an app whose
+  package, activity, pinned flag and `lastUpdateTime` all match the previous entry keeps its existing
+  `LauncherApp` instance. Only new or updated apps load a label and artwork. Unchanged tiles are
+  therefore equal to before and Compose skips them. An unknown update time (0) is never reused.
+- **Snapshot.** `filesDir/apps.snapshot` (binary, versioned; anything unreadable counts as no snapshot,
+  written via a temp file and rename) holds label, component, category, pinned flag, art kind and
+  update time per app. Artwork lives in `cacheDir/art/<package>-<lastUpdateTime>.png`. Files for old
+  builds, uninstalled apps and leftover temp files are deleted after each rescan.
+- **Cold start.** The loader publishes the snapshot immediately with artwork decoded for leanback
+  (Home) apps, then publishes again once the rest of the artwork is decoded. If the system purged the
+  cache directory, missing artwork is re-rendered from the package and cached again (`fillMissingArt`
+  runs on every refresh, so an interrupted decode also finishes later).
+- **Threading.** One background-priority thread. A newer `refresh()` makes an older run in flight stop
+  early (generation counter checked between apps), so quick back-to-back resumes do one scan.
+  `publish` is called on the main thread. Scan, restore, persist and art phases have
+  `Trace` sections for Perfetto, and Logcat tag `AppLoader` reports what happened.
+
+**Not done here (left for later items)**
+- Icon size (still 192×192) and hardware bitmaps: PF4. PF4 must write the PNG from the software bitmap
+  before converting, because a hardware bitmap cannot be compressed.
+- The in-memory cache does not survive the Activity being destroyed while the process lives; the
+  snapshot covers that case at the cost of one more restore.
 
 **Acceptance**
-- JVM unit tests (`testDebugUnitTest`): signature is order-independent and changes when any stamp
-  changes; snapshot round trip; version mismatch is ignored; stale-art cleanup picks the right files.
-- Device: return Home with no package changes. Logcat shows "scan skipped" and gfxinfo shows no jank
-  burst in the next second (PF0 step 3).
-- Device: `adb shell pm disable-user --user 0 <an app you don't mind toggling>`, return Home, tile is
-  gone within about 2 s. `pm enable` brings it back.
-- Device: `am force-stop`, then `am start -W`. The grid shows banners from the snapshot before the
-  background reconcile finishes (compare with PF0 step 2).
+- JVM unit tests: signature is order-independent and changes with any stamp or the locale; rescan
+  rule (no earlier scan, changed digest, too old, clock moved back); reuse rule; snapshot round trip
+  including awkward labels; truncated, wrong-version and absurd-count snapshots decode to null;
+  stale-art selection. **Done: 29 pass.** They already caught a decoder bug (reading a field inside a
+  lookup lambda), which is now fixed.
+- Device: return Home with no package changes. Logcat (`adb logcat -s AppLoader`) shows
+  `scan skipped: N apps unchanged`, no publish, and gfxinfo shows no jank burst in the next second
+  (PF0 step 3).
+- Device: `adb shell pm disable-user --user 0 <an app you don't mind toggling>`, return Home: the tile is
+  gone, log shows `scan: reused N-1, rebuilt 0`. `pm enable` brings it back with `rebuilt 1`.
+- Device: `am force-stop`, then `am start -W`. Log shows `restored N apps from snapshot`, and the
+  grid has banners before the reconcile finishes (compare with PF0 step 2).
+- Device: change the system language, return Home: labels update (digest includes the locale).
 - Two quick resumes in a row produce one scan, not two overlapping ones.
 
-**Rollback:** the loader sits behind one call; restoring the old `thread { load }` is a one-line revert.
+**Rollback:** `git revert` of the PF2 commit restores the old `thread { load }` path.
 
 ---
 
@@ -438,7 +480,7 @@ Fill in as items land. "n/a" means not measured at that stage.
 | Hardware bitmaps exhaust file descriptors | Descriptor count in PF0 and PF4; hardware only for pinned apps if needed |
 | DSP optimization changes the sound | Parity test plus A/B listening; generator code untouched; bump `RENDER_VERSION` so caches rebuild |
 | Focus restyle drifts from the design | Screenshot parity and checker C-X1; `fieldFocus`/`fieldTile` signatures unchanged |
-| Cloud can't compile | Same as BUILD_PLAN: checker plus diff read here, owner-side build catches the rest; keep each commit small |
+| Cloud environment can't run the app | It can compile, run JVM unit tests and build release/R8 when `dl.google.com` is reachable (see Building in the cloud), but there is no emulator (no KVM). Device behavior is always an owner check; keep each commit small |
 
 ## 7. Out of scope
 

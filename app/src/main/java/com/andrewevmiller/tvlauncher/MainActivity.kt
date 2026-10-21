@@ -25,6 +25,7 @@ import com.andrewevmiller.tvlauncher.home.HomeScreen
 import com.andrewevmiller.tvlauncher.home.MenuAction
 import com.andrewevmiller.tvlauncher.home.SystemTile
 import com.andrewevmiller.tvlauncher.home.orderPinned
+import com.andrewevmiller.tvlauncher.home.data.AppLoader
 import com.andrewevmiller.tvlauncher.home.data.InstalledApps
 import com.andrewevmiller.tvlauncher.home.data.LauncherApp
 import androidx.compose.runtime.CompositionLocalProvider
@@ -32,10 +33,10 @@ import com.andrewevmiller.tvlauncher.sound.FieldSound
 import com.andrewevmiller.tvlauncher.sound.LocalFieldSound
 import com.andrewevmiller.tvlauncher.theme.FieldIcons
 import com.andrewevmiller.tvlauncher.theme.FieldTheme
-import kotlin.concurrent.thread
 
 class MainActivity : ComponentActivity() {
     private lateinit var sound: FieldSound
+    private lateinit var loader: AppLoader
     private lateinit var history: LaunchHistory
     private var records by mutableStateOf<List<LaunchRecord>>(emptyList())
     private var recentOpen by mutableStateOf(false)
@@ -65,6 +66,7 @@ class MainActivity : ComponentActivity() {
             }
         }
         sound = FieldSound(this)
+        loader = AppLoader(this) { apps = it }
         history = LaunchHistory(this)
         layoutPrefs = getSharedPreferences("layout", MODE_PRIVATE)
         order = (layoutPrefs.getString("order", "") ?: "").split(';').filter { it.isNotEmpty() }
@@ -135,12 +137,13 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        // Reload on every return so installs and uninstalls show up.
-        thread { apps = InstalledApps.load(this) }
+        // Cheap when nothing was installed, removed or updated; otherwise rebuilds only what changed.
+        loader.refresh()
     }
 
     override fun onDestroy() {
         super.onDestroy()
+        loader.close()
         sound.release()
     }
 
