@@ -1,7 +1,9 @@
 # Sleep timer: plan
 
-Status: **S0 (spike) in progress.** Nothing else is built. This extends `docs/BUILD_PLAN.md`; the rules in
-`CLAUDE.md` (design, ownership, verification) apply unchanged.
+Status: **S1, S2, S3, S4 and S5 are built and pass in the cloud; S0 (the TV spike) has not been run, and S6 to S8
+(Home tile, picker, Settings section, UI tests, README) are not built.** There is no way to start the timer from the UI
+yet. Nothing has run on a TV. This extends `docs/BUILD_PLAN.md`; the rules in `CLAUDE.md` (design, ownership,
+verification) apply unchanged.
 
 ## What it does
 
@@ -52,7 +54,21 @@ S2, S4 and S5 run in parallel once S1 is in. S3 and S6 also wait for S0.
 - The countdown is not cancelled by key presses. The tile can extend it by 15 min or cancel it.
 - The deadline is stored (small SharedPreferences store). After a reboot, a deadline in the past is dropped.
 - If nothing is playing when it fires, skip the pause and still play the sound and dim.
-- The dim screen stays until a key is pressed. It never resumes media.
+- The dim screen stays until a key is pressed, or for 30 minutes (`SleepConfig.DIM_AUTO_FINISH_MILLIS`), whichever is
+  first; the paused app is then back on top and the TV's own timeout takes over. It never resumes media. When the
+  screensaver route is used instead of our own activity, it is a normal dream and ends on the first key press.
+- If the TV is already off when the alarm fires (the user switched it off first), the whole sequence is skipped: no
+  sound, no dim, no wake-up.
+- The dim activity does not hold the screen on by default (`SleepConfig.DIM_KEEPS_SCREEN_ON = false`), so the TV's own
+  screen-off timeout can still run; that may cut the 45 s fade short. Flip it after the TV test if that happens.
+- The alarm survives the system killing the launcher process. A reboot or a force-stop cancels it; the launcher
+  re-arms a stored deadline that is still in the future the next time it starts (it is Home, so that is at boot) and
+  drops a stale one. A deadline up to two minutes in the past is still fired after a cold start (the alarm lands at or
+  just after the deadline); a TV switched off in that window is caught by the "already off" rule above.
+- The sleep screen keeps a faint clock to the minute (no seconds), at 15% of full ink (about 35/255), reached 60% of
+  the way through the fade. On an LCD that does not burn in; if the panel turns out to be OLED, a still clock needs
+  pixel shifting or a slow drift, which is not built. The normal screensaver clock shows seconds, also under reduced
+  motion (Home's header clock ticks every second the same way).
 - No volume fade in v1: HDMI/ARC setups often have fixed volume, and a crash could leave it low.
 - Closing sound obeys the interface-sounds switch and the system sound-effects setting.
 
@@ -60,4 +76,9 @@ S2, S4 and S5 run in parallel once S1 is in. S3 and S6 also wait for S0.
 
 Cloud: purecheck, `:app:assembleDebug testDebugUnitTest lintDebug`, screenshots of every new state.
 TV: the S0 matrix; the real timer end to end in YouTube and one other app; whether the TV's own idle timeout then
-turns the screen off; closing-sound loudness.
+turns the screen off (and whether `DIM_KEEPS_SCREEN_ON` should be flipped); closing-sound loudness, including when the
+launcher process had been killed and the alarm starts it cold; whether the faint clock is legible and not too bright
+in a dark room; whether the dim screen can start from the background without `adb shell appops set
+com.andrewevmiller.tvlauncher SYSTEM_ALERT_WINDOW allow`. After the spike, set `SleepConfig.PROVEN_PAUSE_RUNG` and
+`PROVEN_DIM_STRATEGY`. What the last real run did is in `adb logcat -s FieldSleep`, or on a debug build
+`adb shell run-as com.andrewevmiller.tvlauncher cat shared_prefs/field_sleep.xml`.
