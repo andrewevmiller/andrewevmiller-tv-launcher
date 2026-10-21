@@ -16,6 +16,21 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.runtime.Composable
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.focus.onFocusChanged
+import kotlinx.coroutines.launch
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
+import kotlinx.coroutines.android.awaitFrame
 import androidx.compose.runtime.Immutable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -68,15 +83,47 @@ fun HomeScreen(
     onChip: (Chip) -> Unit,
     onOpenDrawer: () -> Unit,
     onLaunch: (LauncherApp) -> Unit,
+    feature: Feature?,
+    recent: List<RecentEntry>,
+    recentOpen: Boolean,
+    onToggleRecent: () -> Unit,
+    order: List<String>,
+    editingPkg: String?,
+    onReorderStart: (LauncherApp) -> Unit,
+    onMove: (LauncherApp, Int) -> Unit,
+    onEditEnd: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val colors = Field.colors
     val matches = { a: LauncherApp -> chip.category == null || a.category == chip.category }
-    val apps = if (drawer) allApps.filter(matches) else allApps.filter { it.pinned && matches(it) }
+    val apps = if (drawer) allApps.filter(matches) else orderPinned(allApps, order).filter(matches)
+    // Tiles are recreated when they move between rows, so focus is put back on the moved tile by key.
+    val requesters = remember { mutableMapOf<String, FocusRequester>() }
+    val gesture = remember { OkGesture() }
+    val listState = rememberLazyListState()
+    val scope = rememberCoroutineScope()
+    // Focus only scrolls the minimum needed, which leaves the header cut off when coming back up.
+    // The band and chips sit at the top, so landing on them shows the whole top of the page.
+    val toTop = Modifier.onFocusChanged {
+        if (it.hasFocus) scope.launch {
+            // Wait out the focus bring-into-view scroll, which would otherwise win.
+            awaitFrame()
+            awaitFrame()
+            listState.animateScrollToItem(0)
+        }
+    }
+    val reorderable = !drawer && chip == Chip.ALL
+    LaunchedEffect(apps.map { it.component.packageName }, editingPkg) {
+        if (editingPkg != null) {
+            awaitFrame()
+            runCatching { requesters[editingPkg]?.requestFocus() }
+        }
+    }
     val cells: List<Cell> = apps.map { Cell.App(it) } + if (drawer) emptyList() else listOf(Cell.All(allApps.size))
     val gridRows = cells.chunked(COLUMNS)
     Box(modifier.fillMaxSize().background(colors.bg).dotGrid(colors.line)) {
         LazyColumn(
+            state = listState,
             contentPadding = PaddingValues(
                 start = FieldDimens.safeHorizontal, end = FieldDimens.safeHorizontal,
                 top = FieldDimens.safeVertical, bottom = 40.dp,
@@ -86,8 +133,14 @@ fun HomeScreen(
                 ClockHeader(if (drawer) "All apps" else "Home")
                 Spacer(Modifier.height(18.dp))
             }
+            if (feature != null && !drawer) {
+                item("band") {
+                    FeatureBand(feature, onOpen = { onLaunch(feature.app) }, modifier = toTop)
+                    Spacer(Modifier.height(18.dp))
+                }
+            }
             item("chips") {
-                Row(Modifier.padding(horizontal = 4.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                Row(toTop.padding(horizontal = 4.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                     Chip.entries.forEach { c -> ChipPill(c.label, selected = c == chip) { onChip(c) } }
                 }
                 Spacer(Modifier.height(10.dp))
@@ -102,10 +155,28 @@ fun HomeScreen(
                 ) {
                     gridRows[i].forEach { cell ->
                         when (cell) {
-                            is Cell.App -> AppTile(cell.app) { onLaunch(cell.app) }
+                            is Cell.App -> AppTile(
+                                app = cell.app,
+                                requester = requesters.getOrPut(cell.app.component.packageName) { FocusRequester() },
+                                gesture = gesture,
+                                reorderable = reorderable,
+                                editing = editingPkg != null,
+                                lifted = editingPkg == cell.app.component.packageName,
+                                onMove = { onMove(cell.app, it) },
+                                onReorderStart = { onReorderStart(cell.app) },
+                                onEditEnd = onEditEnd,
+                                onClick = { onLaunch(cell.app) },
+                            )
                             is Cell.All -> AllAppsTile(cell.count, onOpenDrawer)
                         }
                     }
+                }
+            }
+            if (!drawer && recent.isNotEmpty()) {
+                item("recent") {
+                    SectionHead(if (recentOpen) "Recent" else "Recent · ${recent.size} hidden")
+                    RecentRow(recent, recentOpen, onToggleRecent, onLaunch)
+                    Spacer(Modifier.height(10.dp))
                 }
             }
             if (!drawer && systemTiles.isNotEmpty()) {
@@ -148,13 +219,64 @@ private fun ChipPill(label: String, selected: Boolean, onClick: () -> Unit) {
 }
 
 @Composable
-private fun AppTile(app: LauncherApp, onClick: () -> Unit) {
+private fun AppTile(
+    app: LauncherApp,
+    requester: FocusRequester,
+    gesture: OkGesture,
+    reorderable: Boolean,
+    editing: Boolean,
+    lifted: Boolean,
+    onMove: (Int) -> Unit,
+    onReorderStart: () -> Unit,
+    onEditEnd: () -> Unit,
+    onClick: () -> Unit,
+) {
     val colors = Field.colors
     val art = app.artwork
+    val fullBleed = art != null && app.artworkIsBanner
     Box(
         Modifier
             .size(FieldDimens.bannerWidth, FieldDimens.bannerHeight)
-            .fieldTile(onClick)
+            // A lifted tile tips and grows a little more, still the one focused element.
+            .graphicsLayer {
+                if (lifted) {
+                    scaleX = 1.04f
+                    scaleY = 1.04f
+                    rotationZ = -1.4f
+                }
+            }
+            .onPreviewKeyEvent { e ->
+                val ok = e.key == Key.DirectionCenter || e.key == Key.Enter || e.key == Key.NumPadEnter
+                val down = e.type == KeyEventType.KeyDown
+                when {
+                    editing -> when {
+                        ok && down -> true
+                        ok -> {
+                            // The release that ends the long press that started this edit is not a drop.
+                            if (gesture.longFired) gesture.longFired = false else onEditEnd()
+                            true
+                        }
+                        !down -> false
+                        e.key == Key.DirectionLeft -> { onMove(-1); true }
+                        e.key == Key.DirectionRight -> { onMove(1); true }
+                        e.key == Key.DirectionUp -> { onMove(-COLUMNS); true }
+                        e.key == Key.DirectionDown -> { onMove(COLUMNS); true }
+                        else -> false
+                    }
+                    ok && reorderable -> {
+                        if (down) {
+                            if (e.nativeKeyEvent.repeatCount > 0 && !gesture.longFired) {
+                                gesture.longFired = true
+                                onReorderStart()
+                            }
+                        } else if (!gesture.longFired) onClick()
+                        true
+                    }
+                    else -> false
+                }
+            }
+            .focusRequester(requester)
+            .fieldTile(onClick, bleed = fullBleed)
             .clip(FieldShapes.tile)
             .background(colors.bgSoft, FieldShapes.tile),
     ) {
@@ -217,3 +339,10 @@ private fun SystemTileView(tile: SystemTile) {
         Text(tile.label, style = Field.type.bodyStrong.copy(fontSize = 13.sp, lineHeight = 16.sp), color = colors.ink, maxLines = 2)
     }
 }
+
+/** Shared across tiles because a moving tile is recreated: has a long press just begun an edit? */
+class OkGesture { var longFired = false }
+
+/** Home order: saved order first, anything new after it in A-Z order. */
+fun orderPinned(apps: List<LauncherApp>, order: List<String>): List<LauncherApp> =
+    apps.filter { it.pinned }.sortedBy { a -> order.indexOf(a.component.packageName).let { if (it < 0) Int.MAX_VALUE else it } }
