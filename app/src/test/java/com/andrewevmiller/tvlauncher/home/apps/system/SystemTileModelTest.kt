@@ -307,8 +307,8 @@ class SystemTileModelTest {
     @Test
     fun inputTypeConstantsMatchTheFramework() {
         // android.media.tv.TvInputInfo; the same values are checked against the real class on the owner's machine.
-        assertEquals(0, TvInputType.OTHER)
-        assertEquals(1, TvInputType.TUNER)
+        assertEquals(1000, TvInputType.OTHER)
+        assertEquals(0, TvInputType.TUNER)
         assertEquals(1001, TvInputType.COMPOSITE)
         assertEquals(1002, TvInputType.SVIDEO)
         assertEquals(1003, TvInputType.SCART)

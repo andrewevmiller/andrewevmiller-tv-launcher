@@ -37,11 +37,12 @@ data class SystemTile(
 /**
  * `android.media.tv.TvInputInfo.TYPE_*`, duplicated so this file stays Android-free.
  * `FrameworkConstantsTest` (runs on the owner's machine, not in purecheck) checks every value against
- * the real constants. Note TYPE_OTHER is 0 and TYPE_TUNER is 1.
+ * the real constants. Note TYPE_TUNER is 0 and TYPE_OTHER is 1000 (an earlier draft had them swapped; the
+ * test caught it).
  */
 object TvInputType {
-    const val OTHER = 0
-    const val TUNER = 1
+    const val TUNER = 0
+    const val OTHER = 1000
     const val COMPOSITE = 1001
     const val SVIDEO = 1002
     const val SCART = 1003
