@@ -68,7 +68,7 @@ class MainActivity : ComponentActivity() {
         history = LaunchHistory(this)
         layoutPrefs = getSharedPreferences("layout", MODE_PRIVATE)
         order = (layoutPrefs.getString("order", "") ?: "").split(';').filter { it.isNotEmpty() }
-        // No saved choice yet means Home shows every app with a TV launcher entry.
+        // No saved choice yet means nothing is pinned; Home starts empty and the user picks.
         pinnedSet = if (layoutPrefs.contains("pinned")) {
             (layoutPrefs.getString("pinned", "") ?: "").split(';').filter { it.isNotEmpty() }.toSet()
         } else null
@@ -157,7 +157,7 @@ class MainActivity : ComponentActivity() {
         sound.tick()
     }
 
-    private fun isPinned(app: LauncherApp) = pinnedSet?.contains(app.component.packageName) ?: app.pinned
+    private fun isPinned(app: LauncherApp) = pinnedSet?.contains(app.component.packageName) ?: false
 
     /** Runs the choice from the long-press menu and saves the result on the TV. */
     private fun pick(action: MenuAction) {
@@ -198,7 +198,7 @@ class MainActivity : ComponentActivity() {
             val at = Instant.ofEpochMilli(recent.at).atZone(ZoneId.systemDefault())
             return Feature(recent.app, DateTimeFormatter.ofPattern("yyyy-MM-dd 'at' HH:mm").format(at))
         }
-        return apps.firstOrNull { it.pinned }?.let { Feature(it, null) }
+        return null
     }
 
     private fun open(intent: Intent) {

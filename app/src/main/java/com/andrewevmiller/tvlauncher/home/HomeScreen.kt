@@ -149,7 +149,7 @@ fun HomeScreen(
             if (dy != 0f) listState.animateScrollBy(dy, tween(220, easing = FastOutSlowInEasing))
         }
     }
-    val isPinned = { a: LauncherApp -> pinnedSet?.contains(a.component.packageName) ?: a.pinned }
+    val isPinned = { a: LauncherApp -> pinnedSet?.contains(a.component.packageName) ?: false }
     // After the menu closes the tile gets focus back (Move needs it for the arrow keys).
     var lastMenuPkg by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(menuApp) {
@@ -188,6 +188,14 @@ fun HomeScreen(
             }
             item("apps-head") {
                 SectionHead(if (drawer) "Every app · A–Z · ${apps.size}" else "Apps · ${apps.size} pinned")
+                if (!drawer && apps.isEmpty() && chip == Chip.ALL) {
+                    Text(
+                        "Nothing is pinned yet. Open All apps, hold OK on an app and choose Pin to Home.",
+                        style = Field.type.body.copy(fontSize = 14.sp, lineHeight = 21.sp),
+                        color = colors.muted,
+                        modifier = Modifier.padding(bottom = 14.dp),
+                    )
+                }
             }
             // One block with every tile placed by index. A tile keeps its identity (and focus) when it
             // changes place, and slides to its new spot instead of being rebuilt in another row.
@@ -433,7 +441,7 @@ class OkGesture { var longFired = false }
 
 /** Home order: saved order first, anything new after it in A-Z order. */
 fun orderPinned(apps: List<LauncherApp>, order: List<String>, pinnedSet: Set<String>?): List<LauncherApp> =
-    apps.filter { pinnedSet?.contains(it.component.packageName) ?: it.pinned }.sortedBy { a -> order.indexOf(a.component.packageName).let { if (it < 0) Int.MAX_VALUE else it } }
+    apps.filter { pinnedSet?.contains(it.component.packageName) ?: false }.sortedBy { a -> order.indexOf(a.component.packageName).let { if (it < 0) Int.MAX_VALUE else it } }
 
 /** A small pin on drawer tiles for apps that are on Home. */
 @Composable
