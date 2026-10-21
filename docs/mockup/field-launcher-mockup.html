@@ -326,20 +326,22 @@ h2 { font-family: var(--serif); font-weight: 700; letter-spacing: -0.01em; font-
 
   const state = { chip: 'all', r: 2, c: 0, scrollX: {}, ambient: false, slides: false, recentOpen: false, light: false, reduced: matchMedia('(prefers-reduced-motion: reduce)').matches, owners: false, solo: null };
 
-  /* Interface sounds: detuned supersaw through saturation + amplitude bitcrush, with a noise
-     transient on the attack. Industrial but short and quiet. The app pre-renders the same recipe. */
+  /* Interface sounds: 1–2 triangle oscillators pushed through a wavefolder and hard saturation,
+     then a filter sweep, with a noise transient on the attack. Harsh but short and quiet.
+     The app pre-renders the same recipe. */
   const sfx = (() => {
     let ctx = null, bus = null, noiseBuf = null, last = 0;
     const api = { on: false };
     const curves = {};
-    // soft-clip with drive k, then quantize to `levels` steps (bitcrush in amplitude)
-    function curve(k, levels) {
-      const key = k + ':' + levels;
+    // wavefold (sine folder, amount `fold`), soft-clip with drive k, then quantize to `levels` steps
+    function curve(k, levels, fold) {
+      const key = k + ':' + levels + ':' + fold;
       if (curves[key]) return curves[key];
-      const n = 2048, c = new Float32Array(n);
+      const n = 4096, c = new Float32Array(n);
       for (let i = 0; i < n; i++) {
         const x = (i / (n - 1)) * 2 - 1;
-        let y = Math.tanh(k * x) / Math.tanh(k);
+        let y = fold ? Math.sin(fold * x * Math.PI / 2) : x;
+        y = Math.tanh(k * y) / Math.tanh(k);
         if (levels) y = Math.round(y * levels) / levels;
         c[i] = y;
       }
@@ -360,29 +362,29 @@ h2 { font-family: var(--serif); font-weight: 700; letter-spacing: -0.01em; font-
       if (ctx.state === 'suspended') ctx.resume();
       return ctx;
     };
-    const SPREAD = [-1, -0.62, -0.28, 0, 0.28, 0.62, 1];
-    function saw(f, { at = 0, dur = 0.1, gain = 0.03, voices = 7, detune = 22, glide = null,
-                      lpFrom = 3500, lpTo = 900, q = 2, drive = 4, crush = 0, click = 0 } = {}) {
+    function tri(f, { at = 0, dur = 0.1, gain = 0.03, voices = 2, detune = 9, glide = null,
+                      lpFrom = 7000, lpTo = 2500, q = 1.5, drive = 6, fold = 2.2, crush = 0, click = 0 } = {}) {
       const c = audio(); if (!c) return;
       const t = c.currentTime + at;
       const sum = c.createGain(); sum.gain.value = 1 / Math.sqrt(voices);
-      const idx = voices === 7 ? SPREAD : SPREAD.filter((_, i) => i % Math.ceil(7 / voices) === 0).slice(0, voices);
-      idx.forEach(s => {
-        const o = c.createOscillator(); o.type = 'sawtooth';
+      const spread = voices === 1 ? [0] : Array.from({ length: voices }, (_, i) => -1 + (2 * i) / (voices - 1));
+      spread.forEach(s => {
+        const o = c.createOscillator(); o.type = 'triangle';
         o.frequency.setValueAtTime(f, t); o.detune.value = s * detune;
         if (glide) o.frequency.exponentialRampToValueAtTime(glide, t + dur);
         o.connect(sum);
         const jitter = Math.random() * 0.002;            // staggered starts = varied phases
         o.start(t + jitter); o.stop(t + dur + 0.03);
       });
+      // fold first, then filter, so the sweep shapes the folded harmonics
+      const shaper = c.createWaveShaper(); shaper.curve = curve(drive, crush, fold); shaper.oversample = '4x';
       const flt = c.createBiquadFilter(); flt.type = 'lowpass'; flt.Q.value = q;
       flt.frequency.setValueAtTime(lpFrom, t); flt.frequency.exponentialRampToValueAtTime(Math.max(60, lpTo), t + dur);
-      const shaper = c.createWaveShaper(); shaper.curve = curve(drive, crush); shaper.oversample = '2x';
       const env = c.createGain();
       env.gain.setValueAtTime(0.0001, t);
       env.gain.exponentialRampToValueAtTime(gain, t + 0.003);
       env.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-      sum.connect(flt); flt.connect(shaper); shaper.connect(env); env.connect(bus);
+      sum.connect(shaper); shaper.connect(flt); flt.connect(env); env.connect(bus);
       if (click) {
         const n = c.createBufferSource(); n.buffer = noiseBuf;
         const nf = c.createBiquadFilter(); nf.type = 'bandpass'; nf.frequency.value = 3200; nf.Q.value = 1.2;
@@ -397,31 +399,31 @@ h2 { font-family: var(--serif); font-weight: 700; letter-spacing: -0.01em; font-
       const now = performance.now();
       const held = now - last < 90;          // key-repeat: thinner and quieter
       last = now;
-      saw(880 - (row || 0) * 40, { dur: held ? 0.02 : 0.032, gain: held ? 0.012 : 0.02, voices: 3, detune: 12,
-        lpFrom: 5000, lpTo: 1500, drive: 6, crush: 12, click: held ? 0.01 : 0.025 });
+      tri(1320 - (row || 0) * 60, { dur: held ? 0.02 : 0.03, gain: held ? 0.012 : 0.02, voices: 1,
+        fold: 3, drive: 8, lpFrom: 9000, lpTo: 3000, click: held ? 0.01 : 0.03 });
     };
-    // edge: a crushed sub thud
-    api.edge = () => { if (api.on) saw(55, { dur: 0.13, gain: 0.06, voices: 3, detune: 30, glide: 41, lpFrom: 700, lpTo: 200, drive: 10, crush: 10, click: 0.02 }); };
+    // edge: a folded, crushed low thud
+    api.edge = () => { if (api.on) tri(70, { dur: 0.13, gain: 0.06, detune: 20, glide: 50, fold: 3.5, drive: 10, crush: 12, lpFrom: 1800, lpTo: 300, click: 0.02 }); };
     api.select = () => {
       if (!api.on) return;
-      saw(220, { dur: 0.09, gain: 0.03, lpFrom: 3200, lpTo: 500, drive: 4, crush: 24, click: 0.02 });
-      saw(330, { at: 0.05, dur: 0.11, gain: 0.028, lpFrom: 3200, lpTo: 500, drive: 4, crush: 24 });
+      tri(440, { dur: 0.08, gain: 0.028, fold: 2.5, drive: 7, click: 0.025 });
+      tri(660, { at: 0.05, dur: 0.1, gain: 0.026, fold: 2.5, drive: 7 });
     };
     api.back = () => {
       if (!api.on) return;
-      saw(330, { dur: 0.08, gain: 0.028, lpFrom: 2800, lpTo: 500, drive: 4, crush: 24, click: 0.02 });
-      saw(220, { at: 0.045, dur: 0.11, gain: 0.03, lpFrom: 2400, lpTo: 400, drive: 4, crush: 24 });
+      tri(660, { dur: 0.07, gain: 0.026, fold: 2.5, drive: 7, click: 0.025 });
+      tri(440, { at: 0.045, dur: 0.1, gain: 0.028, fold: 2.5, drive: 7 });
     };
-    // launch: stacked rising supersaw stabs, filter opening as it climbs, plus a sub
+    // launch: rising stabs that fold harder and open brighter as they climb, plus a sub
     api.launch = () => {
       if (!api.on) return;
-      [130.8, 164.8, 196, 261.6].forEach((f, i) =>
-        saw(f, { at: i * 0.045, dur: 0.3 - i * 0.03, gain: 0.026, lpFrom: 500 + i * 400, lpTo: 2600 + i * 600, q: 4, drive: 5, crush: 20, click: i === 0 ? 0.03 : 0 }));
-      saw(65.4, { dur: 0.3, gain: 0.03, voices: 1, detune: 0, lpFrom: 300, lpTo: 120, drive: 3 });
+      [261.6, 329.6, 392, 523.3].forEach((f, i) =>
+        tri(f, { at: i * 0.045, dur: 0.28 - i * 0.03, gain: 0.024, fold: 1.6 + i * 0.6, drive: 7, lpFrom: 2500 + i * 1200, lpTo: 6000, q: 3, click: i === 0 ? 0.035 : 0 }));
+      tri(65.4, { dur: 0.3, gain: 0.035, voices: 1, fold: 1.2, drive: 4, lpFrom: 600, lpTo: 200 });
     };
-    // screensaver in: a slow detuned swell with the filter creeping open; wake: short rising sweep
-    api.sleep = () => { if (!api.on) return; saw(110, { dur: 1.7, gain: 0.024, detune: 30, glide: 165, lpFrom: 250, lpTo: 1600, q: 5, drive: 3, crush: 32 }); };
-    api.wake = () => { if (!api.on) return; saw(196, { dur: 0.26, gain: 0.028, glide: 294, lpFrom: 400, lpTo: 3000, q: 4, drive: 5, crush: 20, click: 0.02 }); };
+    // screensaver in: a slow detuned swell with the filter creeping open; wake: short bright sweep
+    api.sleep = () => { if (!api.on) return; tri(110, { dur: 1.7, gain: 0.024, detune: 25, glide: 165, fold: 1.5, drive: 5, lpFrom: 600, lpTo: 4000, q: 4 }); };
+    api.wake = () => { if (!api.on) return; tri(220, { dur: 0.26, gain: 0.028, glide: 330, fold: 3, drive: 8, lpFrom: 1500, lpTo: 7000, click: 0.02 }); };
     return api;
   })();
 

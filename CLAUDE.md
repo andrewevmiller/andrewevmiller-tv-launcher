@@ -15,10 +15,10 @@ A personal Android TV launcher for one Hisense TV, in the andrewevmiller.com
 - Everything inside the 5% safe area (`FieldDimens.safeHorizontal/Vertical`).
 - Sound follows the accent rule: navigation is near-silent; only launch/select get a voiced sound.
   Use `FieldSound` (agent F), never play audio directly. Respect the system sound-effects setting.
-- Sound character: industrial supersaw. Detuned sawtooth stacks (up to 7 voices, PolyBLEP to limit
-  aliasing) -> resonant low-pass sweep -> tanh saturation -> amplitude bitcrush, with a band-passed
-  noise click on the attack. Master high-pass ~70Hz and a compressor. The reference recipe is the
-  `sfx` block in `docs/mockup/field-launcher-mockup.html`; the Kotlin renderer should match it by ear.
+- Sound character: harsh wavefolded triangle. 1–2 slightly detuned triangle oscillators -> sine
+  wavefolder -> tanh saturation (optional amplitude bitcrush) -> resonant low-pass sweep, with a
+  band-passed noise click on the attack. Master high-pass ~70Hz and a compressor. The reference
+  recipe is the `sfx` block in `docs/mockup/field-launcher-mockup.html`; match it by ear.
 
 ## Product decisions
 - App tiles are 192x108dp (`FieldDimens.bannerWidth/Height`). Apps without a 16:9 banner show
