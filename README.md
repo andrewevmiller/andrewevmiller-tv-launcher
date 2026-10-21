@@ -61,7 +61,7 @@ the next time you open it by hand. Run `./scripts/deploy.sh` to make it Home aga
 ## Using it
 
 - **Home button** returns to Home from anywhere and resets it (filter cleared, Recent collapsed, focus on your apps).
-- **Menu key** on the remote, or the SETTINGS chip top right, opens launcher Settings.
+- **Menu key** on the remote, or the LAUNCHER SETTINGS chip top right, opens launcher Settings.
 - **Settings:** Appearance (dark/light, reduced motion, dot-grid brightness), Sound (on/off, waveform, per-app
   motif re-roll and mute), Screensaver (Oxyfield / Google Photos, Start now), About. Every change applies
   immediately.

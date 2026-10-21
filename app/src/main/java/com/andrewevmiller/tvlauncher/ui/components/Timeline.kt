@@ -42,8 +42,10 @@ data class TimelineItem(
     val subtitle: String,
 )
 
-private val EntryWidth = 280.dp
-private val EntryDateWidth = 56.dp
+private val EntryWidth = 292.dp
+
+/** Eight mono caption characters, so a 12-hour time such as `12:05 PM` fits on one line. */
+private val EntryDateWidth = 68.dp
 
 /**
  * A timeline entry (the mockup's `.entry`): a mono date/time column, a line icon, the title in Geist and a

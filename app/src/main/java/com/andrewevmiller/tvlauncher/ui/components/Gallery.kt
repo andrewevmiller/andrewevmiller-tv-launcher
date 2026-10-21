@@ -64,7 +64,8 @@ private const val GalleryCaptionBacking = 0.72f
 /**
  * A print-like tile (the mockup's `.photo`): a `bgSoft` mat with a hairline border, the picture inset in it,
  * leaning [tiltFor]([index]) degrees at rest. `fieldTile` straightens it and scales it up on focus; the mono
- * caption fades in only while focused (it snaps when reduced motion is on). OK plays `FieldSound.select()`
+ * caption fades in only while focused (it snaps when reduced motion is on), except on a tile with no
+ * picture, whose caption is always shown. OK plays `FieldSound.select()`
  * (unless [playSelect] is false, e.g. when the handler plays the sleep sound) and calls [onSelect].
  */
 @Composable
@@ -80,7 +81,8 @@ fun GalleryTile(
     val reduced = Field.reducedMotion
     var focused by remember { mutableStateOf(false) }
     val captionAlpha by animateFloatAsState(
-        targetValue = if (focused) 1f else 0f,
+        // A tile with no picture has nothing else to say what it is, so its caption is always visible.
+        targetValue = if (focused || item.image == null) 1f else 0f,
         animationSpec = if (reduced) snap() else tween(durationMillis = 160),
         label = "galleryCaption",
     )

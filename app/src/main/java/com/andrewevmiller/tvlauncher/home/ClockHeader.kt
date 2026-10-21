@@ -28,7 +28,7 @@ import java.time.ZonedDateTime
 
 /**
  * Title on the left, a lab-notebook timestamp on the right: `2026-10-21 · 19:42:07 PDT` (see [ClockFormat]).
- * With [onOpenSettings] a small SETTINGS chip sits left of the timestamp (the Menu key opens it too).
+ * With [onOpenSettings] a small LAUNCHER SETTINGS chip sits left of the timestamp (the Menu key opens it too).
  */
 @Composable
 fun ClockHeader(title: String = "Home", onOpenSettings: (() -> Unit)? = null) {
@@ -77,6 +77,7 @@ private fun SettingsChip(onClick: () -> Unit) {
             size = 18.dp,
             tint = if (focused) Field.colors.accent else Field.colors.muted,
         )
-        Text("SETTINGS", style = Field.type.label, color = Field.colors.muted)
+        // "Launcher": the Inputs & system row has its own "Settings" tile, which opens the TV's settings.
+        Text("LAUNCHER SETTINGS", style = Field.type.label, color = Field.colors.muted)
     }
 }

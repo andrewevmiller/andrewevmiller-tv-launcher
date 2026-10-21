@@ -31,6 +31,7 @@ import com.andrewevmiller.tvlauncher.ui.components.FeatureBand
 import com.andrewevmiller.tvlauncher.ui.components.GalleryItem
 import com.andrewevmiller.tvlauncher.ui.components.GalleryRow
 import com.andrewevmiller.tvlauncher.ui.components.RecentRow
+import com.andrewevmiller.tvlauncher.ui.components.focusBleed
 import com.andrewevmiller.tvlauncher.ui.components.TimelineItem
 import com.andrewevmiller.tvlauncher.ui.components.recentSectionLabel
 import com.andrewevmiller.tvlauncher.ui.icons.FieldIcons
@@ -191,7 +192,7 @@ fun HomeContent(
                 )
             },
         )
-        add(HomeRow("system", "Inputs & system") { SystemTilesRow() })
+        add(HomeRow("system", "Inputs & system") { SystemTilesRow(Modifier.focusBleed()) })
     }
 
     HomeScreen(
