@@ -140,6 +140,48 @@ h2 { font-family: var(--serif); font-weight: 700; letter-spacing: -0.01em; font-
 .sys svg { width: 22px; height: 22px; color: var(--t-muted); flex: none; }
 .sys.on svg { color: var(--t-accent); }
 .sys span { font-size: 13px; font-weight: 500; line-height: 1.2; }
+/* Tools row: the same tiles as the system row, a little wider so the sleep caption fits. Only the sleep tile has a caption. */
+.sys.tool { width: 168px; }
+.sys .lbl { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.sys .cap { font-family: var(--mono); font-size: 10px; letter-spacing: 0.06em; color: var(--t-muted); line-height: 1.2; white-space: nowrap; }
+/* inline sleep picker: a chip row under the Tools tiles, opened in place like the Recent chip */
+.viewport.pick { margin-top: 4px; }
+.pick-label { align-self: center; flex: none; font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--t-muted); }
+
+/* margin note: one mono line under the header with a hairline under it. No note: hidden, shown quietly only while focused. */
+.note-sec { margin-bottom: 12px; }
+.note-sec .sec-rule { margin: 3px 0 0; }
+.f.note { display: block; border-color: transparent; border-radius: 4px; padding: 2px 8px; font-family: var(--mono); font-size: 12.5px; line-height: 1.3; letter-spacing: 0.06em; color: var(--t-muted); white-space: pre; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.f.note.on { border-color: var(--t-accent); background: var(--t-soft); color: var(--t-ink); transform: scale(1.02); }
+.f.note.edit.on { transform: none; }
+.note-sec.empty:not(.peek) { display: none; }
+.note-sec.empty .f.note.on { color: var(--t-muted); }
+.note-in { font: inherit; letter-spacing: inherit; color: var(--t-ink); background: transparent; border: 0; outline: 0; padding: 0; width: 480px; caret-color: var(--t-ink); }
+.note-hint { align-self: center; flex: none; margin-left: 12px; font-family: var(--mono); font-size: 11px; letter-spacing: 0.06em; color: var(--t-muted); }
+
+/* full-width lines for Readout, Viewing log and Settings. Rest = a hairline underneath, focus = the shared ring (scaled 1.02, not 1.06, so it stays inside the safe area). */
+.list { display: block; }
+.f.line { display: grid; grid-template-columns: var(--cols, 260px 1fr); column-gap: 16px; align-items: baseline; margin: 0 12px; padding: 5px 10px; border-color: transparent; border-bottom-color: var(--t-line); border-radius: 0; font-family: var(--mono); font-size: 12.5px; letter-spacing: 0.04em; line-height: 1.35; color: var(--t-ink); font-variant-numeric: tabular-nums; }
+.f.line:last-child { border-bottom-color: transparent; }
+.f.line.on { border-color: var(--t-accent); border-radius: 4px; background: var(--t-soft); transform: scale(1.02); }
+.line .k { color: var(--t-muted); }
+.line .k.ink, .line .v { color: var(--t-ink); }
+.line .v.mute { color: var(--t-muted); }
+.bar { letter-spacing: 0; white-space: pre; color: var(--t-muted); }
+.bar .rest { color: var(--t-line); }
+.f.line.on .bar { color: var(--t-ink); }
+.sum { font-family: var(--mono); font-size: 13px; letter-spacing: 0.06em; color: var(--t-ink); white-space: pre; margin: 0 0 14px; }
+.sum .k { color: var(--t-muted); }
+.sec.grp { margin-bottom: 12px; }
+.grp-date { font-family: var(--mono); font-size: 11.5px; letter-spacing: 0.08em; color: var(--t-muted); margin: 0 12px 2px 23px; }
+.f.row { display: flex; align-items: center; gap: 12px; margin: 0 12px 6px; padding: 9px 14px; background: var(--t-soft); border-radius: 6px; }
+.f.row.on { transform: scale(1.02); }
+.row .lbl-b { flex: 1; font-size: 14px; font-weight: 500; line-height: 1.2; }
+.row .val { font-family: var(--mono); font-size: 12px; letter-spacing: 0.04em; color: var(--t-ink); }
+.row .val.off { color: var(--t-muted); }
+.cap-line { font-family: var(--mono); font-size: 11px; letter-spacing: 0.04em; color: var(--t-muted); margin: 4px 12px 8px; }
+.cap-line.flush { margin-left: 0; }
+.viewport + .cap-line { margin-top: 8px; }
 
 .toast { position: absolute; right: 48px; bottom: 22px; font-family: var(--mono); font-size: 12px; letter-spacing: 0.04em; color: var(--t-ink); background: var(--t-panel); border: 1px solid var(--t-line); padding: 6px 12px; border-radius: 4px; opacity: 0; transition: opacity 200ms; pointer-events: none; }
 .toast.show { opacity: 1; }
@@ -148,6 +190,9 @@ h2 { font-family: var(--serif); font-weight: 700; letter-spacing: -0.01em; font-
 .ambient { position: absolute; inset: 0; background: var(--t-bg); opacity: 0; pointer-events: none; transition: opacity 500ms; }
 .ambient.show { opacity: 1; pointer-events: auto; }
 .ambient canvas { width: 100%; height: 100%; display: block; }
+/* the picture (field + its background) is one layer so the sleep dim can scale all of it towards black; the clock sits above and leaves sooner */
+.amb-pic { position: absolute; inset: 0; background: var(--t-bg); }
+.reduced .ambient { transition: none; }
 .amb-clock { position: absolute; left: 48px; bottom: 30px; }
 .amb-time { font-family: var(--serif); font-weight: 700; font-size: 56px; letter-spacing: -0.01em; line-height: 1; color: var(--t-ink); font-variant-numeric: tabular-nums; }
 .amb-date { font-family: var(--mono); font-size: 12px; letter-spacing: 0.08em; color: var(--t-muted); margin-top: 8px; text-transform: uppercase; }
@@ -223,7 +268,7 @@ h2 { font-family: var(--serif); font-weight: 700; letter-spacing: -0.01em; font-
   <header>
     <div class="eyebrow">ANDREWEVMILLER-TV-LAUNCHER · MOCKUP · REV 0.1</div>
     <h1>Field Launcher</h1>
-    <p class="lede">A working mockup of the home screen on a 960×540dp TV canvas, in the site's field-notebook language. Click the screen, then drive it with <kbd>←</kbd> <kbd>↑</kbd> <kbd>→</kbd> <kbd>↓</kbd>, <kbd>Enter</kbd> and <kbd>Esc</kbd>, or use the remote. Apps sit in a four-column grid that ends in an All apps tile; hold <kbd>Enter</kbd> on an app to rearrange it. Turn on build owners to see which agent ships each part.</p>
+    <p class="lede">A working mockup of the home screen on a 960×540dp TV canvas, in the site's field-notebook language. Click the screen, then drive it with <kbd>←</kbd> <kbd>↑</kbd> <kbd>→</kbd> <kbd>↓</kbd>, <kbd>Enter</kbd> and <kbd>Esc</kbd>, or use the remote. Apps sit in a four-column grid that ends in an All apps tile; hold <kbd>Enter</kbd> on an app to rearrange it. The Tools row at the bottom holds the sleep timer, the viewing log and the readout; the margin note under the title is yours to edit. Turn on build owners to see which agent ships each part.</p>
   </header>
 
   <div class="workbench">
@@ -235,8 +280,8 @@ h2 { font-family: var(--serif); font-weight: 700; letter-spacing: -0.01em; font-
             <div class="toast" id="toast"></div>
             <div class="ambient" id="ambient" data-owner="D">
               <span class="own-tag">D · Ambient</span>
-              <canvas id="ambCanvas" width="1920" height="1080"></canvas>
-              <div class="amb-clock"><div class="amb-time" id="ambTime">19:42</div><div class="amb-date" id="ambDate">Wednesday · 2026-10-21</div></div>
+              <div class="amb-pic" id="ambPic"><canvas id="ambCanvas" width="1920" height="1080"></canvas></div>
+              <div class="amb-clock" id="ambClock"><div class="amb-time" id="ambTime">19:42</div><div class="amb-date" id="ambDate">Wednesday · 2026-10-21</div></div>
             </div>
             <div class="slides" id="slides" data-owner="D">
               <span class="own-tag">D · Photos screensaver hand-off</span>
@@ -274,6 +319,15 @@ h2 { font-family: var(--serif); font-weight: 700; letter-spacing: -0.01em; font-
           <button class="toggle" id="t-motion" aria-pressed="false"><span>Reduced motion</span><span class="state">off</span></button>
           <button class="toggle" id="t-own" aria-pressed="false"><span>Build owners</span><span class="state">off</span></button>
         </div>
+      </div>
+      <div>
+        <div class="panel-label">Demo · sleep timer &amp; viewing log</div>
+        <div class="toggles">
+          <button class="toggle" id="t-fast" aria-pressed="false"><span>Fast fade (4 s, not 45 s)</span><span class="state">off</span></button>
+          <button class="toggle" id="t-usage" aria-pressed="false"><span>Usage access</span><span class="state">granted</span></button>
+        </div>
+        <div class="row-btns"><button id="r-skip">Skip to end</button><button id="r-restorelog">Restore sample log</button></div>
+        <div class="mono" id="sleepStat" style="margin-top:8px">Sleep timer off</div>
       </div>
       <div>
         <div class="panel-label">Sound waveform · settings</div>
@@ -357,6 +411,98 @@ h2 { font-family: var(--serif); font-weight: 700; letter-spacing: -0.01em; font-
     { name: 'HDMI 1', icon: 'port' }, { name: 'HDMI 2', icon: 'port' }, { name: 'Wi-Fi', icon: 'wifi' },
     { name: 'Search', icon: 'search' }, { name: 'Settings', icon: 'gear' }
   ];
+  /* ---- notebook features: sample data, formats and the pure rules the Kotlin code mirrors (docs/SLEEP_TIMER_PLAN.md, docs/NOTEBOOK_FEATURES_PLAN.md) ---- */
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const toMin = hhmm => +hhmm.slice(0, 2) * 60 + +hhmm.slice(3, 5);
+  const hhmm = m => pad(Math.floor(m / 60)) + ':' + pad(m % 60);
+  /* durations read "14 h 20 m", "1 h 05 m" or "53 m" */
+  const fmtDur = m => m < 60 ? m + ' m' : Math.floor(m / 60) + ' h ' + pad(m % 60) + ' m';
+
+  /* sleep timer: SleepPresets, SleepLogic.caption/clock, SleepDimMath */
+  const SLEEP_MINUTES = [15, 30, 45, 60, 90, 120], SLEEP_EXTEND = 15, SLEEP_MAX = 240, SLEEP_DEFAULT = 45;
+  const FADE_MS = 45000, FAST_FADE_MS = 4000, DIM_FLOOR = 0.05, CLOCK_GONE = 0.6;
+  const SLEEP_SOUND_AFTER_PAUSE_MS = 600, SLEEP_DIM_AFTER_SOUND_MS = 1200;   // runSleepEnd's gaps
+  function sleepCaption(ms) {
+    if (ms <= 0) return '0 min';
+    if (ms < 60000) return '<1 min';
+    const m = Math.ceil(ms / 60000);
+    return m < 60 ? m + ' min' : Math.floor(m / 60) + ' h ' + pad(m % 60) + ' min';
+  }
+  function sleepClock(ms) { const s = ms <= 0 ? 0 : Math.ceil(ms / 1000); return Math.floor(s / 3600) + ':' + pad(Math.floor((s % 3600) / 60)) + ':' + pad(s % 60); }
+  const smooth = t => t * t * (3 - 2 * t);
+  const dimProgress = (el, fade) => fade <= 0 ? 1 : Math.min(1, Math.max(0, el / fade));
+  function dimLevel(el, fade, reduced) {
+    if (reduced) return DIM_FLOOR;
+    const t = dimProgress(el, fade);
+    if (t <= 0) return 1;
+    if (t >= 1) return DIM_FLOOR;
+    return DIM_FLOOR + (1 - DIM_FLOOR) * (1 - smooth(t));
+  }
+  function clockLevel(el, fade, reduced) {
+    if (reduced) return 0;
+    const t = dimProgress(el, fade) / CLOCK_GONE;
+    if (t <= 0) return 1;
+    if (t >= 1) return 0;
+    return 1 - smooth(t);
+  }
+
+  /* margin note: one line of the viewer's own text, 80 characters at most, no newlines */
+  const NOTE_MAX = 80, NOTE_KEY = 'fieldLauncher.marginNote', NOTE_SAMPLE = 'finish S2 of Severance';
+  const cleanNote = s => String(s).replace(/[\r\n]+/g, ' ').slice(0, NOTE_MAX).trim();
+  const noteStore = {
+    get() { try { return localStorage.getItem(NOTE_KEY); } catch (e) { return null; } },
+    set(v) { try { localStorage.setItem(NOTE_KEY, v); } catch (e) { /* the page works without storage */ } }
+  };
+
+  /* readout: Device / Network / Checks. Uptime ticks live; the Usage access check follows the demo control. */
+  const UPTIME_BASE_S = 3 * 86400 + 4 * 3600 + 12 * 60 + 9, UPTIME_T0 = Date.now();
+  function fmtUptime() {
+    const s = UPTIME_BASE_S + Math.floor((Date.now() - UPTIME_T0) / 1000);
+    return Math.floor(s / 86400) + 'd ' + pad(Math.floor((s % 86400) / 3600)) + ':' + pad(Math.floor((s % 3600) / 60)) + ':' + pad(s % 60);
+  }
+  const READOUT = [
+    { key: 'ro-dev', title: 'Device', lines: () => [
+      ['Model', 'SmartTV 4K'], ['Android', '12 (API 31)'], ['Security patch', '2026-08-05'], ['Uptime', fmtUptime(), 'roUptime'],
+      ['Storage', '11.2 GB free of 24.0 GB'], ['Memory', '1.1 GB free of 2.0 GB'], ['Display', '1920x1080 · 320 dpi · 60 Hz'], ['Launcher', '0.1.0']] },
+    { key: 'ro-net', title: 'Network', lines: () => [
+      ['Connection', 'Wi-Fi'], ['IP address', '192.168.1.42'], ['Link speed', '433 Mbps'], ['Internet', 'yes']] },
+    { key: 'ro-chk', title: 'Checks', check: true, lines: () => [
+      ['WRITE_SECURE_SETTINGS', 'ok'], ['Usage access', state.usage ? 'ok' : 'missing · run scripts/deploy.sh'],
+      ['Previous home recorded', 'ok · com.gathin.tvhome'], ['Screensaver', 'Oxyfield'], ['Watch Next readable', 'unknown']] }
+  ];
+
+  /* viewing log: sample sessions [date, start, end, app]. This week is hand-written to total 14 h 20 m in 11 sessions;
+     the earlier ones come from a fixed seed, so every load shows the same log. Everything shown is computed from these. */
+  const LOG_WEEK = [
+    ['10-21', '19:05', '20:40', 'YouTube'], ['10-21', '18:05', '18:58', 'Plex'], ['10-21', '12:10', '12:45', 'Spotify'],
+    ['10-20', '21:40', '23:05', 'Spotify'], ['10-20', '19:30', '21:30', 'Netflix'], ['10-20', '12:30', '13:10', 'YouTube'], ['10-20', '07:45', '08:30', 'Plex'],
+    ['10-19', '20:12', '22:40', 'Moonlight'], ['10-19', '18:15', '19:50', 'Plex'], ['10-19', '17:00', '17:50', 'Tidal'], ['10-19', '12:05', '13:39', 'YouTube']
+  ];
+  const LOG_EARLIER = (() => {
+    let s = 1021;
+    const rnd = () => { s = (s + 0x6D2B79F5) >>> 0; let t = s; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+    const pool = ['YouTube', 'YouTube', 'Plex', 'Netflix', 'Netflix', 'Spotify', 'Tidal', 'Moonlight', 'Prime Video', 'Disney+', 'RetroArch'];
+    const out = [];
+    for (let day = 1; day <= 18; day++) {
+      [[450, 660, 0.35, 20, 70], [720, 1020, 0.5, 25, 95], [1080, 1290, 0.9, 45, 170]].forEach(([from, to, p, dMin, dMax]) => {
+        if (rnd() > p) return;
+        const start = from + Math.floor((rnd() * (to - from)) / 5) * 5;
+        const dur = Math.round((dMin + rnd() * (dMax - dMin)) / 5) * 5;
+        out.push(['10-' + pad(day), hhmm(start), hhmm(Math.min(start + dur, to + 55)), pool[Math.floor(rnd() * pool.length)]]);
+      });
+    }
+    return out;
+  })();
+  const LOG_ALL = LOG_WEEK.concat(LOG_EARLIER).map(([d, s, e, app]) => ({ d, s, e, app, m: toMin(e) - toMin(s) }))
+    .sort((a, b) => (a.d === b.d ? (a.s < b.s ? 1 : -1) : (a.d < b.d ? 1 : -1)));
+  const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  const LOG_RANGES = {
+    week: { label: 'This week', head: 'THIS WEEK', from: '10-19', to: '10-25', buckets: ['10-19', '10-20', '10-21', '10-22', '10-23', '10-24', '10-25'].map((d, i) => ({ label: WEEKDAYS[i], from: d, to: d })), per: 'Per day' },
+    last: { label: 'Last week', head: 'LAST WEEK', from: '10-12', to: '10-18', buckets: ['10-12', '10-13', '10-14', '10-15', '10-16', '10-17', '10-18'].map((d, i) => ({ label: WEEKDAYS[i], from: d, to: d })), per: 'Per day' },
+    month: { label: 'Month', head: 'MONTH', from: '10-01', to: '10-31', buckets: [['10-01', '10-04'], ['10-05', '10-11'], ['10-12', '10-18'], ['10-19', '10-25']].map(([f, t]) => ({ label: f, from: f, to: t })), per: 'Per week · starting' }
+  };
+  const LOG_CHIPS = ['week', 'last', 'month'];
+
   const AGENTS = [
     { id: 'I', name: 'Integrator', wave: 'Wave 1 + 3', desc: 'Theme tokens, fonts, focus style, dot grid, home frame and clock. Wires every row in at the end.' },
     { id: 'A', name: 'Scripts & safety', wave: 'Wave 1', desc: 'probe, deploy and rescue scripts, crash fallback to the stock launcher. No UI of its own.' },
@@ -367,9 +513,14 @@ h2 { font-family: var(--serif); font-weight: 700; letter-spacing: -0.01em; font-
     { id: 'F', name: 'Sound', wave: 'Wave 2', desc: 'Interface sound set rendered from a script, SoundPool playback, repeat throttling, on/off setting. No UI region.' }
   ];
 
-  /* view: 'home' or 'drawer'. r/c index into `rows` (visual rows), so a grid of N rows is N entries; code that
-     needs "which section" asks rows[r].key ('band' | 'chips' | 'apps' | 'recent' | 'photos' | 'system'). */
-  const state = { view: 'home', chip: 'all', r: 0, c: 0, scrollX: {}, order: APPS.filter(a => a.pinned).map(a => a.pkg), edit: null, ambient: false, slides: false, recentOpen: false, light: false, reduced: matchMedia('(prefers-reduced-motion: reduce)').matches, owners: false, solo: null };
+  /* view: 'home', 'drawer', 'readout', 'log' or 'settings'. r/c index into `rows` (visual rows), so a grid of N rows is N entries; code that
+     needs "which section" asks rows[r].key ('note' | 'band' | 'chips' | 'apps' | 'recent' | 'photos' | 'system' | 'tools' | 'sleep' on Home).
+     Notebook features: sleep = the running timer { endsAt, len } or null; dim = the sleep dim screen is up (it reuses the ambient overlay);
+     note = the margin note; noteEdit = its editor is open. */
+  const state = { view: 'home', chip: 'all', r: 0, c: 0, scrollX: {}, order: APPS.filter(a => a.pinned).map(a => a.pkg), edit: null, ambient: false, slides: false, recentOpen: false, light: false, reduced: matchMedia('(prefers-reduced-motion: reduce)').matches, owners: false, solo: null,
+    sleep: null, sleepOpen: false, sleepDefault: SLEEP_DEFAULT, dim: false, fast: false,
+    note: (() => { const s = noteStore.get(); return s === null ? NOTE_SAMPLE : cleanNote(s); })(), noteEdit: false,
+    usage: true, logOn: true, logCleared: false, logRange: 'week', clearArmed: false };
 
   /* Interface sounds: 1–2 triangle oscillators pushed through a wavefolder and hard saturation,
      then a filter sweep, with a noise transient on the attack. Harsh but short and quiet.
@@ -581,12 +732,50 @@ h2 { font-family: var(--serif); font-weight: 700; letter-spacing: -0.01em; font-
         </div></div>
       </div>`;
 
+  /* margin note: `NOTE  text` under the header. Empty and unfocused it is hidden (takes no space); focused it reads `NOTE  add a note`. */
+  function noteSec() {
+    const empty = !state.note && !state.noteEdit;
+    const body = state.noteEdit
+      ? `<span class="f note edit">NOTE  <input class="note-in" id="noteIn" type="text" maxlength="${NOTE_MAX}" spellcheck="false" autocomplete="off" aria-label="Margin note"></span><span class="note-hint">Enter saves · Esc discards</span>`
+      : `<span class="f note">NOTE  ${esc(state.note || 'add a note')}</span>`;
+    return `
+      <div class="sec note-sec${empty ? ' empty' : ''}" data-owner="B">${tag('B', 'Margin note')}
+        <div class="viewport"><div class="track" data-key="note">${body}</div></div>
+        <div class="sec-rule"></div>
+      </div>`;
+  }
+
+  /* sleep timer picker: opens in place under the Tools tiles. While a timer runs it also offers +15 min and Cancel. */
+  const sleepLeft = () => state.sleep ? Math.max(0, state.sleep.endsAt - Date.now()) : 0;
+  const sleepTileCaption = () => state.sleep ? 'Sleep · ' + sleepCaption(sleepLeft()) : 'Off';
+  function sleepPicker() {
+    const run = !!state.sleep;
+    const chip = (label, attrs, sel) => `<span class="f chip${sel ? ' sel' : ''}" ${attrs}>${label}</span>`;
+    return `<div class="viewport pick"><div class="track" data-key="sleep">
+        <span class="pick-label">Sleep after · min</span>
+        ${chip('Off', 'data-min="0"', !run)}
+        ${SLEEP_MINUTES.map(m => chip(m, `data-min="${m}"`, run && state.sleep.len === m)).join('')}
+        ${run ? chip('+' + SLEEP_EXTEND + ' min', 'data-act="extend"') + chip('Cancel', 'data-act="cancel"') : ''}
+      </div></div>`;
+  }
+  const toolsSec = () => `
+      <div class="sec" data-owner="B">${tag('B', 'Tools row')}
+        <div class="sec-rule"></div><div class="sec-label">Tools</div>
+        <div class="viewport"><div class="track" data-key="tools">
+          <div class="f sys tool" data-act="sleep">${svg('moon')}<div class="lbl"><span>Sleep timer</span><div class="cap" id="sleepCap">${sleepTileCaption()}</div></div></div>
+          <div class="f sys tool" data-act="log">${svg('wave')}<div class="lbl"><span>Viewing log</span></div></div>
+          <div class="f sys tool" data-act="readout">${svg('points')}<div class="lbl"><span>Readout</span></div></div>
+        </div></div>
+        ${state.sleepOpen ? sleepPicker() : ''}
+      </div>`;
+
   function homeHTML() {
     const apps = homeApps();
     return `
       <div class="tv-head" data-owner="I" style="position:relative">${tag('I', 'Frame + clock')}
         <div class="tv-title">Home</div><div class="tv-clock" id="clock"></div>
       </div>
+      ${noteSec()}
       <div class="band" data-owner="C">${tag('C', 'Feature band')}
         <div>
           <div class="band-kicker">Featured · Plex · resume at 31:08</div>
@@ -617,9 +806,10 @@ h2 { font-family: var(--serif); font-weight: 700; letter-spacing: -0.01em; font-
       <div class="sec" data-owner="B">${tag('B', 'System tiles')}
         <div class="sec-rule"></div><div class="sec-label">Inputs &amp; system</div>
         <div class="viewport"><div class="track" data-key="system">
-          ${SYS.map(s => `<div class="f sys">${svg(s.icon)}<span>${s.name}</span></div>`).join('')}
+          ${SYS.map(s => `<div class="f sys"${s.name === 'Settings' ? ' data-act="settings"' : ''}>${svg(s.icon)}<span>${s.name}</span></div>`).join('')}
         </div></div>
-      </div>`;
+      </div>
+      ${toolsSec()}`;
   }
 
   /* the drawer: same frame, same chips, same grid and tile as Home, but every app, A–Z, no All apps cell */
@@ -636,15 +826,92 @@ h2 { font-family: var(--serif); font-weight: 700; letter-spacing: -0.01em; font-
       </div>`;
   }
 
+  /* Routes: Readout, Viewing log and Settings draw into the same #content, like the drawer. Their lines are `.f.line` / `.f.row`
+     in a `.list` (one line = one row), so the arrows scroll them; Back returns to Home with focus on the tile it came from. */
+  const head = title => `<div class="tv-head" data-owner="I" style="position:relative">${tag('I', 'Frame + clock')}
+        <div class="tv-title">${title}</div><div class="tv-clock" id="clock"></div>
+      </div>`;
+  const lineHTML = (cols, cells) => `<div class="f line" style="--cols:${cols}">${cells.join('')}</div>`;
+
+  /* Readout: label/value lines in three blocks. Status words in Checks are plain muted text, never coloured. */
+  function readoutHTML() {
+    return head('Readout') + READOUT.map(b => `
+      <div class="sec">
+        <div class="sec-rule"></div><div class="sec-label">${b.title}</div>
+        <div class="list" data-key="${b.key}">${b.lines().map(([k, v, id]) =>
+          lineHTML('260px 1fr', [`<span class="k${b.check ? ' ink' : ''}">${esc(k)}</span>`, `<span class="v${b.check ? ' mute' : ''}"${id ? ` id="${id}"` : ''}>${esc(v)}</span>`])).join('')}</div>
+      </div>`).join('');
+  }
+
+  /* Viewing log: summary, a mono text bar per weekday (block characters, no colour), top apps, then sessions by date. */
+  const logSessions = range => state.logCleared ? [] : LOG_ALL.filter(s => s.d >= range.from && s.d <= range.to);
+  const sumMin = list => list.reduce((t, s) => t + s.m, 0);
+  function textBar(m, max, cells) {
+    const x = max > 0 ? (m / max) * cells : 0, full = Math.floor(x), eighths = Math.round((x - full) * 8);
+    const f = full + (eighths === 8 ? 1 : 0), part = eighths > 0 && eighths < 8 ? '▏▎▍▌▋▊▉'[eighths - 1] : '';
+    return `<span class="bar">${'█'.repeat(f)}${part}<span class="rest">${'░'.repeat(Math.max(0, cells - f - (part ? 1 : 0)))}</span></span>`;
+  }
+  function logMessage(text) {
+    return head('Viewing log') + `<div class="sec"><div class="list" data-key="log-msg">${lineHTML('1fr', [`<span class="v">${esc(text)}</span>`])}</div></div>`;
+  }
+  function logHTML() {
+    if (!state.usage) return logMessage('Usage access is not granted. Run scripts/deploy.sh once.');
+    if (!state.logOn) return logMessage('Viewing log is off. Turn it on in Settings.');
+    const range = LOG_RANGES[state.logRange], ss = logSessions(range);
+    const chips = `<div class="sec"><div class="viewport"><div class="track" data-key="logchips">${LOG_CHIPS.map(id =>
+      `<span class="f chip ${state.logRange === id ? 'sel' : ''}">${LOG_RANGES[id].label}</span>`).join('')}</div></div></div>`;
+    const summary = `<div class="sum"><span class="k">${range.head}</span>  ${fmtDur(sumMin(ss))} · ${ss.length} session${ss.length === 1 ? '' : 's'}</div>`;
+    if (!ss.length) return head('Viewing log') + summary + chips + `<div class="sec"><div class="list" data-key="log-msg">${lineHTML('1fr', ['<span class="v">No sessions recorded yet.</span>'])}</div></div>`;
+
+    const buckets = range.buckets.map(b => ({ label: b.label, m: sumMin(ss.filter(s => s.d >= b.from && s.d <= b.to)) }));
+    const max = Math.max(...buckets.map(b => b.m));
+    const bars = `<div class="sec"><div class="sec-rule"></div><div class="sec-label">${range.per}</div>
+        <div class="list" data-key="log-bars">${buckets.map(b => lineHTML('56px 352px 1fr', [`<span class="k">${b.label}</span>`, textBar(b.m, max, 40), `<span class="v${b.m ? '' : ' mute'}">${b.m ? fmtDur(b.m) : '–'}</span>`])).join('')}</div></div>`;
+
+    const total = sumMin(ss), byApp = {};
+    ss.forEach(s => { byApp[s.app] = (byApp[s.app] || 0) + s.m; });
+    const top = Object.entries(byApp).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).slice(0, 5);
+    const topApps = `<div class="sec"><div class="sec-rule"></div><div class="sec-label">Top apps</div>
+        <div class="list" data-key="log-top">${top.map(([n, m]) => lineHTML('260px 120px 1fr', [`<span class="k ink">${esc(n)}</span>`, `<span class="v">${fmtDur(m)}</span>`, `<span class="v mute">${Math.round((100 * m) / total)}%</span>`])).join('')}</div></div>`;
+
+    const dates = [...new Set(ss.map(s => s.d))];
+    const sessions = `<div class="sec" style="margin-bottom:10px"><div class="sec-rule"></div><div class="sec-label">Sessions</div></div>` + dates.map(d => `
+      <div class="sec grp"><div class="grp-date">${d}</div>
+        <div class="list" data-key="log-d-${d}">${ss.filter(s => s.d === d).map(s => lineHTML('150px 260px 1fr', [`<span class="k">${s.s}–${s.e}</span>`, `<span class="k ink">${esc(s.app)}</span>`, `<span class="v">${fmtDur(s.m)}</span>`])).join('')}</div>
+      </div>`).join('');
+    return head('Viewing log') + summary + chips + bars + topApps + sessions;
+  }
+
+  /* Settings: only the sections the notebook features add (Sleep, Viewing log); Sound has its own picker in the side panel. */
+  function settingsHTML() {
+    return head('Settings') + `
+      <div class="sec">
+        <div class="sec-rule"></div><div class="sec-label">Sleep</div>
+        <div class="cap-line flush">Default length · min</div>
+        <div class="viewport"><div class="track" data-key="set-sleep">${SLEEP_MINUTES.map(m => `<span class="f chip${m === state.sleepDefault ? ' sel' : ''}" data-min="${m}">${m}</span>`).join('')}</div></div>
+        <div class="cap-line flush">The sleep picker on Home opens on this length.</div>
+      </div>
+      <div class="sec">
+        <div class="sec-rule"></div><div class="sec-label">Viewing log</div>
+        <div class="list" data-key="set-log">
+          <div class="f row" data-act="logtoggle"><span class="lbl-b">Viewing log</span><span class="val${state.logOn ? '' : ' off'}">${state.logOn ? 'on' : 'off'}</span></div>
+          <div class="f row" data-act="clearlog"><span class="lbl-b">Clear log</span><span class="val">${state.clearArmed ? 'Press OK again to clear' : ''}</span></div>
+        </div>
+        <div class="cap-line">Kept on this TV only. Nothing leaves it.</div>
+      </div>
+      <div class="cap-line">Appearance, Sound and Screensaver are not drawn in this mockup.</div>`;
+  }
+
   /* place: optional function that puts focus where the caller wants it; default keeps the current row/column */
   function render(place) {
-    content.innerHTML = state.view === 'drawer' ? drawerHTML() : homeHTML();
+    content.innerHTML = ({ home: homeHTML, drawer: drawerHTML, readout: readoutHTML, log: logHTML, settings: settingsHTML }[state.view])();
     rows = [];
     content.querySelectorAll('[data-key]').forEach(box => {
       const items = [...box.querySelectorAll('.f')];
-      if (box.classList.contains('grid')) {
-        const gn = Math.ceil(items.length / COLS);
-        for (let g = 0; g < gn; g++) rows.push({ key: box.dataset.key, items: items.slice(g * COLS, (g + 1) * COLS), grid: true, gr: g, gn });
+      const cols = box.classList.contains('grid') ? COLS : box.classList.contains('list') ? 1 : 0;
+      if (cols) {
+        const gn = Math.ceil(items.length / cols);
+        for (let g = 0; g < gn; g++) rows.push({ key: box.dataset.key, items: items.slice(g * cols, (g + 1) * cols), grid: true, gr: g, gn });
       } else rows.push({ key: box.dataset.key, items });
     });
     rows.forEach((row, r) => row.items.forEach((el, c) => { el.dataset.r = r; el.dataset.c = c; }));
@@ -665,6 +932,14 @@ h2 { font-family: var(--serif); font-weight: 700; letter-spacing: -0.01em; font-
     if (!row) return;
     state.r = r; state.c = Math.max(0, Math.min(c, row.items.length - 1));
     const el = row.items[state.c];
+    // an empty margin note is hidden until it takes focus; show it before anything is measured
+    const noteBox = content.querySelector('.note-sec');
+    if (noteBox) noteBox.classList.toggle('peek', row.key === 'note');
+    // "Clear log" asks for a second OK; moving off it withdraws the question
+    if (state.clearArmed && el.dataset.act !== 'clearlog') {
+      state.clearArmed = false;
+      const v = content.querySelector('[data-act="clearlog"] .val'); if (v) v.textContent = '';
+    }
     el.classList.add('on');
     el.classList.toggle('lift', !!state.edit && el.dataset.pkg === state.edit.pkg);
     // horizontal: carousels keep the focused item inside their viewport; the grid never scrolls sideways
@@ -689,13 +964,18 @@ h2 { font-family: var(--serif); font-weight: 700; letter-spacing: -0.01em; font-
     let y = -(parseFloat(content.dataset.y || 0));
     if (botT - y > VIEW_H) y = botT - VIEW_H;
     if (topT - y < 0) y = Math.max(0, topT);
-    if (row.key === 'band' || row.key === 'chips') y = 0;
+    if (r === 0 || row.key === 'note' || row.key === 'band' || row.key === 'chips') y = 0;   // the first row shows the top of the page, header and all
     content.dataset.y = -y;
     content.style.transform = `translateY(${-y}px)`;
   }
 
   function exitAmbient() {
-    if (state.ambient) { setAmbient(false); sfx.wake(); return true; }
+    if (state.ambient) {
+      const wasDim = state.dim;
+      setAmbient(false); sfx.wake();
+      if (wasDim) wakeFromSleep();
+      return true;
+    }
     if (state.slides) { setSlides(false); sfx.wake(); return true; }
     return false;
   }
@@ -709,8 +989,10 @@ h2 { font-family: var(--serif); font-weight: 700; letter-spacing: -0.01em; font-
 
   function move(dir) {
     if (exitAmbient()) return;
+    if (state.noteEdit) return;   // the editor's input owns the keys; the remote's arrows do nothing meanwhile
     if (state.edit) return editMove(dir);
     const row = rows[state.r];
+    if (!row) return;
     if (dir === 'left' || dir === 'right') {
       // within a row; never wraps, the end of the row is an edge
       const nc = state.c + (dir === 'right' ? 1 : -1);
@@ -731,16 +1013,45 @@ h2 { font-family: var(--serif); font-weight: 700; letter-spacing: -0.01em; font-
   }
 
   let toastTimer;
-  function toast(msg, sticky) {
+  function toast(msg, sticky, ms = 1600) {
     toastEl.textContent = msg; toastEl.classList.add('show');
     clearTimeout(toastTimer);
-    if (!sticky) toastTimer = setTimeout(() => toastEl.classList.remove('show'), 1600);
+    if (!sticky) toastTimer = setTimeout(() => toastEl.classList.remove('show'), ms);
   }
 
   function select() {
     if (exitAmbient()) return;
-    const row = rows[state.r], el = row.items[state.c];
+    if (state.noteEdit) return saveNote(document.getElementById('noteIn').value);   // OK on the remote is "Done"
+    const row = rows[state.r];
+    if (!row) return;
+    const el = row.items[state.c];
     switch (row.key) {
+      case 'note':
+        return startNoteEdit();
+      case 'tools':
+        if (el.dataset.act === 'sleep') return toggleSleepPicker();
+        return openRoute(el.dataset.act);
+      case 'sleep':
+        return sleepPick(el);
+      case 'logchips':
+        sfx.select(); state.logRange = LOG_CHIPS[state.c];
+        { const c = state.c; render(() => focus(firstRow('logchips'), c)); } return;
+      case 'set-sleep': {
+        sfx.select(); state.sleepDefault = +el.dataset.min;
+        const c = state.c; render(() => focus(firstRow('set-sleep'), c)); return;
+      }
+      case 'set-log': {
+        if (el.dataset.act === 'logtoggle') {
+          sfx.select(); state.logOn = !state.logOn;
+          const r = state.r, c = state.c; render(() => focus(r, c)); return;
+        }
+        // clearlog: the first OK asks, the second one clears
+        sfx.select();
+        if (!state.clearArmed) { state.clearArmed = true; const r = state.r, c = state.c; render(() => focus(r, c)); return; }
+        state.clearArmed = false; state.logCleared = true;
+        { const r = state.r, c = state.c; render(() => focus(r, c)); }
+        return toast('Viewing log cleared');
+      }
       case 'band':
         launchApp('Plex'); return toast('Opening Plex · resume 31:08');
       case 'chips': {
@@ -758,9 +1069,116 @@ h2 { font-family: var(--serif); font-weight: 700; letter-spacing: -0.01em; font-
       case 'photos':
         return setSlides(true, state.c);
       case 'system':
+        if (el.dataset.act === 'settings') return openRoute('settings');
         sfx.select(); return toast(el.textContent.trim().startsWith('HDMI') ? 'Switching to ' + el.textContent.trim() : 'Opening ' + el.textContent.trim());
     }
   }
+
+  /* Routes (Readout, Viewing log, Settings): open from a tile, Back returns to Home with focus on that tile. */
+  const ROUTE_FIRST = { readout: () => focus(firstRow('ro-dev'), 0), settings: () => focus(firstRow('set-sleep'), SLEEP_MINUTES.indexOf(state.sleepDefault)),
+    log: () => focus(firstRow('logchips') >= 0 ? firstRow('logchips') : 0, LOG_CHIPS.indexOf(state.logRange)) };
+  let routeFrom = null;
+  function openRoute(name) {
+    sfx.select();
+    state.sleepOpen = false;
+    routeFrom = name;
+    setView(name);
+    render(ROUTE_FIRST[name]);
+  }
+  function closeRoute() {
+    const from = routeFrom; routeFrom = null;
+    state.clearArmed = false;
+    setView('home');
+    render(() => focusWhere(el => el.dataset.act === from));
+  }
+
+  /* Sleep timer. Tile caption: Off, or `Sleep · 42 min` counting down. OK on the tile opens the picker in place; a length starts
+     the timer (select sound) and collapses it. +15 min extends (never past 240 min from now); Cancel stops it. */
+  function toggleSleepPicker() {
+    sfx.select();
+    state.sleepOpen = !state.sleepOpen;
+    render(() => state.sleepOpen ? focusWhere(el => el.dataset.min === String(state.sleepDefault)) : focusWhere(el => el.dataset.act === 'sleep'));
+  }
+  function sleepPick(el) {
+    sfx.select();
+    const now = Date.now();
+    if (!state.sleep && (el.dataset.act === 'extend' || el.dataset.act === 'cancel')) {
+      // the timer ran out while the picker was open: nothing to extend or cancel
+    } else if (el.dataset.act === 'extend') {
+      state.sleep.endsAt = Math.min(state.sleep.endsAt + SLEEP_EXTEND * 60000, now + SLEEP_MAX * 60000);
+      toast('Sleep timer · +' + SLEEP_EXTEND + ' min');
+    } else if (el.dataset.act === 'cancel' || el.dataset.min === '0') {
+      state.sleep = null;
+      toast('Sleep timer off');
+    } else {
+      const len = +el.dataset.min;
+      state.sleep = { len, endsAt: now + len * 60000 };
+      toast('Sleep timer · ' + len + ' min');
+    }
+    state.sleepOpen = false;
+    render(() => focusWhere(t => t.dataset.act === 'sleep'));
+    sleepTick();
+  }
+  function sleepTick() {
+    const cap = document.getElementById('sleepCap');
+    if (cap) cap.textContent = sleepTileCaption();
+    document.getElementById('sleepStat').textContent = state.sleep ? 'Sleep timer · ' + sleepClock(sleepLeft()) + ' left' : 'Sleep timer off';
+    if (state.sleep && Date.now() >= state.sleep.endsAt) fireSleep();
+  }
+  /* The firing sequence (runSleepEnd): pause the media, wait 600 ms, the closing sound, wait 1200 ms, the dim screen.
+     The mockup has no now-playing indicator, so "pause" is a one-line note. The key presses do not cancel it. */
+  function fireSleep() {
+    state.sleep = null; state.sleepOpen = false;
+    if (state.edit) { state.order = state.edit.orig; state.edit = null; }
+    if (state.view === 'home') render();   // the tile reads Off, the picker is closed
+    toast('Media paused', false, 1100);
+    setTimeout(() => sfx.windDown(), SLEEP_SOUND_AFTER_PAUSE_MS);
+    setTimeout(showSleepDim, SLEEP_SOUND_AFTER_PAUSE_MS + SLEEP_DIM_AFTER_SOUND_MS);
+    sleepTick();
+  }
+  function showSleepDim() {
+    if (state.slides) setSlides(false);
+    setAmbient(true, true);
+  }
+  /* Any key wakes the dim screen back to Home (media stays paused); the sleep tile reads Off again. */
+  function wakeFromSleep() {
+    state.sleepOpen = false;
+    setView('home');
+    render(() => focusWhere(el => el.dataset.act === 'sleep'));
+  }
+  function skipSleep() {
+    if (!state.sleep) return toast('No timer running · pick a length first');
+    state.sleep.endsAt = Date.now();
+    sleepTick();
+  }
+
+  /* Margin note: OK opens a one-line editor (80 characters); Enter saves, Escape discards; saving nothing removes the line. */
+  function startNoteEdit() {
+    sfx.select();
+    state.noteEdit = true;
+    render(() => focusWhere(el => el.classList.contains('note')));
+    const input = document.getElementById('noteIn');
+    input.value = state.note;
+    input.focus(); input.setSelectionRange(input.value.length, input.value.length);
+    input.addEventListener('keydown', e => {
+      if (e.repeat) return;
+      if (e.key === 'Enter') { e.preventDefault(); saveNote(input.value); }
+      else if (e.key === 'Escape') { e.preventDefault(); cancelNoteEdit(); }
+    });
+  }
+  function endNoteEdit() {
+    state.noteEdit = false;
+    render(() => focusWhere(el => el.classList.contains('note')));
+    stage.focus();
+  }
+  function saveNote(text) {
+    state.note = cleanNote(text);
+    noteStore.set(state.note);
+    sfx.select();
+    endNoteEdit();
+    toast(state.note ? 'Note saved' : 'Note removed');
+  }
+  function cancelNoteEdit() { sfx.back(); endNoteEdit(); }
 
   /* Home <-> drawer. Both draw into the same #content, so the drawer is simply the other view of the screen. */
   function setView(v) {
@@ -813,7 +1231,7 @@ h2 { font-family: var(--serif); font-weight: 700; letter-spacing: -0.01em; font-
   let pressTimer = 0, pressing = false, pressDone = false, pressSrc = '';
   function canLift() {
     const row = rows[state.r];
-    return state.view === 'home' && !state.edit && !state.ambient && !state.slides && row.key === 'apps' && !!row.items[state.c].dataset.pkg;
+    return state.view === 'home' && !state.edit && !state.ambient && !state.slides && !!row && row.key === 'apps' && !!row.items[state.c].dataset.pkg;
   }
   function pressStart(src) {
     if (pressing) return;
@@ -859,9 +1277,12 @@ h2 { font-family: var(--serif); font-weight: 700; letter-spacing: -0.01em; font-
 
   function back() {
     if (exitAmbient()) return;
+    if (state.noteEdit) return cancelNoteEdit();   // Back discards the note being typed
     if (state.edit) return endEdit(false);
     sfx.back();
     if (state.view === 'drawer') return closeDrawer();   // Back from the drawer: Home, focus on the All apps tile
+    if (state.view !== 'home') return closeRoute();      // Back from Readout / Viewing log / Settings: Home, focus on its tile
+    if (state.sleepOpen) { state.sleepOpen = false; return render(() => focusWhere(el => el.dataset.act === 'sleep')); }   // Back closes the open sleep picker first
     const first = firstRow('apps');
     if (state.r !== first || state.c !== 0) focus(first, 0);
   }
@@ -870,12 +1291,14 @@ h2 { font-family: var(--serif); font-weight: 700; letter-spacing: -0.01em; font-
     sfx.back();
     if (state.edit) { state.order = state.edit.orig; state.edit = null; }   // Home abandons a move, like Back
     clearTimeout(toastTimer); toastEl.classList.remove('show');
-    state.chip = 'all';
+    state.chip = 'all'; state.sleepOpen = false; state.noteEdit = false; state.clearArmed = false; routeFrom = null;
     if (state.view !== 'home') setView('home');
     render(() => focus(firstRow('apps'), 0));
   }
 
   stage.addEventListener('keydown', e => {
+    if (e.target instanceof HTMLInputElement) return;   // the margin-note editor handles its own keys
+    if (state.dim) { e.preventDefault(); exitAmbient(); return; }   // any key wakes the sleep dim screen
     const map = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right' };
     if (map[e.key]) { e.preventDefault(); pressCancel(); move(map[e.key]); }
     else if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); if (!e.repeat) pressStart('key'); }
@@ -885,9 +1308,10 @@ h2 { font-family: var(--serif); font-weight: 700; letter-spacing: -0.01em; font-
   stage.addEventListener('keyup', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pressEnd(); } });
   stage.addEventListener('focus', () => { hint.textContent = 'Keyboard connected: arrows move, Enter selects (hold it on an app to rearrange), Esc goes back, H goes home.'; hint.classList.add('live'); });
   // a key held while the stage loses focus would never see its keyup; a pointer press on the OK button moves focus by design
-  stage.addEventListener('blur', () => { if (pressSrc === 'key') pressCancel(); hint.textContent = 'Click the screen to take control with the keyboard.'; hint.classList.remove('live'); });
+  stage.addEventListener('blur', e => { if (e.relatedTarget && stage.contains(e.relatedTarget)) return; if (pressSrc === 'key') pressCancel(); hint.textContent = 'Click the screen to take control with the keyboard.'; hint.classList.remove('live'); });
   stage.addEventListener('click', e => {
     if (exitAmbient()) return;
+    if (state.noteEdit) return;   // clicks inside the editor are for the text field
     if (state.edit) return endEdit(true);
     const f = e.target.closest('.f');
     if (f) { const r = +f.dataset.r, c = +f.dataset.c; if (r === state.r && c === state.c) select(); else { sfx.tick(r); focus(r, c); } }
@@ -950,6 +1374,19 @@ h2 { font-family: var(--serif); font-weight: 700; letter-spacing: -0.01em; font-
   renderVoices();
   bind('t-sound', () => { sfx.on = !sfx.on; setToggle('t-sound', sfx.on); if (sfx.on) { sfx.select(); toast('Interface sounds on · try moving around'); } });
   bind('t-motion', () => { state.reduced = !state.reduced; screen.classList.toggle('reduced', state.reduced); setToggle('t-motion', state.reduced); drawBand(performance.now()); });
+  // the demo controls hand the keyboard back to the screen, so the next key press is the TV's (e.g. the one that wakes the dim screen)
+  bind('t-fast', () => { state.fast = !state.fast; setToggle('t-fast', state.fast); stage.focus(); });
+  function setUsageToggle() {
+    const b = document.getElementById('t-usage');
+    b.setAttribute('aria-pressed', !state.usage); b.querySelector('.state').textContent = state.usage ? 'granted' : 'missing';
+  }
+  bind('t-usage', () => {
+    state.usage = !state.usage; setUsageToggle();
+    if (state.view === 'log' || state.view === 'readout') render(() => focus(Math.min(state.r, rows.length - 1), state.c));
+    stage.focus();
+  });
+  bind('r-skip', () => { skipSleep(); stage.focus(); });
+  bind('r-restorelog', () => { state.logCleared = false; state.logOn = true; if (state.view === 'log' || state.view === 'settings') render(); toast('Sample log restored'); stage.focus(); });
   bind('t-own', () => { state.owners = !state.owners; if (!state.owners) state.solo = null; setToggle('t-own', state.owners); applyOwners(); renderAgents(); });
 
   function applyOwners() {
@@ -995,6 +1432,10 @@ h2 { font-family: var(--serif); font-weight: 700; letter-spacing: -0.01em; font-
     document.getElementById('ambDate').textContent = d.toLocaleDateString('en-US', { weekday: 'long' }) + ' · ' + ds;
   }
   setInterval(tickClock, 1000);
+  setInterval(() => {
+    const u = document.getElementById('roUptime'); if (u) u.textContent = fmtUptime();   // Readout: uptime ticks live
+    sleepTick();                                                                        // the tile caption counts down; fires at 0
+  }, 1000);
 
   /* screen scaling */
   const ro = new ResizeObserver(() => { screen.style.transform = `scale(${stage.clientWidth / 960})`; });
@@ -1029,22 +1470,34 @@ h2 { font-family: var(--serif); font-weight: 700; letter-spacing: -0.01em; font-
 
   const amb = document.getElementById('ambient');
   const ambCtx = document.getElementById('ambCanvas').getContext('2d');
-  let ambRipples = [], ambRaf = 0, lastSpawn = 0;
-  function setAmbient(on) {
-    state.ambient = on; amb.classList.toggle('show', on); setToggle('t-amb', on);
+  const ambPic = document.getElementById('ambPic'), ambClock = document.getElementById('ambClock');
+  let ambRipples = [], ambRaf = 0, lastSpawn = 0, dimT0 = 0;
+  /* dim = the sleep timer's screen: the same Oxyfield picture, the whole of it (dots and background) fading to a near-black floor
+     over 45 s (smoothstep, SleepDimMath), the clock gone by 60% of the fade, then one still frame. Reduced motion: the dim frame at once. */
+  const dimFade = () => state.fast ? FAST_FADE_MS : FADE_MS;
+  function applyDim(elapsed) {
+    const lv = dimLevel(elapsed, dimFade(), state.reduced), cl = clockLevel(elapsed, dimFade(), state.reduced);
+    ambPic.style.filter = lv < 1 ? `brightness(${lv.toFixed(4)})` : '';
+    ambClock.style.opacity = cl < 1 ? cl.toFixed(4) : '';
+  }
+  function setAmbient(on, dim = false) {
+    state.ambient = on; state.dim = on && dim; amb.classList.toggle('show', on); setToggle('t-amb', on && !dim);
     cancelAnimationFrame(ambRaf);
+    ambPic.style.filter = ''; ambClock.style.opacity = '';
     if (on) {
-      sfx.sleep();
+      if (!dim) sfx.sleep();   // the sleep timer already played its own closing sound (windDown) before the dim screen came up
       const now = performance.now();
+      dimT0 = now;
       ambRipples = [{ x: 1200, y: 420, t0: now - 2200, v: 260, w: 60, life: 7 }, { x: 520, y: 700, t0: now - 500, v: 260, w: 60, life: 7 }];
       ambLoop(now);
     }
   }
   function ambLoop(now) {
-    if (state.reduced) { field(ambCtx, 1920, 1080, 44, ambRipples, ambRipples[0].t0 + 2600, 2.2); return; }
+    if (state.reduced) { field(ambCtx, 1920, 1080, 44, ambRipples, ambRipples[0].t0 + 2600, 2.2); if (state.dim) applyDim(Infinity); return; }
     if (now - lastSpawn > 2400) { lastSpawn = now; ambRipples.push({ x: 200 + Math.random() * 1520, y: 120 + Math.random() * 840, t0: now, v: 220 + Math.random() * 80, w: 55, life: 7 }); }
     ambRipples = ambRipples.filter(r => (now - r.t0) / 1000 < r.life);
     field(ambCtx, 1920, 1080, 44, ambRipples, now, 2.2);
+    if (state.dim) { const el = now - dimT0; applyDim(el); if (el >= dimFade()) return; }   // settled: hold this frame, stop drawing
     ambRaf = requestAnimationFrame(ambLoop);
   }
 
@@ -1100,5 +1553,10 @@ h2 { font-family: var(--serif); font-weight: 700; letter-spacing: -0.01em; font-
   if (state.reduced) { screen.classList.add('reduced'); setToggle('t-motion', true); }
   renderAgents();
   render(() => focus(firstRow('apps'), 0));
+  // The first layout is measured before the web fonts arrive (text can wrap differently), which can scroll Home by a few dp.
+  // Once the fonts are in, measure again, but only if nobody has moved yet.
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => {
+    if (state.view === 'home' && !state.noteEdit && state.r === firstRow('apps') && state.c === 0) { content.dataset.y = 0; focus(state.r, state.c); }
+  });
 })();
 </script>
