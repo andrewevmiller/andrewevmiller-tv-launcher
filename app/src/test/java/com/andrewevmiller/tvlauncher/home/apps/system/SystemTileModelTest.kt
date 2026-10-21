@@ -329,6 +329,6 @@ class SystemTileModelTest {
         assertEquals("tv inputs: 1 kept, 2 dropped", lines.first())
         assertTrue(lines.any { it.contains("KEEP") && it.contains("label='Apple TV'") })
         assertTrue(lines.any { it.contains("DROP  HIDDEN") })
-        assertTrue(lines.any { it.contains("DROP  NOT_PHYSICAL") && it.contains("type=0(OTHER)") })
+        assertTrue(lines.any { it.contains("DROP  NOT_PHYSICAL") && it.contains("type=1000(OTHER)") })
     }
 }
