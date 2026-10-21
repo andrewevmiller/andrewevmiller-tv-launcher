@@ -4,6 +4,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -36,6 +37,9 @@ import androidx.compose.ui.focus.onFocusChanged
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.graphicsLayer
@@ -104,14 +108,17 @@ fun HomeScreen(
     onToggleRecent: () -> Unit,
     order: List<String>,
     editingPkg: String?,
-    onReorderStart: (LauncherApp) -> Unit,
+    onLongPress: (LauncherApp) -> Unit,
     onMove: (LauncherApp, Int) -> Unit,
     onEditEnd: () -> Unit,
+    pinnedSet: Set<String>?,
+    menuApp: LauncherApp?,
+    onMenuPick: (MenuAction) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val colors = Field.colors
     val matches = { a: LauncherApp -> chip.category == null || a.category == chip.category }
-    val apps = if (drawer) allApps.filter(matches) else orderPinned(allApps, order).filter(matches)
+    val apps = if (drawer) allApps.filter(matches) else orderPinned(allApps, order, pinnedSet).filter(matches)
     val requesters = remember { mutableMapOf<String, FocusRequester>() }
     val gesture = remember { OkGesture() }
     val listState = rememberLazyListState()
@@ -142,7 +149,16 @@ fun HomeScreen(
             if (dy != 0f) listState.animateScrollBy(dy, tween(220, easing = FastOutSlowInEasing))
         }
     }
-    val reorderable = !drawer && chip == Chip.ALL
+    val isPinned = { a: LauncherApp -> pinnedSet?.contains(a.component.packageName) ?: a.pinned }
+    // After the menu closes the tile gets focus back (Move needs it for the arrow keys).
+    var lastMenuPkg by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(menuApp) {
+        if (menuApp != null) lastMenuPkg = menuApp.component.packageName
+        else lastMenuPkg?.let {
+            awaitFrame()
+            runCatching { requesters[it]?.requestFocus() }
+        }
+    }
     val cells: List<Cell> = apps.map { Cell.App(it) } + if (drawer) emptyList() else listOf(Cell.All(allApps.size))
     val gridRows = cells.chunked(COLUMNS)
     Box(modifier.fillMaxSize().background(colors.bg).dotGrid(colors.line)) {
@@ -205,16 +221,17 @@ fun HomeScreen(
                                         app = cell.app,
                                         requester = requesters.getOrPut(cell.app.component.packageName) { FocusRequester() },
                                         gesture = gesture,
-                                        reorderable = reorderable,
+                                        reorderable = true,
                                         editing = editingPkg != null,
                                         lifted = editingPkg == cell.app.component.packageName,
                                         onMove = { onMove(cell.app, it) },
-                                        onReorderStart = { onReorderStart(cell.app) },
+                                        onLongPress = { onLongPress(cell.app) },
                                         onEditEnd = onEditEnd,
                                         onClick = { onLaunch(cell.app) },
                                     )
                                     is Cell.All -> AllAppsTile(cell.count, onOpenDrawer)
                                 }
+                                if (drawer && cell is Cell.App && isPinned(cell.app)) PinBadge()
                             }
                         }
                     }
@@ -240,6 +257,17 @@ fun HomeScreen(
                 }
             }
         }
+        }
+        if (menuApp != null) {
+            val onHome = !drawer && chip == Chip.ALL && isPinned(menuApp)
+            val actions = buildList {
+                if (onHome) add(MenuAction.MOVE)
+                add(if (isPinned(menuApp)) MenuAction.UNPIN else MenuAction.PIN)
+            }
+            PinMenu(menuApp, actions) {
+                gesture.longFired = false
+                onMenuPick(it)
+            }
         }
     }
 }
@@ -286,7 +314,7 @@ private fun AppTile(
     editing: Boolean,
     lifted: Boolean,
     onMove: (Int) -> Unit,
-    onReorderStart: () -> Unit,
+    onLongPress: () -> Unit,
     onEditEnd: () -> Unit,
     onClick: () -> Unit,
 ) {
@@ -311,8 +339,7 @@ private fun AppTile(
                     editing -> when {
                         ok && down -> true
                         ok -> {
-                            // The release that ends the long press that started this edit is not a drop.
-                            if (gesture.longFired) gesture.longFired = false else onEditEnd()
+                            onEditEnd()
                             true
                         }
                         !down -> false
@@ -324,9 +351,11 @@ private fun AppTile(
                     }
                     ok && reorderable -> {
                         if (down) {
+                            // A new press starts clean: the release of the one that opened the menu may never reach this tile.
+                            if (e.nativeKeyEvent.repeatCount == 0) gesture.longFired = false
                             if (e.nativeKeyEvent.repeatCount > 0 && !gesture.longFired) {
                                 gesture.longFired = true
-                                onReorderStart()
+                                onLongPress()
                             }
                         } else if (!gesture.longFired) onClick()
                         true
@@ -403,5 +432,16 @@ private fun SystemTileView(tile: SystemTile) {
 class OkGesture { var longFired = false }
 
 /** Home order: saved order first, anything new after it in A-Z order. */
-fun orderPinned(apps: List<LauncherApp>, order: List<String>): List<LauncherApp> =
-    apps.filter { it.pinned }.sortedBy { a -> order.indexOf(a.component.packageName).let { if (it < 0) Int.MAX_VALUE else it } }
+fun orderPinned(apps: List<LauncherApp>, order: List<String>, pinnedSet: Set<String>?): List<LauncherApp> =
+    apps.filter { pinnedSet?.contains(it.component.packageName) ?: it.pinned }.sortedBy { a -> order.indexOf(a.component.packageName).let { if (it < 0) Int.MAX_VALUE else it } }
+
+/** A small pin on drawer tiles for apps that are on Home. */
+@Composable
+private fun BoxScope.PinBadge() {
+    val colors = Field.colors
+    Image(
+        FieldIcons.Pin, null,
+        Modifier.align(Alignment.TopEnd).padding(8.dp).background(colors.bg.copy(alpha = 0.75f), FieldShapes.chip).padding(4.dp).size(14.dp),
+        colorFilter = ColorFilter.tint(colors.ink),
+    )
+}
