@@ -12,6 +12,7 @@
     <uses-permission android:name="android.permission.WRITE_SECURE_SETTINGS" />
 
     <application
+        android:name=".FieldApplication"
         android:allowBackup="false"
         android:banner="@drawable/banner"
         android:icon="@drawable/banner"
@@ -53,5 +54,19 @@
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
         </activity-alias>
+
+        <!-- Oxyfield: our dot-field screensaver. Selected via Settings or
+             `settings put secure screensaver_components com.andrewevmiller.tvlauncher/.ambient.OxyfieldDreamService`. -->
+        <service
+            android:name=".ambient.OxyfieldDreamService"
+            android:exported="true"
+            android:icon="@drawable/banner"
+            android:label="Oxyfield"
+            android:permission="android.permission.BIND_DREAM_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.dreams.DreamService" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </service>
     </application>
 </manifest>

@@ -73,7 +73,10 @@ h2 { font-family: var(--serif); font-weight: 700; letter-spacing: -0.01em; font-
   --t-bg: #F2F1EE; --t-soft: #E9E8E2; --t-panel: #E1E0D9; --t-line: #CBC9C1; --t-ink: #1C1C1A; --t-muted: #5C5B54; --t-accent: #B98FD6; --t-dots: #D6D4CC;
 }
 .content { position: absolute; left: 48px; right: 48px; top: 27px; transition: transform 260ms ease; }
+.content.swap { animation: viewIn 180ms ease-out; }
+@keyframes viewIn { from { opacity: 0; } to { opacity: 1; } }
 .reduced .content, .reduced .track, .reduced .f { transition: none !important; }
+.reduced .content.swap { animation: none; }
 
 .tv-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 18px; }
 .tv-title { font-family: var(--serif); font-weight: 700; font-size: 30px; letter-spacing: -0.01em; line-height: 1; }
@@ -84,10 +87,14 @@ h2 { font-family: var(--serif); font-weight: 700; letter-spacing: -0.01em; font-
 .sec-label { font-family: var(--mono); font-weight: 500; font-size: 11.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--t-muted); margin-bottom: 8px; }
 .viewport { overflow: hidden; margin: -8px; padding: 8px; }
 .track { display: flex; gap: 14px; transition: transform 260ms ease; }
+/* app grid: 4 x 192dp tiles + 3 x 32dp gaps = 864dp, the safe content width, so the grid meets the hairlines. Row gap 20dp. */
+.grid { display: grid; grid-template-columns: repeat(4, 192px); column-gap: 32px; row-gap: 20px; }
 
 /* focus treatment shared by every focusable */
 .f { flex: none; border: 1px solid var(--t-line); border-radius: 6px; transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease; transform: rotate(var(--tilt, 0deg)); }
 .f.on { border-color: var(--t-accent); box-shadow: 0 0 0 2px var(--t-accent); transform: rotate(0deg) scale(1.06); z-index: 2; position: relative; }
+/* edit mode: the tile being moved is lifted a little further and tipped, still the one focused element */
+.f.on.lift { transform: rotate(-1.4deg) scale(1.1); }
 
 /* feature band */
 .band { background: var(--t-panel); border-top: 1px solid var(--t-line); border-bottom: 1px solid var(--t-line); margin: 0 -48px 18px; padding: 16px 48px; display: grid; grid-template-columns: 1fr 300px; gap: 28px; align-items: center; position: relative; }
@@ -108,6 +115,7 @@ h2 { font-family: var(--serif); font-weight: 700; letter-spacing: -0.01em; font-
 .app { width: 192px; height: 108px; background: var(--t-soft); padding: 12px 14px; display: flex; flex-direction: column; justify-content: space-between; }
 .app svg { width: 44px; height: 44px; stroke-width: 1.3; color: var(--t-muted); }
 .app.on svg { color: var(--t-accent); }
+.app.all { background: transparent; }
 .app-name { font-weight: 500; font-size: 14px; line-height: 1.2; }
 .app-cat { font-family: var(--mono); font-size: 10px; letter-spacing: 0.06em; color: var(--t-muted); text-transform: uppercase; }
 
@@ -207,6 +215,7 @@ h2 { font-family: var(--serif); font-weight: 700; letter-spacing: -0.01em; font-
 
 @media (prefers-reduced-motion: reduce) {
   .content, .track, .f, .ambient, .toast { transition: none !important; }
+  .content.swap { animation: none; }
 }
 </style>
 
@@ -214,7 +223,7 @@ h2 { font-family: var(--serif); font-weight: 700; letter-spacing: -0.01em; font-
   <header>
     <div class="eyebrow">ANDREWEVMILLER-TV-LAUNCHER · MOCKUP · REV 0.1</div>
     <h1>Field Launcher</h1>
-    <p class="lede">A working mockup of the home screen on a 960×540dp TV canvas, in the site's field-notebook language. Click the screen, then drive it with <kbd>←</kbd> <kbd>↑</kbd> <kbd>→</kbd> <kbd>↓</kbd>, <kbd>Enter</kbd> and <kbd>Esc</kbd>, or use the remote. Turn on build owners to see which agent ships each part.</p>
+    <p class="lede">A working mockup of the home screen on a 960×540dp TV canvas, in the site's field-notebook language. Click the screen, then drive it with <kbd>←</kbd> <kbd>↑</kbd> <kbd>→</kbd> <kbd>↓</kbd>, <kbd>Enter</kbd> and <kbd>Esc</kbd>, or use the remote. Apps sit in a four-column grid that ends in an All apps tile; hold <kbd>Enter</kbd> on an app to rearrange it. Turn on build owners to see which agent ships each part.</p>
   </header>
 
   <div class="workbench">
@@ -301,21 +310,31 @@ h2 { font-family: var(--serif); font-weight: 700; letter-spacing: -0.01em; font-
     wifi: '<path d="M2.5 9a14 14 0 0 1 19 0M5.5 12.5a9.5 9.5 0 0 1 13 0M8.5 16a5 5 0 0 1 7 0"/><circle cx="12" cy="19" r=".8" fill="currentColor"/>',
     search: '<circle cx="10.5" cy="10.5" r="6"/><path d="m15 15 5.5 5.5"/>',
     folder: '<path d="M3 6.5h6l2 2h10V18H3z"/>',
+    grid: '<rect x="4" y="4" width="6.5" height="6.5" rx="1.2"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.2"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.2"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.2"/>',
     points: '<circle cx="6" cy="16" r="1" fill="currentColor"/><circle cx="9" cy="9" r="1" fill="currentColor"/><circle cx="13" cy="14" r="1" fill="currentColor"/><circle cx="17" cy="7" r="1" fill="currentColor"/><circle cx="18" cy="17" r="1" fill="currentColor"/><path d="M3 21h18M3 3v18"/>'
   };
   const svg = n => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON[n]}</svg>`;
 
+  /* Every installed app. `pinned` ones fill the Home grid (in this order); the drawer lists all of them A–Z. */
   const APPS = [
-    { name: 'YouTube', cat: 'video', icon: 'play', pkg: 'com.google.android.youtube.tv' },
-    { name: 'Netflix', cat: 'video', icon: 'play', pkg: 'com.netflix.ninja' },
-    { name: 'Plex', cat: 'video', icon: 'play', pkg: 'com.plexapp.android' },
-    { name: 'Spotify', cat: 'music', icon: 'note', pkg: 'com.spotify.tv.android' },
-    { name: 'Tidal', cat: 'music', icon: 'note', pkg: 'com.aspiro.tidal' },
-    { name: 'Moonlight', cat: 'games', icon: 'pad', pkg: 'com.limelight' },
-    { name: 'RetroArch', cat: 'games', icon: 'pad', pkg: 'com.retroarch' },
-    { name: 'File Manager', cat: 'tools', icon: 'folder', pkg: 'com.alphainventor.filemanager' },
-    { name: 'Analyzer', cat: 'tools', icon: 'tool', pkg: 'com.andrewevmiller.analyzer' }
+    { name: 'YouTube', cat: 'video', icon: 'play', pkg: 'com.google.android.youtube.tv', pinned: true },
+    { name: 'Netflix', cat: 'video', icon: 'play', pkg: 'com.netflix.ninja', pinned: true },
+    { name: 'Plex', cat: 'video', icon: 'play', pkg: 'com.plexapp.android', pinned: true },
+    { name: 'Spotify', cat: 'music', icon: 'note', pkg: 'com.spotify.tv.android', pinned: true },
+    { name: 'Tidal', cat: 'music', icon: 'note', pkg: 'com.aspiro.tidal', pinned: true },
+    { name: 'Moonlight', cat: 'games', icon: 'pad', pkg: 'com.limelight', pinned: true },
+    { name: 'RetroArch', cat: 'games', icon: 'pad', pkg: 'com.retroarch', pinned: true },
+    { name: 'File Manager', cat: 'tools', icon: 'folder', pkg: 'com.alphainventor.filemanager', pinned: true },
+    { name: 'Analyzer', cat: 'tools', icon: 'tool', pkg: 'com.andrewevmiller.analyzer', pinned: true },
+    { name: 'Prime Video', cat: 'video', icon: 'play', pkg: 'com.amazon.amazonvideo.livingroom', pinned: false },
+    { name: 'Disney+', cat: 'video', icon: 'play', pkg: 'com.disney.disneyplus', pinned: false },
+    { name: 'Twitch', cat: 'video', icon: 'play', pkg: 'tv.twitch.android.app', pinned: false },
+    { name: 'YouTube Music', cat: 'music', icon: 'note', pkg: 'com.google.android.youtube.tvmusic', pinned: false },
+    { name: 'Steam Link', cat: 'games', icon: 'pad', pkg: 'com.valvesoftware.steamlink', pinned: false },
+    { name: 'Downloader', cat: 'tools', icon: 'folder', pkg: 'com.esaba.downloader', pinned: false }
   ];
+  const BY_PKG = Object.fromEntries(APPS.map(a => [a.pkg, a]));
+  const COLS = 4;   // grid columns: 4 x 192dp + 3 x 32dp gaps = 864dp
   const CHIPS = ['all', 'video', 'music', 'games', 'tools'];
   const RECENT = [
     { d: '10-21', t: '18:05', icon: 'play', title: 'Plex', sub: 'The Expanse · S2E4' },
@@ -340,14 +359,16 @@ h2 { font-family: var(--serif); font-weight: 700; letter-spacing: -0.01em; font-
   const AGENTS = [
     { id: 'I', name: 'Integrator', wave: 'Wave 1 + 3', desc: 'Theme tokens, fonts, focus style, dot grid, home frame and clock. Wires every row in at the end.' },
     { id: 'A', name: 'Scripts & safety', wave: 'Wave 1', desc: 'probe, deploy and rescue scripts, crash fallback to the stock launcher. No UI of its own.' },
-    { id: 'B', name: 'Home core', wave: 'Wave 2', desc: 'Installed-apps repository, favorites row, system tiles, pin / reorder / hide stored on the TV.' },
+    { id: 'B', name: 'Home core', wave: 'Wave 2', desc: 'Installed-apps repository, app grid and all-apps drawer, system tiles, pin / reorder / hide stored on the TV.' },
     { id: 'C', name: 'Components', wave: 'Wave 2', desc: 'Chips, feature band, timeline entries, tilted gallery tiles and the line-icon set.' },
     { id: 'D', name: 'Ambient', wave: 'Wave 2', desc: 'Oxyfield screensaver as a DreamService, frame-rate cap, reduced-motion still frame.' },
     { id: 'E', name: 'Watch Next spike', wave: 'Wave 2', desc: 'Tests whether the Hisense lets us read other apps\' rows, and whether we can start Google\'s photo screensaver on demand.' },
     { id: 'F', name: 'Sound', wave: 'Wave 2', desc: 'Interface sound set rendered from a script, SoundPool playback, repeat throttling, on/off setting. No UI region.' }
   ];
 
-  const state = { chip: 'all', r: 2, c: 0, scrollX: {}, ambient: false, slides: false, recentOpen: false, light: false, reduced: matchMedia('(prefers-reduced-motion: reduce)').matches, owners: false, solo: null };
+  /* view: 'home' or 'drawer'. r/c index into `rows` (visual rows), so a grid of N rows is N entries; code that
+     needs "which section" asks rows[r].key ('band' | 'chips' | 'apps' | 'recent' | 'photos' | 'system'). */
+  const state = { view: 'home', chip: 'all', r: 0, c: 0, scrollX: {}, order: APPS.filter(a => a.pinned).map(a => a.pkg), edit: null, ambient: false, slides: false, recentOpen: false, light: false, reduced: matchMedia('(prefers-reduced-motion: reduce)').matches, owners: false, solo: null };
 
   /* Interface sounds: 1–2 triangle oscillators pushed through a wavefolder and hard saturation,
      then a filter sweep, with a noise transient on the attack. Harsh but short and quiet.
@@ -530,14 +551,35 @@ h2 { font-family: var(--serif); font-weight: 700; letter-spacing: -0.01em; font-
   const toastEl = document.getElementById('toast');
   const hint = document.getElementById('hint');
 
-  /* rows: each has key, items (DOM built in render) */
+  /* rows: one entry per VISUAL row, { key, items: [el], grid?, gr?, gn? }. Sections are addressed by key
+     ('band' | 'chips' | 'apps' | 'recent' | 'photos' | 'system'), never by a number, so a grid that grows or
+     shrinks (chip filter, edit mode, drawer) cannot shift the other rows. Every container with data-key becomes
+     one row; a .grid is cut into rows of COLS tiles that all share its key. state.r indexes this array, so
+     sfx.tick(row) gives every grid row its own pitch. */
   let rows = [];
+  const firstRow = key => rows.findIndex(r => r.key === key);
+  const focusWhere = pred => {
+    for (let r = 0; r < rows.length; r++) { const c = rows[r].items.findIndex(pred); if (c >= 0) return focus(r, c); }
+  };
 
   const tag = (owner, label) => `<span class="own-tag">${owner} · ${label}</span>`;
 
-  function render() {
-    const apps = APPS.filter(a => state.chip === 'all' || a.cat === state.chip);
-    content.innerHTML = `
+  const chipMatch = a => state.chip === 'all' || a.cat === state.chip;
+  const homeApps = () => state.order.map(p => BY_PKG[p]).filter(chipMatch);
+  const drawerApps = () => APPS.filter(chipMatch).sort((a, b) => a.name.localeCompare(b.name));
+
+  const appTile = a => `<div class="f app" data-pkg="${a.pkg}">${svg(a.icon)}<div><div class="app-name">${a.name}</div><div class="app-cat">${a.cat}</div></div></div>`;
+  const allTile = () => `<div class="f app all" data-act="all">${svg('grid')}<div><div class="app-name">All apps</div><div class="app-cat">${APPS.length} installed</div></div></div>`;
+  const chipsSec = () => `
+      <div class="sec" data-owner="C">${tag('C', 'Chips')}
+        <div class="viewport"><div class="track" data-key="chips">
+          ${CHIPS.map(c => `<span class="f chip ${state.chip === c ? 'sel' : ''}">${c === 'all' ? 'All' : c[0].toUpperCase() + c.slice(1)}</span>`).join('')}
+        </div></div>
+      </div>`;
+
+  function homeHTML() {
+    const apps = homeApps();
+    return `
       <div class="tv-head" data-owner="I" style="position:relative">${tag('I', 'Frame + clock')}
         <div class="tv-title">Home</div><div class="tv-clock" id="clock"></div>
       </div>
@@ -546,72 +588,104 @@ h2 { font-family: var(--serif); font-weight: 700; letter-spacing: -0.01em; font-
           <div class="band-kicker">Featured · Plex · resume at 31:08</div>
           <div class="band-title">The Expanse, season 2</div>
           <p class="band-body">Episode 4 of 13. Picks up where you left off yesterday at 18:05.</p>
-          <div class="track" data-row="0"><span class="f cta" data-r="0" data-c="0">Resume →</span></div>
+          <div class="track" data-key="band"><span class="f cta">Resume →</span></div>
         </div>
         <div class="band-viz"><canvas id="bandCanvas" width="600" height="216"></canvas></div>
       </div>
-      <div class="sec" data-owner="C">${tag('C', 'Chips')}
-        <div class="viewport"><div class="track" data-row="1">
-          ${CHIPS.map((c, i) => `<span class="f chip ${state.chip === c ? 'sel' : ''}" data-r="1" data-c="${i}">${c === 'all' ? 'All' : c[0].toUpperCase() + c.slice(1)}</span>`).join('')}
-        </div></div>
-      </div>
-      <div class="sec" data-owner="B">${tag('B', 'Favorites')}
-        <div class="sec-rule"></div><div class="sec-label">Favorites · ${apps.length} pinned</div>
-        <div class="viewport"><div class="track" data-row="2">
-          ${apps.map((a, i) => `<div class="f app" data-r="2" data-c="${i}">${svg(a.icon)}<div><div class="app-name">${a.name}</div><div class="app-cat">${a.cat}</div></div></div>`).join('')}
-        </div></div>
+      ${chipsSec()}
+      <div class="sec" data-owner="B">${tag('B', 'App grid')}
+        <div class="sec-rule"></div><div class="sec-label">Apps · ${apps.length} pinned</div>
+        <div class="grid" data-key="apps">${apps.map(appTile).join('')}${allTile()}</div>
       </div>
       <div class="sec" data-owner="E">${tag('C+E', 'Recent · content via spike')}
         <div class="sec-rule"></div><div class="sec-label">Recent${state.recentOpen ? '' : ' · ' + RECENT.length + ' hidden'}</div>
-        <div class="viewport"><div class="track" data-row="3">
-          <span class="f chip recent-toggle" data-r="3" data-c="0">${state.recentOpen ? 'Hide' : 'Show recent'}</span>
-          ${(state.recentOpen ? RECENT : []).map((e, i) => `<div class="f entry" data-r="3" data-c="${i + 1}"><div class="entry-date">${e.d}<br>${e.t}</div>${svg(e.icon)}<div><div class="entry-title">${e.title}</div><div class="entry-sub">${e.sub}</div></div></div>`).join('')}
+        <div class="viewport"><div class="track" data-key="recent">
+          <span class="f chip recent-toggle">${state.recentOpen ? 'Hide' : 'Show recent'}</span>
+          ${(state.recentOpen ? RECENT : []).map(e => `<div class="f entry"><div class="entry-date">${e.d}<br>${e.t}</div>${svg(e.icon)}<div><div class="entry-title">${e.title}</div><div class="entry-sub">${e.sub}</div></div></div>`).join('')}
         </div></div>
       </div>
       <div class="sec" data-owner="C">${tag('C+D', 'Gallery tiles → slideshow')}
         <div class="sec-rule"></div><div class="sec-label">Photos · select one to start the slideshow</div>
-        <div class="viewport"><div class="track" data-row="4">
-          ${PHOTOS.map((p, i) => `<div class="f photo" data-r="4" data-c="${i}" style="--tilt:${i % 2 ? 0.8 : -0.8}deg"><div class="img" style="background:linear-gradient(${140 + i * 23}deg, ${p.a}, ${p.b})"></div><span class="cap">${p.cap}</span></div>`).join('')}
+        <div class="viewport"><div class="track" data-key="photos">
+          ${PHOTOS.map((p, i) => `<div class="f photo" style="--tilt:${i % 2 ? 0.8 : -0.8}deg"><div class="img" style="background:linear-gradient(${140 + i * 23}deg, ${p.a}, ${p.b})"></div><span class="cap">${p.cap}</span></div>`).join('')}
         </div></div>
       </div>
       <div class="sec" data-owner="B">${tag('B', 'System tiles')}
         <div class="sec-rule"></div><div class="sec-label">Inputs &amp; system</div>
-        <div class="viewport"><div class="track" data-row="5">
-          ${SYS.map((s, i) => `<div class="f sys" data-r="5" data-c="${i}">${svg(s.icon)}<span>${s.name}</span></div>`).join('')}
+        <div class="viewport"><div class="track" data-key="system">
+          ${SYS.map(s => `<div class="f sys">${svg(s.icon)}<span>${s.name}</span></div>`).join('')}
         </div></div>
       </div>`;
-    rows = [...content.querySelectorAll('.track')].map(t => [...t.querySelectorAll('.f')]);
+  }
+
+  /* the drawer: same frame, same chips, same grid and tile as Home, but every app, A–Z, no All apps cell */
+  function drawerHTML() {
+    const apps = drawerApps();
+    return `
+      <div class="tv-head" data-owner="I" style="position:relative">${tag('I', 'Frame + clock')}
+        <div class="tv-title">All apps</div><div class="tv-clock" id="clock"></div>
+      </div>
+      ${chipsSec()}
+      <div class="sec" data-owner="B">${tag('B', 'All-apps drawer')}
+        <div class="sec-rule"></div><div class="sec-label">Every app · A–Z · ${apps.length}</div>
+        <div class="grid" data-key="apps">${apps.map(appTile).join('')}</div>
+      </div>`;
+  }
+
+  /* place: optional function that puts focus where the caller wants it; default keeps the current row/column */
+  function render(place) {
+    content.innerHTML = state.view === 'drawer' ? drawerHTML() : homeHTML();
+    rows = [];
+    content.querySelectorAll('[data-key]').forEach(box => {
+      const items = [...box.querySelectorAll('.f')];
+      if (box.classList.contains('grid')) {
+        const gn = Math.ceil(items.length / COLS);
+        for (let g = 0; g < gn; g++) rows.push({ key: box.dataset.key, items: items.slice(g * COLS, (g + 1) * COLS), grid: true, gr: g, gn });
+      } else rows.push({ key: box.dataset.key, items });
+    });
+    rows.forEach((row, r) => row.items.forEach((el, c) => { el.dataset.r = r; el.dataset.c = c; }));
     state.scrollX = {};
     applyOwners();
     tickClock();
     drawBand(performance.now());
-    focus(Math.min(state.r, rows.length - 1), state.c, false);
+    if (place) place(); else focus(Math.min(state.r, rows.length - 1), state.c);
   }
 
-  function focus(r, c, animate = true) {
+  const VIEW_H = 540 - 27 - 40;   // visible content height: under the 27 top inset, above a 40 bottom margin
+  const offsetIn = (el, root) => { let t = 0; for (let n = el; n && n !== root; n = n.offsetParent) t += n.offsetTop; return t; };
+
+  function focus(r, c) {
     const prev = content.querySelector('.f.on');
-    if (prev) prev.classList.remove('on');
-    state.r = r; state.c = Math.max(0, Math.min(c, rows[r].length - 1));
-    const el = rows[state.r][state.c];
-    if (!el) return;
+    if (prev) prev.classList.remove('on', 'lift');
+    const row = rows[r];
+    if (!row) return;
+    state.r = r; state.c = Math.max(0, Math.min(c, row.items.length - 1));
+    const el = row.items[state.c];
     el.classList.add('on');
-    // horizontal: keep focused item inside its viewport
-    const track = el.parentElement;
-    const vpW = 864;
-    let sx = state.scrollX[r] || 0;
-    const left = el.offsetLeft, right = left + el.offsetWidth;
-    if (right - sx > vpW - 24) sx = right - vpW + 24;
-    if (left - sx < 0) sx = Math.max(0, left - 0);
-    state.scrollX[r] = sx;
-    track.style.transform = `translateX(${-sx}px)`;
-    // vertical: keep the focused section in view
+    el.classList.toggle('lift', !!state.edit && el.dataset.pkg === state.edit.pkg);
+    // horizontal: carousels keep the focused item inside their viewport; the grid never scrolls sideways
+    if (!row.grid) {
+      const track = el.parentElement;
+      const vpW = 864;
+      let sx = state.scrollX[r] || 0;
+      const left = el.offsetLeft, right = left + el.offsetWidth;
+      if (right - sx > vpW - 24) sx = right - vpW + 24;
+      if (left - sx < 0) sx = Math.max(0, left - 0);
+      state.scrollX[r] = sx;
+      track.style.transform = `translateX(${-sx}px)`;
+    }
+    // vertical: keep the focused tile in view. A grid row scrolls by itself (so the drawer can be taller than the
+    // screen); the first row also brings its section label in, the last row its section bottom.
     const sec = el.closest('.sec, .band, .tv-head');
-    const top = sec.offsetTop, bottom = top + sec.offsetHeight;
-    const cur = -(parseFloat(content.dataset.y || 0));
-    let y = cur;
-    if (bottom - y > 540 - 27 - 40) y = bottom - (540 - 27 - 40);
-    if (top - y < 0) y = Math.max(0, top - 10);
-    if (r <= 1) y = 0;
+    const secTop = sec.offsetTop, secBottom = secTop + sec.offsetHeight;
+    const elTop = offsetIn(el, content), elBottom = elTop + el.offsetHeight;
+    const isFirst = !row.grid || row.gr === 0, isLast = !row.grid || row.gr === row.gn - 1;
+    const topT = isFirst ? secTop - 10 : elTop - 14;
+    const botT = isLast ? secBottom : elBottom + 14;
+    let y = -(parseFloat(content.dataset.y || 0));
+    if (botT - y > VIEW_H) y = botT - VIEW_H;
+    if (topT - y < 0) y = Math.max(0, topT);
+    if (row.key === 'band' || row.key === 'chips') y = 0;
     content.dataset.y = -y;
     content.style.transform = `translateY(${-y}px)`;
   }
@@ -622,42 +696,134 @@ h2 { font-family: var(--serif); font-weight: 700; letter-spacing: -0.01em; font-
     return false;
   }
 
+  const centerX = el => { const b = el.getBoundingClientRect(); return b.left + b.width / 2; };
+  const nearest = (items, x) => {
+    let best = 0, bd = Infinity;
+    items.forEach((el, i) => { const d = Math.abs(centerX(el) - x); if (d < bd) { bd = d; best = i; } });
+    return best;
+  };
+
   function move(dir) {
     if (exitAmbient()) return;
+    if (state.edit) return editMove(dir);
+    const row = rows[state.r];
     if (dir === 'left' || dir === 'right') {
+      // within a row; never wraps, the end of the row is an edge
       const nc = state.c + (dir === 'right' ? 1 : -1);
-      if (nc < 0 || nc >= rows[state.r].length) return sfx.edge();
+      if (nc < 0 || nc >= row.items.length) return sfx.edge();
       sfx.tick(state.r);
       return focus(state.r, nc);
     }
     const nr = state.r + (dir === 'down' ? 1 : -1);
     if (nr < 0 || nr >= rows.length) return sfx.edge();
+    const next = rows[nr];
+    // grid row to grid row: same column, and a shorter row lands on its last tile.
+    // From any other section (chips above, Recent below): the column nearest to where focus was.
+    const col = row.key === 'apps' && next.key === 'apps'
+      ? Math.min(state.c, next.items.length - 1)
+      : nearest(next.items, centerX(row.items[state.c]));
     sfx.tick(nr);
-    // pick the item in the next row nearest horizontally to the current one
-    const cur = rows[state.r][state.c];
-    const cx = cur.getBoundingClientRect().left + cur.getBoundingClientRect().width / 2;
-    let best = 0, bd = Infinity;
-    rows[nr].forEach((el, i) => { const b = el.getBoundingClientRect(); const d = Math.abs(b.left + b.width / 2 - cx); if (d < bd) { bd = d; best = i; } });
-    focus(nr, best);
+    focus(nr, col);
   }
 
   let toastTimer;
-  function toast(msg) {
+  function toast(msg, sticky) {
     toastEl.textContent = msg; toastEl.classList.add('show');
-    clearTimeout(toastTimer); toastTimer = setTimeout(() => toastEl.classList.remove('show'), 1600);
+    clearTimeout(toastTimer);
+    if (!sticky) toastTimer = setTimeout(() => toastEl.classList.remove('show'), 1600);
   }
 
   function select() {
     if (exitAmbient()) return;
-    const el = rows[state.r][state.c];
-    if (state.r === 0) { launchApp('Plex'); return toast('Opening Plex · resume 31:08'); }
-    if (state.r === 1) { sfx.select(); state.chip = CHIPS[state.c]; const c = state.c; render(); focus(1, c); return; }
-    if (state.r === 2) { const n = el.querySelector('.app-name').textContent; launchApp(n); return toast('Launching ' + n + '…'); }
-    if (state.r === 3 && state.c === 0) { sfx.select(); state.recentOpen = !state.recentOpen; render(); return; }
-    if (state.r === 3) { const n = el.querySelector('.entry-title').textContent; launchApp(n); return toast('Reopening ' + n + '…'); }
-    if (state.r === 4) return setSlides(true, state.c);
-    if (state.r === 5) { sfx.select(); return toast(el.textContent.trim().startsWith('HDMI') ? 'Switching to ' + el.textContent.trim() : 'Opening ' + el.textContent.trim()); }
+    const row = rows[state.r], el = row.items[state.c];
+    switch (row.key) {
+      case 'band':
+        launchApp('Plex'); return toast('Opening Plex · resume 31:08');
+      case 'chips': {
+        sfx.select(); state.chip = CHIPS[state.c];
+        const c = state.c; render(() => focus(firstRow('chips'), c)); return;
+      }
+      case 'apps': {
+        if (el.dataset.act === 'all') return openDrawer();
+        const n = el.querySelector('.app-name').textContent; launchApp(n); return toast('Launching ' + n + '…');
+      }
+      case 'recent': {
+        if (state.c === 0) { sfx.select(); state.recentOpen = !state.recentOpen; render(() => focus(firstRow('recent'), 0)); return; }
+        const n = el.querySelector('.entry-title').textContent; launchApp(n); return toast('Reopening ' + n + '…');
+      }
+      case 'photos':
+        return setSlides(true, state.c);
+      case 'system':
+        sfx.select(); return toast(el.textContent.trim().startsWith('HDMI') ? 'Switching to ' + el.textContent.trim() : 'Opening ' + el.textContent.trim());
+    }
   }
+
+  /* Home <-> drawer. Both draw into the same #content, so the drawer is simply the other view of the screen. */
+  function setView(v) {
+    state.view = v;
+    state.scrollX = {};
+    content.dataset.y = 0; content.style.transform = 'translateY(0px)';
+    content.classList.remove('swap'); void content.offsetWidth; content.classList.add('swap');
+  }
+  function openDrawer() {
+    sfx.select();
+    setView('drawer');
+    render(() => focus(firstRow('apps'), 0));
+  }
+  function closeDrawer() {
+    setView('home');
+    render(() => focusWhere(el => el.dataset.act === 'all'));
+  }
+
+  /* Edit mode (long-press OK on a pinned app): the tile lifts, arrows move it (left/right one place, up/down one
+     grid row, clamped), OK drops it, Back puts everything back. The order lives in state.order for the session. */
+  const reorder = (list, from, to) => { const a = list.slice(); a.splice(to, 0, a.splice(from, 1)[0]); return a; };
+  const LONG_PRESS_MS = 600;
+  function enterEdit() {
+    const el = rows[state.r].items[state.c];
+    state.edit = { pkg: el.dataset.pkg, orig: state.order.slice() };
+    el.classList.add('lift');
+    sfx.select();
+    toast('Moving ' + BY_PKG[state.edit.pkg].name + ' · arrows move · OK drops · Back cancels', true);
+  }
+  function editMove(dir) {
+    const vis = homeApps(), i = vis.findIndex(a => a.pkg === state.edit.pkg);
+    let j = dir === 'left' ? i - 1 : dir === 'right' ? i + 1 : dir === 'up' ? i - COLS : i + COLS;
+    if (dir === 'up' || dir === 'down') j = Math.max(0, Math.min(vis.length - 1, j));
+    if (j < 0 || j >= vis.length || j === i) return sfx.edge();
+    state.order = reorder(state.order, state.order.indexOf(vis[i].pkg), state.order.indexOf(vis[j].pkg));
+    render(() => focusWhere(el => el.dataset.pkg === state.edit.pkg));
+    sfx.tick(state.r);
+  }
+  function endEdit(drop) {
+    const e = state.edit;
+    if (!e) return;
+    if (!drop) state.order = e.orig;
+    state.edit = null;
+    render(() => focusWhere(el => el.dataset.pkg === e.pkg));
+    if (drop) { sfx.select(); toast('Placed ' + BY_PKG[e.pkg].name + ' · position ' + (state.order.indexOf(e.pkg) + 1)); }
+    else { sfx.back(); toast('Move cancelled'); }
+  }
+
+  /* OK key / button: a short press selects (on release); holding on a pinned app lifts it. Everything else selects at once. */
+  let pressTimer = 0, pressing = false, pressDone = false, pressSrc = '';
+  function canLift() {
+    const row = rows[state.r];
+    return state.view === 'home' && !state.edit && !state.ambient && !state.slides && row.key === 'apps' && !!row.items[state.c].dataset.pkg;
+  }
+  function pressStart(src) {
+    if (pressing) return;
+    pressing = true; pressDone = false; pressSrc = src;
+    if (state.edit) { pressDone = true; return endEdit(true); }
+    if (!canLift()) { pressDone = true; return select(); }
+    pressTimer = setTimeout(() => { pressDone = true; enterEdit(); }, LONG_PRESS_MS);
+  }
+  function pressEnd() {
+    if (!pressing) return;
+    pressing = false; clearTimeout(pressTimer);
+    if (!pressDone) select();
+  }
+  function pressCancel() { pressing = false; clearTimeout(pressTimer); }
 
   const motifEl = document.getElementById('motif');
   function showMotif(app, m) {
@@ -689,26 +855,36 @@ h2 { font-family: var(--serif); font-weight: 700; letter-spacing: -0.01em; font-
 
   function back() {
     if (exitAmbient()) return;
+    if (state.edit) return endEdit(false);
     sfx.back();
-    if (state.r !== 2 || state.c !== 0) focus(2, 0);
+    if (state.view === 'drawer') return closeDrawer();   // Back from the drawer: Home, focus on the All apps tile
+    const first = firstRow('apps');
+    if (state.r !== first || state.c !== 0) focus(first, 0);
   }
   function home() {
     exitAmbient();
     sfx.back();
-    state.chip = 'all'; state.r = 2; state.c = 0; render();
+    if (state.edit) { state.order = state.edit.orig; state.edit = null; }   // Home abandons a move, like Back
+    clearTimeout(toastTimer); toastEl.classList.remove('show');
+    state.chip = 'all';
+    if (state.view !== 'home') setView('home');
+    render(() => focus(firstRow('apps'), 0));
   }
 
   stage.addEventListener('keydown', e => {
     const map = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right' };
-    if (map[e.key]) { e.preventDefault(); move(map[e.key]); }
-    else if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); select(); }
+    if (map[e.key]) { e.preventDefault(); pressCancel(); move(map[e.key]); }
+    else if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); if (!e.repeat) pressStart('key'); }
     else if (e.key === 'Escape' || e.key === 'Backspace') { e.preventDefault(); back(); }
     else if (e.key === 'h' || e.key === 'H') home();
   });
-  stage.addEventListener('focus', () => { hint.textContent = 'Keyboard connected: arrows move, Enter selects, Esc goes back, H goes home.'; hint.classList.add('live'); });
-  stage.addEventListener('blur', () => { hint.textContent = 'Click the screen to take control with the keyboard.'; hint.classList.remove('live'); });
+  stage.addEventListener('keyup', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pressEnd(); } });
+  stage.addEventListener('focus', () => { hint.textContent = 'Keyboard connected: arrows move, Enter selects (hold it on an app to rearrange), Esc goes back, H goes home.'; hint.classList.add('live'); });
+  // a key held while the stage loses focus would never see its keyup; a pointer press on the OK button moves focus by design
+  stage.addEventListener('blur', () => { if (pressSrc === 'key') pressCancel(); hint.textContent = 'Click the screen to take control with the keyboard.'; hint.classList.remove('live'); });
   stage.addEventListener('click', e => {
     if (exitAmbient()) return;
+    if (state.edit) return endEdit(true);
     const f = e.target.closest('.f');
     if (f) { const r = +f.dataset.r, c = +f.dataset.c; if (r === state.r && c === state.c) select(); else { sfx.tick(r); focus(r, c); } }
   });
@@ -716,7 +892,14 @@ h2 { font-family: var(--serif); font-weight: 700; letter-spacing: -0.01em; font-
   const bind = (id, fn) => document.getElementById(id).addEventListener('click', fn);
   bind('r-up', () => move('up')); bind('r-down', () => move('down'));
   bind('r-left', () => move('left')); bind('r-right', () => move('right'));
-  bind('r-ok', select); bind('r-back', back); bind('r-home', home);
+  bind('r-back', back); bind('r-home', home);
+  // OK: hold it with the pointer to lift an app; a click from the keyboard (detail 0) just selects
+  const okBtn = document.getElementById('r-ok');
+  okBtn.addEventListener('pointerdown', () => pressStart('ptr'));
+  okBtn.addEventListener('pointerup', pressEnd);
+  okBtn.addEventListener('pointerleave', pressCancel);
+  okBtn.addEventListener('pointercancel', pressCancel);
+  okBtn.addEventListener('click', e => { if (e.detail === 0) select(); });
 
   function setToggle(id, on) {
     const b = document.getElementById(id);
@@ -910,6 +1093,6 @@ h2 { font-family: var(--serif); font-weight: 700; letter-spacing: -0.01em; font-
 
   if (state.reduced) { screen.classList.add('reduced'); setToggle('t-motion', true); }
   renderAgents();
-  render();
+  render(() => focus(firstRow('apps'), 0));
 })();
 </script>

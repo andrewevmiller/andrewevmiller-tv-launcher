@@ -97,6 +97,12 @@ that way, rerun with `GRADLE_OPTS="-Dorg.gradle.internal.repository.max.tentativ
 -Dorg.gradle.internal.repository.initial.backoff=3000"` and `--max-workers=1`. Dependencies are cached after one
 success. **Run purecheck before you report done**, and put its output in your handoff.
 
+**Many agents, 4 CPUs.** Run purecheck through `bash <main-checkout>/tools/purecheck.sh` (from your worktree root): it takes a
+lock so runs queue one at a time and reuses one warm Gradle daemon (about 10 s per run instead of 60 s cold, with no CPU
+storm). The Android layer can be compiled in the cloud now that `dl.google.com` is allowed and the SDK is installed at
+`~/android-sdk`: `bash <main-checkout>/tools/compile.sh [gradle tasks]` (default `:app:compileDebugKotlin`) is likewise
+serialised. The integrator runs it on each merged batch; do not run it in a loop.
+
 ## Home activity, previous home, and the crash fallback (shared by scripts/ and safety/)
 - The manifest registers HOME on `.HomeAlias` (an `activity-alias` of `MainActivity`), not on `MainActivity`.
   The default home is set with `cmd package set-home-activity com.andrewevmiller.tvlauncher/.HomeAlias`.

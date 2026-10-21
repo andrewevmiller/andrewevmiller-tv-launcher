@@ -6,7 +6,7 @@ design language. This document is the operating plan for building it with a team
 
 - Visual and interaction reference: [`docs/mockup/field-launcher-mockup.html`](mockup/field-launcher-mockup.html)
   (also published at https://claude.ai/artifact/6tfS68Vrs7oQKB1oPWmcXS).
-  **Exception:** the mockup's Favorites section is still a carousel until task M1 lands; the app grid in §5.4 overrides it.
+  The mockup's Apps section is the §5.4 grid (task M1, done); it also adds a `grid` icon for the "All apps" tile and six unpinned sample apps so the drawer scrolls.
 - Agent rules and file ownership: [`CLAUDE.md`](../CLAUDE.md). **If this plan and `CLAUDE.md` disagree, `CLAUDE.md` wins.**
 - Design source: andrewevmiller.com design language (tokens already in `theme/Tokens.kt`)
 
@@ -240,7 +240,7 @@ Per-app motif overrides (re-roll seed, mute) are stored by F alongside its own d
   B2 implements it with DataStore; B1 builds `AppsRepository` on top of it.
 - Fakes for previews and tests: `FakeAppsRepository`, `FakeSettingsRepository`, `FakeMotifOverrides`,
   `InMemoryLayoutStore`, `NoOpFieldSound`, `NoOpScreensaverController`.
-- `ui/icons/FieldIcons.kt` fixes the icon names (`FieldIcons.Play, Note, Pad, Tool, Wave, Port, Gear, Wifi, Search, Folder, Points`, plus `forCategory(AppCategory)`) with placeholder bodies, and `FieldIcon(icon, modifier, size, tint)` draws one. C5 fills in the glyphs; everyone else codes against the names now.
+- `ui/icons/FieldIcons.kt` fixes the icon names (`FieldIcons.Play, Note, Pad, Tool, Wave, Port, Gear, Wifi, Search, Folder, Grid, Points`, plus `forCategory(AppCategory)`) with placeholder bodies, and `FieldIcon(icon, modifier, size, tint)` draws one. C5 fills in the glyphs; everyone else codes against the names now.
 - The manifest registers HOME on `.HomeAlias`; see `CLAUDE.md` "Home activity, previous home, and the crash fallback".
 
 ### 5.3 Wiring (done by the integrator in wave 3)
@@ -324,7 +324,7 @@ Gate **G1** (owner): `./scripts/deploy.sh` → TV shows the placeholder home wit
 
 | ID | Task | Model | Deliverables | Acceptance |
 |---|---|---|---|---|
-| M1 | Change the mockup's Favorites carousel to the §5.4 grid: 4 columns, 192×108 tiles, "All apps" last cell, 2D arrow-key focus with the §5.4 rules, chips filter the grid; row indices in `select()`/`move()` become key-based so adding grid rows doesn't break the other rows | Haiku (escalate to Sonnet after two failures) | `docs/mockup/` | Scripted Playwright check: arrow keys reproduce the §5.4 cases; no console errors; other rows still work |
+| M1 (done) | Change the mockup's Favorites carousel to the §5.4 grid: 4 columns, 192×108 tiles, "All apps" last cell, 2D arrow-key focus with the §5.4 rules, chips filter the grid; row indices in `select()`/`move()` become key-based so adding grid rows doesn't break the other rows | Haiku (escalate to Sonnet after two failures) | `docs/mockup/` | Scripted Playwright check: arrow keys reproduce the §5.4 cases; no console errors; other rows still work |
 
 **D: Ambient**
 
