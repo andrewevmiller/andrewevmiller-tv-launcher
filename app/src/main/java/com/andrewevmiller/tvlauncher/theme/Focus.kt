@@ -18,11 +18,15 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.lerp
+import com.andrewevmiller.tvlauncher.sound.LocalFieldSound
+import com.andrewevmiller.tvlauncher.sound.LocalSoundRow
 
 /**
  * The launcher's single focus treatment, from the site's hover states:
  * rest = hairline `line` border (and an optional slight tilt, like the gallery prints);
  * focused = accent border, small scale-up, tilt straightens.
+ *
+ * Gaining focus also plays the near-silent navigation tick (`FieldSound.tick`, pitched by `LocalSoundRow`).
  *
  * Must come before the focus target in the chain, e.g.
  * `Modifier.fieldFocus().clickable { }`, or use [fieldTile] which does both.
@@ -34,6 +38,8 @@ fun Modifier.fieldFocus(
 ): Modifier = composed {
     val colors = LocalFieldColors.current
     val reduced = LocalReducedMotion.current
+    val sound = LocalFieldSound.current
+    val soundRow = LocalSoundRow.current
     var focused by remember { mutableStateOf(false) }
     val t by animateFloatAsState(
         targetValue = if (focused) 1f else 0f,
@@ -41,7 +47,11 @@ fun Modifier.fieldFocus(
         label = "fieldFocus",
     )
     this
-        .onFocusChanged { focused = it.isFocused || it.hasFocus }
+        .onFocusChanged {
+            val now = it.isFocused || it.hasFocus
+            if (now && !focused) sound.tick(soundRow)
+            focused = now
+        }
         .graphicsLayer {
             val s = 1f + (focusedScale - 1f) * t
             scaleX = s

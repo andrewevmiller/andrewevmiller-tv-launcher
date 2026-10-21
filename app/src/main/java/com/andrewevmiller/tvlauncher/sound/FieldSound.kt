@@ -1,5 +1,6 @@
 package com.andrewevmiller.tvlauncher.sound
 
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.staticCompositionLocalOf
 import com.andrewevmiller.tvlauncher.home.data.LauncherApp
 
@@ -42,3 +43,11 @@ object NoOpFieldSound : FieldSound {
 }
 
 val LocalFieldSound = staticCompositionLocalOf<FieldSound> { NoOpFieldSound }
+
+/**
+ * The visual row the current composition sits in, which sets the pitch of the focus tick
+ * (`FieldSound.tick(row)`). HomeScreen provides it for each row; a multi-row grid adds its own grid-row
+ * index on top. `Modifier.fieldFocus()` plays the tick when an element gains focus, so components
+ * need no sound code for navigation.
+ */
+val LocalSoundRow = compositionLocalOf { 0 }

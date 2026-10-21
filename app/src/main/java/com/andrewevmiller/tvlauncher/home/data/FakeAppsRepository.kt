@@ -12,7 +12,7 @@ import kotlinx.coroutines.flow.combine
 class FakeAppsRepository(
     private val installed: List<LauncherApp> = PreviewApps,
     private val store: LayoutStore = InMemoryLayoutStore(
-        FieldLayout(pinned = PreviewApps.take(6).map { it.component.flattenToString() }),
+        FieldLayout(pinned = PreviewApps.take(6).map { it.component.flattenToString() }, seeded = true),
     ),
     /** Called by [launch]; previews can ignore it. */
     private val onLaunch: (LauncherApp) -> Unit = {},

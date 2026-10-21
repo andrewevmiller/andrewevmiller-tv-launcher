@@ -9,10 +9,13 @@ import kotlinx.coroutines.flow.update
  * (for example `com.plexapp.android/.activity.SplashActivity`).
  *
  * [pinned] is ordered. An app is in at most one of [pinned] and [hidden].
+ * [seeded] is false until the repository has pinned its first-run defaults, so a fresh install
+ * doesn't start with an empty grid and a user who unpins everything doesn't get them back.
  */
 data class FieldLayout(
     val pinned: List<String> = emptyList(),
     val hidden: Set<String> = emptySet(),
+    val seeded: Boolean = false,
 )
 
 /**
