@@ -28,6 +28,7 @@ object FieldIcons {
             }
         }.build()
 
+    val Pin = icon("pin", "M9 3h6l-1 6 3.5 4h-12L10 9z", "M12 13v8")
     val Grid = icon("grid", rect(4f, 4f, 6.5f), rect(13.5f, 4f, 6.5f), rect(4f, 13.5f, 6.5f), rect(13.5f, 13.5f, 6.5f))
     val Port = icon("port", "M4 8h16v5l-2 3H6l-2-3z", "M8 11h8")
     val Gear = icon(
