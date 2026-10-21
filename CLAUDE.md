@@ -13,6 +13,14 @@ A personal Android TV launcher for one Hisense TV, in the andrewevmiller.com
 - Icons are line glyphs: 1.6–1.8 stroke at 24dp, round caps/joins, tinted `muted` (accent only when focused).
 - Respect `Field.reducedMotion`: snap or show a static frame.
 - Everything inside the 5% safe area (`FieldDimens.safeHorizontal/Vertical`).
+- Sound follows the accent rule: navigation is near-silent; only launch/select get a voiced sound.
+  Use `FieldSound` (agent F), never play audio directly. Respect the system sound-effects setting.
+
+## Photos slideshow
+Google Photos content isn't reachable through a public API for this use (Library API is limited to
+app-created media since 2025). We reuse the system's own ambient mode instead: the launcher can make
+it the active screensaver (`Settings.Secure.screensaver_components`, needs `WRITE_SECURE_SETTINGS`
+granted once via `adb shell pm grant`) and start it on demand. Album choice stays in Google's settings.
 
 ## Ownership: who may edit what
 Parallel agents each own a directory. **Do not edit files outside your area.** If you need a change
@@ -25,8 +33,9 @@ integrator will apply it.
 | `scripts/`, `app/.../safety/` | Agent A: scripts & safety |
 | `app/.../home/apps/`, `app/.../home/data/` (except `AppsRepository.kt`) | Agent B: home core |
 | `app/.../ui/components/`, `app/.../ui/icons/` | Agent C: components |
-| `app/.../ambient/` | Agent D: ambient (oxyfield) |
-| `spike/` (separate Gradle module, not included in `:app`) | Agent E: Watch Next spike |
+| `app/.../ambient/` | Agent D: ambient (Oxyfield screensaver + hand-off to Google's photo screensaver) |
+| `spike/` (separate Gradle module, not included in `:app`) | Agent E: spikes (Watch Next access; starting Google's photo screensaver on demand) |
+| `app/.../sound/`, `app/src/main/res/raw/`, `tools/sound/` | Agent F: interface sounds |
 
 New dependencies: list them in your report; don't edit the version catalog.
 

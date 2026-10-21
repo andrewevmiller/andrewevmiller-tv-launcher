@@ -1,0 +1,691 @@
+<title>Field Launcher Mockup</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Serif:wght@700&display=swap">
+<style>
+/* Layout: field-notebook page; a 960x540dp TV canvas scaled into the column, remote + build legend beside it. */
+:root {
+  --bg: #F2F1EE; --bg-soft: #E9E8E2; --panel: #E1E0D9; --line: #CBC9C1;
+  --ink: #1C1C1A; --muted: #5C5B54; --accent: #B98FD6; --accent-ink: #7B4FA3;
+  --bezel: #0E0E0D; --bezel-edge: #2A2A27;
+  --serif: "IBM Plex Serif", Georgia, "Times New Roman", serif;
+  --sans: "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #171716; --bg-soft: #1E1E1C; --panel: #242422; --line: #3A3A35;
+    --ink: #ECEBE5; --muted: #A3A29A; --accent: #B98FD6; --accent-ink: #C9A6E2;
+    --bezel: #050505; --bezel-edge: #34342F; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #171716; --bg-soft: #1E1E1C; --panel: #242422; --line: #3A3A35;
+  --ink: #ECEBE5; --muted: #A3A29A; --accent: #B98FD6; --accent-ink: #C9A6E2;
+  --bezel: #050505; --bezel-edge: #34342F; color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  background-color: var(--bg);
+  background-image: radial-gradient(var(--line) 1px, transparent 1.2px);
+  background-size: 26px 26px;
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 16px;
+  line-height: 1.6;
+}
+.page {
+  max-width: 1180px; margin: 0 auto;
+  padding-block: clamp(28px, 6vw, 64px);
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: grid; gap: 28px;
+}
+.eyebrow, .mono { font-family: var(--mono); font-size: 0.78rem; letter-spacing: 0.06em; color: var(--muted); }
+h1 { font-family: var(--serif); font-weight: 700; letter-spacing: -0.01em; font-size: clamp(2rem, 5vw, 3.2rem); line-height: 1.05; margin: 6px 0 10px; text-wrap: balance; }
+h2 { font-family: var(--serif); font-weight: 700; letter-spacing: -0.01em; font-size: 1.25rem; margin: 0; }
+.lede { max-width: 62ch; margin: 0; color: var(--muted); }
+.lede kbd, .hint kbd { font-family: var(--mono); font-size: 0.8em; border: 1px solid var(--line); background: var(--bg-soft); border-radius: 4px; padding: 0 5px; color: var(--ink); }
+
+.workbench { display: grid; grid-template-columns: minmax(0, 1fr) 260px; gap: 24px; align-items: start; }
+@media (max-width: 900px) { .workbench { grid-template-columns: minmax(0, 1fr); } }
+
+/* ---------- TV ---------- */
+.tv { min-width: 0; }
+.bezel { background: var(--bezel); border: 1px solid var(--bezel-edge); border-radius: 12px; padding: clamp(6px, 1.2vw, 14px); }
+.stage { position: relative; width: 100%; aspect-ratio: 16 / 9; max-width: 100%; overflow: hidden; border-radius: 3px; outline: none; cursor: pointer; }
+.stage:focus-visible { box-shadow: 0 0 0 2px var(--accent); }
+.stand { width: 26%; height: 10px; margin: 0 auto; background: var(--bezel); border: 1px solid var(--bezel-edge); border-top: 0; border-radius: 0 0 6px 6px; }
+.hint { margin: 10px 2px 0; font-size: 0.85rem; color: var(--muted); }
+.hint.live { color: var(--accent-ink); }
+
+.screen {
+  position: absolute; left: 0; top: 0; width: 960px; height: 540px; transform-origin: 0 0; overflow: hidden;
+  --t-bg: #171716; --t-soft: #1E1E1C; --t-panel: #242422; --t-line: #3A3A35; --t-ink: #ECEBE5; --t-muted: #A3A29A; --t-accent: #B98FD6; --t-dots: #2E2E2A;
+  background-color: var(--t-bg);
+  background-image: radial-gradient(var(--t-dots) 1px, transparent 1.2px);
+  background-size: 26px 26px; background-position: 13px 13px;
+  color: var(--t-ink); font-family: var(--sans);
+}
+.screen[data-mode="light"] {
+  --t-bg: #F2F1EE; --t-soft: #E9E8E2; --t-panel: #E1E0D9; --t-line: #CBC9C1; --t-ink: #1C1C1A; --t-muted: #5C5B54; --t-accent: #B98FD6; --t-dots: #D6D4CC;
+}
+.content { position: absolute; left: 48px; right: 48px; top: 27px; transition: transform 260ms ease; }
+.reduced .content, .reduced .track, .reduced .f { transition: none !important; }
+
+.tv-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 18px; }
+.tv-title { font-family: var(--serif); font-weight: 700; font-size: 30px; letter-spacing: -0.01em; line-height: 1; }
+.tv-clock { font-family: var(--mono); font-size: 13px; letter-spacing: 0.06em; color: var(--t-muted); font-variant-numeric: tabular-nums; }
+
+.sec { position: relative; margin-bottom: 18px; }
+.sec-rule { height: 1px; background: var(--t-line); margin-bottom: 10px; }
+.sec-label { font-family: var(--mono); font-weight: 500; font-size: 11.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--t-muted); margin-bottom: 8px; }
+.viewport { overflow: hidden; margin: -8px; padding: 8px; }
+.track { display: flex; gap: 14px; transition: transform 260ms ease; }
+
+/* focus treatment shared by every focusable */
+.f { flex: none; border: 1px solid var(--t-line); border-radius: 6px; transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease; transform: rotate(var(--tilt, 0deg)); }
+.f.on { border-color: var(--t-accent); box-shadow: 0 0 0 2px var(--t-accent); transform: rotate(0deg) scale(1.06); z-index: 2; position: relative; }
+
+/* feature band */
+.band { background: var(--t-panel); border-top: 1px solid var(--t-line); border-bottom: 1px solid var(--t-line); margin: 0 -48px 18px; padding: 16px 48px; display: grid; grid-template-columns: 1fr 300px; gap: 28px; align-items: center; position: relative; }
+.band-kicker { font-family: var(--mono); font-size: 11.5px; letter-spacing: 0.08em; color: var(--t-muted); text-transform: uppercase; }
+.band-title { font-family: var(--serif); font-weight: 700; font-size: 24px; letter-spacing: -0.01em; margin: 4px 0 4px; line-height: 1.15; }
+.band-body { font-size: 14px; line-height: 1.5; color: var(--t-muted); margin: 0 0 12px; max-width: 46ch; }
+.cta { display: inline-block; font-family: var(--mono); font-size: 12.5px; letter-spacing: 0.06em; padding: 6px 14px; color: var(--t-ink); background: transparent; }
+.cta.on { background: var(--t-accent); color: #171716; box-shadow: none; }
+.band-viz { height: 108px; border: 1px solid var(--t-line); border-radius: 4px; background: var(--t-bg); }
+.band-viz canvas { width: 100%; height: 100%; display: block; }
+
+/* chips */
+.chip { border-radius: 999px; background: var(--t-soft); padding: 4px 14px; font-family: var(--mono); font-size: 12px; letter-spacing: 0.04em; color: var(--t-muted); }
+.chip.sel { color: var(--t-ink); border-color: var(--t-muted); }
+.chip.on { border-radius: 999px; color: var(--t-ink); }
+
+/* app banners */
+.app { width: 160px; height: 90px; background: var(--t-soft); padding: 10px 12px; display: flex; flex-direction: column; justify-content: space-between; }
+.app svg { width: 22px; height: 22px; color: var(--t-muted); }
+.app.on svg { color: var(--t-accent); }
+.app-name { font-weight: 500; font-size: 14px; line-height: 1.2; }
+.app-cat { font-family: var(--mono); font-size: 10px; letter-spacing: 0.06em; color: var(--t-muted); text-transform: uppercase; }
+
+/* timeline */
+.entry { width: 236px; display: grid; grid-template-columns: 56px 22px 1fr; gap: 10px; align-items: start; padding: 8px 10px; border-color: transparent; border-left: 1px solid var(--t-line); border-radius: 0; }
+.entry.on { border-radius: 4px; background: var(--t-soft); }
+.entry-date { font-family: var(--mono); font-size: 11px; color: var(--t-muted); line-height: 1.35; font-variant-numeric: tabular-nums; }
+.entry svg { width: 20px; height: 20px; color: var(--t-muted); }
+.entry.on svg { color: var(--t-accent); }
+.entry-title { font-size: 13.5px; font-weight: 500; line-height: 1.25; }
+.entry-sub { font-size: 12px; color: var(--t-muted); line-height: 1.3; }
+
+/* photos */
+.photo { width: 132px; height: 92px; padding: 5px; background: var(--t-soft); position: relative; }
+.photo .img { width: 100%; height: 100%; border-radius: 2px; }
+.photo .cap { position: absolute; left: 8px; bottom: 8px; font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.04em; color: #ECEBE5; background: rgba(23,23,22,0.72); padding: 1px 5px; border-radius: 2px; opacity: 0; transition: opacity 160ms; }
+.photo.on .cap { opacity: 1; }
+
+/* system */
+.sys { width: 120px; height: 64px; background: transparent; display: flex; align-items: center; gap: 10px; padding: 0 12px; }
+.sys svg { width: 22px; height: 22px; color: var(--t-muted); flex: none; }
+.sys.on svg { color: var(--t-accent); }
+.sys span { font-size: 13px; font-weight: 500; line-height: 1.2; }
+
+.toast { position: absolute; right: 48px; bottom: 22px; font-family: var(--mono); font-size: 12px; letter-spacing: 0.04em; color: var(--t-ink); background: var(--t-panel); border: 1px solid var(--t-line); padding: 6px 12px; border-radius: 4px; opacity: 0; transition: opacity 200ms; pointer-events: none; }
+.toast.show { opacity: 1; }
+
+/* ambient */
+.ambient { position: absolute; inset: 0; background: var(--t-bg); opacity: 0; pointer-events: none; transition: opacity 500ms; }
+.ambient.show { opacity: 1; pointer-events: auto; }
+.ambient canvas { width: 100%; height: 100%; display: block; }
+.amb-clock { position: absolute; left: 48px; bottom: 30px; }
+.amb-time { font-family: var(--serif); font-weight: 700; font-size: 56px; letter-spacing: -0.01em; line-height: 1; color: var(--t-ink); font-variant-numeric: tabular-nums; }
+.amb-date { font-family: var(--mono); font-size: 12px; letter-spacing: 0.08em; color: var(--t-muted); margin-top: 8px; text-transform: uppercase; }
+
+/* photos slideshow (system ambient mode, launched from the launcher) */
+.slides { position: absolute; inset: 0; background: #0E0E0D; opacity: 0; pointer-events: none; transition: opacity 500ms; }
+.slides.show { opacity: 1; pointer-events: auto; }
+.slide { position: absolute; inset: 0; opacity: 0; transition: opacity 1400ms ease; }
+.slide.cur { opacity: 1; }
+.slides::after { content: ""; position: absolute; inset: auto 0 0 0; height: 180px; background: linear-gradient(transparent, rgba(14,14,13,0.75)); }
+.slide-meta { position: absolute; left: 48px; bottom: 30px; z-index: 2; color: #ECEBE5; }
+.slide-time { font-family: var(--serif); font-weight: 700; font-size: 44px; letter-spacing: -0.01em; line-height: 1; font-variant-numeric: tabular-nums; }
+.slide-cap { font-family: var(--mono); font-size: 12px; letter-spacing: 0.06em; color: rgba(236,235,229,0.78); margin-top: 8px; }
+.slide-src { position: absolute; right: 48px; bottom: 30px; z-index: 2; font-family: var(--mono); font-size: 11px; letter-spacing: 0.06em; color: rgba(236,235,229,0.6); }
+.reduced .slide { transition: none; }
+
+/* build-owner overlay */
+.own-tag { display: none; position: absolute; top: -2px; right: 0; z-index: 5; font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.05em; background: var(--t-bg); color: var(--t-accent); border: 1px dashed var(--t-accent); padding: 1px 7px; border-radius: 3px; }
+.owners [data-owner] { outline: 1px dashed var(--t-accent); outline-offset: 3px; }
+.owners .own-tag { display: block; }
+.owners.solo [data-owner]:not(.lit) { outline-color: transparent; }
+.owners.solo [data-owner]:not(.lit) .own-tag { display: none; }
+.owners.solo [data-owner]:not(.lit) > :not(.own-tag) { opacity: 0.35; }
+
+/* ---------- side panel ---------- */
+.side { display: grid; gap: 20px; min-width: 0; }
+.panel-label { font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
+.remote { display: grid; grid-template-columns: repeat(3, 44px); grid-template-rows: repeat(3, 44px); gap: 6px; justify-content: start; }
+.remote button, .row-btns button, .toggle {
+  font-family: var(--mono); font-size: 0.78rem; letter-spacing: 0.04em; color: var(--ink);
+  background: var(--bg-soft); border: 1px solid var(--line); border-radius: 6px; cursor: pointer;
+}
+.remote button { font-size: 1rem; }
+.remote button:hover, .row-btns button:hover, .toggle:hover { border-color: var(--muted); }
+.remote button:focus-visible, .row-btns button:focus-visible, .toggle:focus-visible, .agent:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.remote .ok { border-radius: 999px; }
+.row-btns { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+.row-btns button { padding: 6px 12px; }
+.toggles { display: grid; gap: 6px; }
+.toggle { display: flex; justify-content: space-between; align-items: center; padding: 7px 10px; text-align: left; width: 100%; }
+.toggle .state { color: var(--muted); }
+.toggle[aria-pressed="true"] { border-color: var(--accent); }
+.toggle[aria-pressed="true"] .state { color: var(--accent-ink); }
+
+/* ---------- plan ---------- */
+.plan { display: grid; gap: 14px; border-top: 1px solid var(--line); padding-top: 22px; }
+.plan-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.agents { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 0; border-top: 1px solid var(--line); }
+.agent { display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 10px; padding: 14px 4px 14px 0; border: 0; border-bottom: 1px solid var(--line); background: transparent; text-align: left; color: var(--ink); font: inherit; cursor: pointer; }
+.agent:hover .agent-name, .agent[aria-pressed="true"] .agent-name { color: var(--accent-ink); }
+.agent-id { font-family: var(--mono); font-size: 0.8rem; color: var(--muted); padding-top: 2px; }
+.agent[aria-pressed="true"] .agent-id { color: var(--accent-ink); }
+.agent-name { font-weight: 600; font-size: 0.95rem; }
+.agent-desc { font-size: 0.86rem; color: var(--muted); line-height: 1.45; }
+.agent-wave { font-family: var(--mono); font-size: 0.7rem; letter-spacing: 0.06em; color: var(--muted); margin-top: 4px; text-transform: uppercase; }
+
+@media (prefers-reduced-motion: reduce) {
+  .content, .track, .f, .ambient, .toast { transition: none !important; }
+}
+</style>
+
+<div class="page">
+  <header>
+    <div class="eyebrow">ANDREWEVMILLER-TV-LAUNCHER · MOCKUP · REV 0.1</div>
+    <h1>Field Launcher</h1>
+    <p class="lede">A working mockup of the home screen on a 960×540dp TV canvas, in the site's field-notebook language. Click the screen, then drive it with <kbd>←</kbd> <kbd>↑</kbd> <kbd>→</kbd> <kbd>↓</kbd>, <kbd>Enter</kbd> and <kbd>Esc</kbd>, or use the remote. Turn on build owners to see which agent ships each part.</p>
+  </header>
+
+  <div class="workbench">
+    <div class="tv">
+      <div class="bezel">
+        <div class="stage" id="stage" tabindex="0" aria-label="TV screen mockup. Use arrow keys to move focus, Enter to select, Escape for back.">
+          <div class="screen" id="screen" data-mode="dark">
+            <div class="content" id="content"></div>
+            <div class="toast" id="toast"></div>
+            <div class="ambient" id="ambient" data-owner="D">
+              <span class="own-tag">D · Ambient</span>
+              <canvas id="ambCanvas" width="1920" height="1080"></canvas>
+              <div class="amb-clock"><div class="amb-time" id="ambTime">19:42</div><div class="amb-date" id="ambDate">Wednesday · 2026-10-21</div></div>
+            </div>
+            <div class="slides" id="slides" data-owner="D">
+              <span class="own-tag">D · Photos screensaver hand-off</span>
+              <div id="slideStack"></div>
+              <div class="slide-meta"><div class="slide-time" id="slideTime">19:42</div><div class="slide-cap" id="slideCap"></div></div>
+              <div class="slide-src">Google Photos · ambient mode</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="stand"></div>
+      <p class="hint" id="hint">Click the screen to take control with the keyboard.</p>
+    </div>
+
+    <aside class="side">
+      <div>
+        <div class="panel-label">Remote</div>
+        <div class="remote" role="group" aria-label="Remote control">
+          <span></span><button id="r-up" aria-label="Up">↑</button><span></span>
+          <button id="r-left" aria-label="Left">←</button><button id="r-ok" class="ok" aria-label="OK">OK</button><button id="r-right" aria-label="Right">→</button>
+          <span></span><button id="r-down" aria-label="Down">↓</button><span></span>
+        </div>
+        <div class="row-btns">
+          <button id="r-back">Back</button>
+          <button id="r-home">Home</button>
+        </div>
+      </div>
+      <div>
+        <div class="panel-label">Screen</div>
+        <div class="toggles">
+          <button class="toggle" id="t-mode" aria-pressed="false"><span>Light mode</span><span class="state">off</span></button>
+          <button class="toggle" id="t-amb" aria-pressed="false"><span>Oxyfield screensaver</span><span class="state">off</span></button>
+          <button class="toggle" id="t-photos" aria-pressed="false"><span>Photos slideshow</span><span class="state">off</span></button>
+          <button class="toggle" id="t-sound" aria-pressed="false"><span>Interface sounds</span><span class="state">off</span></button>
+          <button class="toggle" id="t-motion" aria-pressed="false"><span>Reduced motion</span><span class="state">off</span></button>
+          <button class="toggle" id="t-own" aria-pressed="false"><span>Build owners</span><span class="state">off</span></button>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <section class="plan">
+    <div class="plan-head">
+      <h2>Who builds what</h2>
+      <span class="mono">select an agent to isolate its parts on screen</span>
+    </div>
+    <div class="agents" id="agents"></div>
+  </section>
+</div>
+
+<script>
+(() => {
+  const ICON = {
+    play: '<path d="M7 5.5v13l11-6.5z"/>',
+    note: '<path d="M9 18V6l10-2v12"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="16.5" cy="16" r="2.5"/>',
+    pad: '<path d="M6 8h12a4 4 0 0 1 4 4v1a4 4 0 0 1-7 2.6L13.5 14h-3L9 15.6A4 4 0 0 1 2 13v-1a4 4 0 0 1 4-4z"/><path d="M7 11v3M5.5 12.5h3"/><circle cx="16" cy="11.5" r=".6" fill="currentColor"/><circle cx="18" cy="13.5" r=".6" fill="currentColor"/>',
+    tool: '<path d="M14.5 6.5a4 4 0 0 0 5 5L12 19a2.1 2.1 0 0 1-3-3z"/><path d="M14.5 6.5 17 4l3 3-2.5 2.5"/>',
+    wave: '<path d="M2 12h3l2-6 3 12 3-9 2 5 2-2h5"/>',
+    port: '<path d="M4 8h16v5l-2 3H6l-2-3z"/><path d="M8 11h8"/>',
+    gear: '<circle cx="12" cy="12" r="3"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"/>',
+    wifi: '<path d="M2.5 9a14 14 0 0 1 19 0M5.5 12.5a9.5 9.5 0 0 1 13 0M8.5 16a5 5 0 0 1 7 0"/><circle cx="12" cy="19" r=".8" fill="currentColor"/>',
+    search: '<circle cx="10.5" cy="10.5" r="6"/><path d="m15 15 5.5 5.5"/>',
+    folder: '<path d="M3 6.5h6l2 2h10V18H3z"/>',
+    points: '<circle cx="6" cy="16" r="1" fill="currentColor"/><circle cx="9" cy="9" r="1" fill="currentColor"/><circle cx="13" cy="14" r="1" fill="currentColor"/><circle cx="17" cy="7" r="1" fill="currentColor"/><circle cx="18" cy="17" r="1" fill="currentColor"/><path d="M3 21h18M3 3v18"/>'
+  };
+  const svg = n => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON[n]}</svg>`;
+
+  const APPS = [
+    { name: 'YouTube', cat: 'video', icon: 'play' }, { name: 'Netflix', cat: 'video', icon: 'play' },
+    { name: 'Plex', cat: 'video', icon: 'play' }, { name: 'Spotify', cat: 'music', icon: 'note' },
+    { name: 'Tidal', cat: 'music', icon: 'note' }, { name: 'Moonlight', cat: 'games', icon: 'pad' },
+    { name: 'RetroArch', cat: 'games', icon: 'pad' }, { name: 'File Manager', cat: 'tools', icon: 'folder' },
+    { name: 'Analyzer', cat: 'tools', icon: 'tool' }
+  ];
+  const CHIPS = ['all', 'video', 'music', 'games', 'tools'];
+  const RECENT = [
+    { d: '10-21', t: '18:05', icon: 'play', title: 'Plex', sub: 'The Expanse · S2E4' },
+    { d: '10-20', t: '21:40', icon: 'note', title: 'Spotify', sub: 'Late-night focus mix' },
+    { d: '10-19', t: '20:12', icon: 'pad', title: 'Moonlight', sub: 'Streamed from desktop' },
+    { d: '10-18', t: '09:30', icon: 'wave', title: 'YouTube', sub: 'EPR oximetry lecture' },
+    { d: '10-17', t: '22:01', icon: 'points', title: 'Analyzer', sub: 'Flow run 0412 review' }
+  ];
+  const PHOTOS = [
+    { cap: '2026-08-14 · Shenandoah', a: '#5C5B54', b: '#B98FD6' },
+    { cap: '2026-07-02 · Lab bench', a: '#3A3A35', b: '#A3A29A' },
+    { cap: '2026-06-21 · Solstice', a: '#7B4FA3', b: '#E1E0D9' },
+    { cap: '2026-05-09 · Fly room', a: '#242422', b: '#5C5B54' },
+    { cap: '2026-04-18 · Rain', a: '#A3A29A', b: '#3A3A35' },
+    { cap: '2026-03-30 · Coast', a: '#5C5B54', b: '#ECEBE5' },
+    { cap: '2026-02-11 · Snow day', a: '#CBC9C1', b: '#7B4FA3' }
+  ];
+  const SYS = [
+    { name: 'HDMI 1', icon: 'port' }, { name: 'HDMI 2', icon: 'port' }, { name: 'Wi-Fi', icon: 'wifi' },
+    { name: 'Search', icon: 'search' }, { name: 'Settings', icon: 'gear' }
+  ];
+  const AGENTS = [
+    { id: 'I', name: 'Integrator', wave: 'Wave 1 + 3', desc: 'Theme tokens, fonts, focus style, dot grid, home frame and clock. Wires every row in at the end.' },
+    { id: 'A', name: 'Scripts & safety', wave: 'Wave 1', desc: 'probe, deploy and rescue scripts, crash fallback to the stock launcher. No UI of its own.' },
+    { id: 'B', name: 'Home core', wave: 'Wave 2', desc: 'Installed-apps repository, favorites row, system tiles, pin / reorder / hide stored on the TV.' },
+    { id: 'C', name: 'Components', wave: 'Wave 2', desc: 'Chips, feature band, timeline entries, tilted gallery tiles and the line-icon set.' },
+    { id: 'D', name: 'Ambient', wave: 'Wave 2', desc: 'Oxyfield screensaver as a DreamService, frame-rate cap, reduced-motion still frame.' },
+    { id: 'E', name: 'Watch Next spike', wave: 'Wave 2', desc: 'Tests whether the Hisense lets us read other apps\' rows, and whether we can start Google\'s photo screensaver on demand.' },
+    { id: 'F', name: 'Sound', wave: 'Wave 2', desc: 'Interface sound set rendered from a script, SoundPool playback, repeat throttling, on/off setting. No UI region.' }
+  ];
+
+  const state = { chip: 'all', r: 2, c: 0, scrollX: {}, ambient: false, slides: false, light: false, reduced: matchMedia('(prefers-reduced-motion: reduce)').matches, owners: false, solo: null };
+
+  /* Interface sounds: quiet, short, woody. Synthesized here; the app ships the same set as rendered OGGs. */
+  const sfx = (() => {
+    let ctx = null, last = 0;
+    const api = { on: false };
+    const audio = () => {
+      if (!ctx) { try { ctx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { return null; } }
+      if (ctx.state === 'suspended') ctx.resume();
+      return ctx;
+    };
+    // one enveloped partial through a gentle low-pass
+    function tone(f, { at = 0, dur = 0.08, gain = 0.04, type = 'sine', glide = null, lp = 3200 } = {}) {
+      const c = audio(); if (!c) return;
+      const t = c.currentTime + at;
+      const o = c.createOscillator(), g = c.createGain(), flt = c.createBiquadFilter();
+      o.type = type; o.frequency.setValueAtTime(f, t);
+      if (glide) o.frequency.exponentialRampToValueAtTime(glide, t + dur);
+      flt.type = 'lowpass'; flt.frequency.value = lp;
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(gain, t + 0.004);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      o.connect(flt); flt.connect(g); g.connect(c.destination);
+      o.start(t); o.stop(t + dur + 0.02);
+    }
+    // focus: a pencil-tap tick; pitch steps down slightly per row so rows have a "height"
+    api.tick = row => {
+      if (!api.on) return;
+      const now = performance.now();
+      const held = now - last < 90;          // key-repeat: thinner and quieter
+      last = now;
+      tone(1900 - (row || 0) * 70, { dur: held ? 0.018 : 0.028, gain: held ? 0.012 : 0.022, type: 'triangle', lp: 5000 });
+    };
+    api.edge = () => { if (api.on) tone(150, { dur: 0.09, gain: 0.05, glide: 110, lp: 800 }); };
+    api.select = () => { if (!api.on) return; tone(660, { dur: 0.07, gain: 0.035, type: 'triangle' }); tone(990, { at: 0.045, dur: 0.1, gain: 0.03, type: 'triangle' }); };
+    api.back = () => { if (!api.on) return; tone(880, { dur: 0.06, gain: 0.03, type: 'triangle' }); tone(587, { at: 0.04, dur: 0.09, gain: 0.03, type: 'triangle' }); };
+    api.launch = () => { if (!api.on) return; [523.3, 659.3, 784].forEach((f, i) => tone(f, { at: i * 0.045, dur: 0.28, gain: 0.03, type: 'triangle', lp: 2600 })); };
+    // screensaver in: a slow resonance swell (a nod to EPR); wake: short rising breath
+    api.sleep = () => { if (!api.on) return; tone(220, { dur: 1.6, gain: 0.03, glide: 330, lp: 1200 }); tone(331, { at: 0.15, dur: 1.5, gain: 0.018, glide: 495, lp: 1200 }); };
+    api.wake = () => { if (!api.on) return; tone(392, { dur: 0.22, gain: 0.03, glide: 587, lp: 2000 }); };
+    return api;
+  })();
+
+  const stage = document.getElementById('stage');
+  const screen = document.getElementById('screen');
+  const content = document.getElementById('content');
+  const toastEl = document.getElementById('toast');
+  const hint = document.getElementById('hint');
+
+  /* rows: each has key, items (DOM built in render) */
+  let rows = [];
+
+  const tag = (owner, label) => `<span class="own-tag">${owner} · ${label}</span>`;
+
+  function render() {
+    const apps = APPS.filter(a => state.chip === 'all' || a.cat === state.chip);
+    content.innerHTML = `
+      <div class="tv-head" data-owner="I" style="position:relative">${tag('I', 'Frame + clock')}
+        <div class="tv-title">Home</div><div class="tv-clock" id="clock"></div>
+      </div>
+      <div class="band" data-owner="C">${tag('C', 'Feature band')}
+        <div>
+          <div class="band-kicker">Featured · Plex · resume at 31:08</div>
+          <div class="band-title">The Expanse, season 2</div>
+          <p class="band-body">Episode 4 of 13. Picks up where you left off yesterday at 18:05.</p>
+          <div class="track" data-row="0"><span class="f cta" data-r="0" data-c="0">Resume →</span></div>
+        </div>
+        <div class="band-viz"><canvas id="bandCanvas" width="600" height="216"></canvas></div>
+      </div>
+      <div class="sec" data-owner="C">${tag('C', 'Chips')}
+        <div class="viewport"><div class="track" data-row="1">
+          ${CHIPS.map((c, i) => `<span class="f chip ${state.chip === c ? 'sel' : ''}" data-r="1" data-c="${i}">${c === 'all' ? 'All' : c[0].toUpperCase() + c.slice(1)}</span>`).join('')}
+        </div></div>
+      </div>
+      <div class="sec" data-owner="B">${tag('B', 'Favorites')}
+        <div class="sec-rule"></div><div class="sec-label">Favorites · ${apps.length} pinned</div>
+        <div class="viewport"><div class="track" data-row="2">
+          ${apps.map((a, i) => `<div class="f app" data-r="2" data-c="${i}">${svg(a.icon)}<div><div class="app-name">${a.name}</div><div class="app-cat">${a.cat}</div></div></div>`).join('')}
+        </div></div>
+      </div>
+      <div class="sec" data-owner="E">${tag('C+E', 'Recent · content via spike')}
+        <div class="sec-rule"></div><div class="sec-label">Recent</div>
+        <div class="viewport"><div class="track" data-row="3">
+          ${RECENT.map((e, i) => `<div class="f entry" data-r="3" data-c="${i}"><div class="entry-date">${e.d}<br>${e.t}</div>${svg(e.icon)}<div><div class="entry-title">${e.title}</div><div class="entry-sub">${e.sub}</div></div></div>`).join('')}
+        </div></div>
+      </div>
+      <div class="sec" data-owner="C">${tag('C+D', 'Gallery tiles → slideshow')}
+        <div class="sec-rule"></div><div class="sec-label">Photos · select one to start the slideshow</div>
+        <div class="viewport"><div class="track" data-row="4">
+          ${PHOTOS.map((p, i) => `<div class="f photo" data-r="4" data-c="${i}" style="--tilt:${i % 2 ? 0.8 : -0.8}deg"><div class="img" style="background:linear-gradient(${140 + i * 23}deg, ${p.a}, ${p.b})"></div><span class="cap">${p.cap}</span></div>`).join('')}
+        </div></div>
+      </div>
+      <div class="sec" data-owner="B">${tag('B', 'System tiles')}
+        <div class="sec-rule"></div><div class="sec-label">Inputs &amp; system</div>
+        <div class="viewport"><div class="track" data-row="5">
+          ${SYS.map((s, i) => `<div class="f sys" data-r="5" data-c="${i}">${svg(s.icon)}<span>${s.name}</span></div>`).join('')}
+        </div></div>
+      </div>`;
+    rows = [...content.querySelectorAll('.track')].map(t => [...t.querySelectorAll('.f')]);
+    state.scrollX = {};
+    applyOwners();
+    tickClock();
+    drawBand(performance.now());
+    focus(Math.min(state.r, rows.length - 1), state.c, false);
+  }
+
+  function focus(r, c, animate = true) {
+    const prev = content.querySelector('.f.on');
+    if (prev) prev.classList.remove('on');
+    state.r = r; state.c = Math.max(0, Math.min(c, rows[r].length - 1));
+    const el = rows[state.r][state.c];
+    if (!el) return;
+    el.classList.add('on');
+    // horizontal: keep focused item inside its viewport
+    const track = el.parentElement;
+    const vpW = 864;
+    let sx = state.scrollX[r] || 0;
+    const left = el.offsetLeft, right = left + el.offsetWidth;
+    if (right - sx > vpW - 24) sx = right - vpW + 24;
+    if (left - sx < 0) sx = Math.max(0, left - 0);
+    state.scrollX[r] = sx;
+    track.style.transform = `translateX(${-sx}px)`;
+    // vertical: keep the focused section in view
+    const sec = el.closest('.sec, .band, .tv-head');
+    const top = sec.offsetTop, bottom = top + sec.offsetHeight;
+    const cur = -(parseFloat(content.dataset.y || 0));
+    let y = cur;
+    if (bottom - y > 540 - 27 - 40) y = bottom - (540 - 27 - 40);
+    if (top - y < 0) y = Math.max(0, top - 10);
+    if (r <= 1) y = 0;
+    content.dataset.y = -y;
+    content.style.transform = `translateY(${-y}px)`;
+  }
+
+  function exitAmbient() {
+    if (state.ambient) { setAmbient(false); sfx.wake(); return true; }
+    if (state.slides) { setSlides(false); sfx.wake(); return true; }
+    return false;
+  }
+
+  function move(dir) {
+    if (exitAmbient()) return;
+    if (dir === 'left' || dir === 'right') {
+      const nc = state.c + (dir === 'right' ? 1 : -1);
+      if (nc < 0 || nc >= rows[state.r].length) return sfx.edge();
+      sfx.tick(state.r);
+      return focus(state.r, nc);
+    }
+    const nr = state.r + (dir === 'down' ? 1 : -1);
+    if (nr < 0 || nr >= rows.length) return sfx.edge();
+    sfx.tick(nr);
+    // pick the item in the next row nearest horizontally to the current one
+    const cur = rows[state.r][state.c];
+    const cx = cur.getBoundingClientRect().left + cur.getBoundingClientRect().width / 2;
+    let best = 0, bd = Infinity;
+    rows[nr].forEach((el, i) => { const b = el.getBoundingClientRect(); const d = Math.abs(b.left + b.width / 2 - cx); if (d < bd) { bd = d; best = i; } });
+    focus(nr, best);
+  }
+
+  let toastTimer;
+  function toast(msg) {
+    toastEl.textContent = msg; toastEl.classList.add('show');
+    clearTimeout(toastTimer); toastTimer = setTimeout(() => toastEl.classList.remove('show'), 1600);
+  }
+
+  function select() {
+    if (exitAmbient()) return;
+    const el = rows[state.r][state.c];
+    if (state.r === 0) { sfx.launch(); return toast('Opening Plex · resume 31:08'); }
+    if (state.r === 1) { sfx.select(); state.chip = CHIPS[state.c]; const c = state.c; render(); focus(1, c); return; }
+    if (state.r === 2) { sfx.launch(); return toast('Launching ' + el.querySelector('.app-name').textContent + '…'); }
+    if (state.r === 3) { sfx.launch(); return toast('Reopening ' + el.querySelector('.entry-title').textContent + '…'); }
+    if (state.r === 4) return setSlides(true, state.c);
+    if (state.r === 5) { sfx.select(); return toast(el.textContent.trim().startsWith('HDMI') ? 'Switching to ' + el.textContent.trim() : 'Opening ' + el.textContent.trim()); }
+  }
+
+  function back() {
+    if (exitAmbient()) return;
+    sfx.back();
+    if (state.r !== 2 || state.c !== 0) focus(2, 0);
+  }
+  function home() {
+    exitAmbient();
+    sfx.back();
+    state.chip = 'all'; state.r = 2; state.c = 0; render();
+  }
+
+  stage.addEventListener('keydown', e => {
+    const map = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right' };
+    if (map[e.key]) { e.preventDefault(); move(map[e.key]); }
+    else if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); select(); }
+    else if (e.key === 'Escape' || e.key === 'Backspace') { e.preventDefault(); back(); }
+    else if (e.key === 'h' || e.key === 'H') home();
+  });
+  stage.addEventListener('focus', () => { hint.textContent = 'Keyboard connected: arrows move, Enter selects, Esc goes back, H goes home.'; hint.classList.add('live'); });
+  stage.addEventListener('blur', () => { hint.textContent = 'Click the screen to take control with the keyboard.'; hint.classList.remove('live'); });
+  stage.addEventListener('click', e => {
+    if (exitAmbient()) return;
+    const f = e.target.closest('.f');
+    if (f) { const r = +f.dataset.r, c = +f.dataset.c; if (r === state.r && c === state.c) select(); else { sfx.tick(r); focus(r, c); } }
+  });
+
+  const bind = (id, fn) => document.getElementById(id).addEventListener('click', fn);
+  bind('r-up', () => move('up')); bind('r-down', () => move('down'));
+  bind('r-left', () => move('left')); bind('r-right', () => move('right'));
+  bind('r-ok', select); bind('r-back', back); bind('r-home', home);
+
+  function setToggle(id, on) {
+    const b = document.getElementById(id);
+    b.setAttribute('aria-pressed', on); b.querySelector('.state').textContent = on ? 'on' : 'off';
+  }
+  bind('t-mode', () => { state.light = !state.light; screen.dataset.mode = state.light ? 'light' : 'dark'; setToggle('t-mode', state.light); });
+  bind('t-amb', () => { if (state.ambient) exitAmbient(); else { if (state.slides) setSlides(false); setAmbient(true); } });
+  bind('t-photos', () => { if (state.slides) exitAmbient(); else { if (state.ambient) setAmbient(false); setSlides(true, 0); } });
+  bind('t-sound', () => { sfx.on = !sfx.on; setToggle('t-sound', sfx.on); if (sfx.on) { sfx.select(); toast('Interface sounds on · try moving around'); } });
+  bind('t-motion', () => { state.reduced = !state.reduced; screen.classList.toggle('reduced', state.reduced); setToggle('t-motion', state.reduced); drawBand(performance.now()); });
+  bind('t-own', () => { state.owners = !state.owners; if (!state.owners) state.solo = null; setToggle('t-own', state.owners); applyOwners(); renderAgents(); });
+
+  function applyOwners() {
+    screen.classList.toggle('owners', state.owners);
+    screen.classList.toggle('solo', !!state.solo);
+    screen.querySelectorAll('[data-owner]').forEach(el => {
+      const o = el.dataset.owner;
+      el.classList.toggle('lit', state.solo === o || (state.solo === 'C' && o === 'E'));
+    });
+    if (state.solo === 'D' && !state.ambient) setAmbient(true);
+  }
+
+  const agentsEl = document.getElementById('agents');
+  function renderAgents() {
+    agentsEl.innerHTML = AGENTS.map(a => `
+      <button class="agent" data-id="${a.id}" aria-pressed="${state.solo === a.id}">
+        <span class="agent-id">${a.id}</span>
+        <span><span class="agent-name">${a.name}</span><br><span class="agent-desc">${a.desc}</span><br><span class="agent-wave">${a.wave}</span></span>
+      </button>`).join('');
+  }
+  agentsEl.addEventListener('click', e => {
+    const b = e.target.closest('.agent'); if (!b) return;
+    const id = b.dataset.id;
+    state.solo = state.solo === id ? null : id;
+    state.owners = true; setToggle('t-own', true);
+    if (id === 'A' && state.solo) toast('Agent A has no UI · scripts/ and safety/');
+    if (id === 'F' && state.solo) { sfx.on = true; setToggle('t-sound', true); sfx.launch(); toast('Agent F is audible only · sounds on'); }
+    if (state.solo !== 'D' && state.ambient) setAmbient(false);
+    if (state.solo !== 'D' && state.slides) setSlides(false);
+    applyOwners(); renderAgents();
+  });
+
+  /* clock */
+  function pad(n) { return String(n).padStart(2, '0'); }
+  function tickClock() {
+    const d = new Date();
+    const ds = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+    const ts = `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    const c = document.getElementById('clock'); if (c) c.textContent = `${ds} · ${ts}`;
+    document.getElementById('ambTime').textContent = ts;
+    document.getElementById('ambDate').textContent = d.toLocaleDateString('en-US', { weekday: 'long' }) + ' · ' + ds;
+  }
+  setInterval(tickClock, 10000);
+
+  /* screen scaling */
+  const ro = new ResizeObserver(() => { screen.style.transform = `scale(${stage.clientWidth / 960})`; });
+  ro.observe(stage);
+
+  /* oxyfield: dots brighten from muted to accent as ripples pass */
+  const tokens = () => {
+    const cs = getComputedStyle(screen);
+    return { bg: cs.getPropertyValue('--t-bg').trim(), dot: cs.getPropertyValue('--t-line').trim(), muted: cs.getPropertyValue('--t-muted').trim(), accent: cs.getPropertyValue('--t-accent').trim() };
+  };
+  const hex = h => { h = h.replace('#', ''); return [0, 2, 4].map(i => parseInt(h.slice(i, i + 2), 16)); };
+  const mix = (a, b, t) => `rgb(${a.map((v, i) => Math.round(v + (b[i] - v) * t)).join(',')})`;
+
+  function field(ctx, W, H, step, ripples, now, base) {
+    const t = tokens(); const cDot = hex(t.dot), cMut = hex(t.muted), cAcc = hex(t.accent);
+    ctx.fillStyle = t.bg; ctx.fillRect(0, 0, W, H);
+    for (let y = step / 2; y < H; y += step) {
+      for (let x = step / 2; x < W; x += step) {
+        let e = 0;
+        for (const r of ripples) {
+          const age = (now - r.t0) / 1000; const rad = age * r.v; const d = Math.hypot(x - r.x, y - r.y);
+          const fade = Math.max(0, 1 - age / r.life);
+          e += Math.exp(-((d - rad) ** 2) / (2 * r.w * r.w)) * fade;
+        }
+        e = Math.min(1, e);
+        const col = e < 0.5 ? mix(cDot, cMut, e * 2) : mix(cMut, cAcc, (e - 0.5) * 2);
+        ctx.fillStyle = col;
+        ctx.beginPath(); ctx.arc(x, y, base * (1 + e * 1.3), 0, Math.PI * 2); ctx.fill();
+      }
+    }
+  }
+
+  const amb = document.getElementById('ambient');
+  const ambCtx = document.getElementById('ambCanvas').getContext('2d');
+  let ambRipples = [], ambRaf = 0, lastSpawn = 0;
+  function setAmbient(on) {
+    state.ambient = on; amb.classList.toggle('show', on); setToggle('t-amb', on);
+    cancelAnimationFrame(ambRaf);
+    if (on) {
+      sfx.sleep();
+      const now = performance.now();
+      ambRipples = [{ x: 1200, y: 420, t0: now - 2200, v: 260, w: 60, life: 7 }, { x: 520, y: 700, t0: now - 500, v: 260, w: 60, life: 7 }];
+      ambLoop(now);
+    }
+  }
+  function ambLoop(now) {
+    if (state.reduced) { field(ambCtx, 1920, 1080, 44, ambRipples, ambRipples[0].t0 + 2600, 2.2); return; }
+    if (now - lastSpawn > 2400) { lastSpawn = now; ambRipples.push({ x: 200 + Math.random() * 1520, y: 120 + Math.random() * 840, t0: now, v: 220 + Math.random() * 80, w: 55, life: 7 }); }
+    ambRipples = ambRipples.filter(r => (now - r.t0) / 1000 < r.life);
+    field(ambCtx, 1920, 1080, 44, ambRipples, now, 2.2);
+    ambRaf = requestAnimationFrame(ambLoop);
+  }
+
+  /* small oxyfield in the feature band */
+  let bandRaf = 0, bandRipples = [];
+  function drawBand(now) {
+    cancelAnimationFrame(bandRaf);
+    const cv = document.getElementById('bandCanvas'); if (!cv) return;
+    const ctx = cv.getContext('2d');
+    if (!bandRipples.length) bandRipples = [{ x: 380, y: 100, t0: now - 1200, v: 120, w: 26, life: 5 }];
+    const loop = n => {
+      if (!document.getElementById('bandCanvas')) return;
+      if (state.reduced) { field(ctx, 600, 216, 18, bandRipples, bandRipples[0].t0 + 1400, 1.6); return; }
+      bandRipples = bandRipples.filter(r => (n - r.t0) / 1000 < r.life);
+      if (bandRipples.length < 2 && (!bandRipples.length || n - bandRipples[bandRipples.length - 1].t0 > 1800)) bandRipples.push({ x: 60 + Math.random() * 480, y: 30 + Math.random() * 160, t0: n, v: 110, w: 24, life: 5 });
+      field(ctx, 600, 216, 18, bandRipples, n, 1.6);
+      bandRaf = requestAnimationFrame(loop);
+    };
+    loop(now);
+  }
+
+  /* photos slideshow: stands in for Google's own ambient mode, which the launcher starts */
+  const SLIDE_LOOKS = [
+    'radial-gradient(120% 90% at 70% 30%, #E8C9A0 0%, #8A6E5A 40%, #2B2622 100%)',
+    'radial-gradient(100% 80% at 30% 60%, #9FB4C7 0%, #4E6274 45%, #171B1F 100%)',
+    'radial-gradient(110% 90% at 50% 20%, #D9D2E9 0%, #7B4FA3 50%, #1E1726 100%)',
+    'radial-gradient(120% 100% at 20% 80%, #B7C9A8 0%, #55684A 45%, #1A1E17 100%)',
+    'radial-gradient(100% 90% at 80% 70%, #F0E6D2 0%, #A39478 45%, #2A2620 100%)',
+    'radial-gradient(120% 90% at 40% 40%, #CBC9C1 0%, #5C5B54 50%, #171716 100%)',
+    'radial-gradient(110% 100% at 60% 30%, #E7B8A8 0%, #8C5848 45%, #241A17 100%)'
+  ];
+  const slideStack = document.getElementById('slideStack');
+  slideStack.innerHTML = SLIDE_LOOKS.map(bg => `<div class="slide" style="background:${bg}"></div>`).join('');
+  const slideEls = [...slideStack.children];
+  let slideIdx = 0, slideTimer = 0;
+  function showSlide(i) {
+    slideEls.forEach((el, k) => el.classList.toggle('cur', k === i));
+    document.getElementById('slideCap').textContent = PHOTOS[i % PHOTOS.length].cap.replace(' · ', ' · ').toUpperCase();
+    document.getElementById('slideTime').textContent = document.getElementById('ambTime').textContent;
+  }
+  function setSlides(on, start = 0) {
+    state.slides = on;
+    document.getElementById('slides').classList.toggle('show', on);
+    setToggle('t-photos', on);
+    clearInterval(slideTimer);
+    if (on) {
+      sfx.sleep();
+      slideIdx = start % slideEls.length; showSlide(slideIdx);
+      slideTimer = setInterval(() => { slideIdx = (slideIdx + 1) % slideEls.length; showSlide(slideIdx); }, state.reduced ? 9000 : 5000);
+    }
+  }
+
+  if (state.reduced) { screen.classList.add('reduced'); setToggle('t-motion', true); }
+  renderAgents();
+  render();
+})();
+</script>
