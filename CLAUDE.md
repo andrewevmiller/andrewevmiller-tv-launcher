@@ -68,7 +68,7 @@ integrator will apply it.
 **Contract files** (the interfaces in `docs/BUILD_PLAN.md` §5.2: `sound/FieldSound.kt`, `sound/Waveform.kt`,
 `sound/MotifOverrides.kt`, `settings/SettingsRepository.kt`, `ambient/ScreensaverController.kt`,
 `home/data/AppsRepository.kt`, `home/data/AppCategory.kt`, `home/data/LayoutStore.kt`,
-`home/data/FakeAppsRepository.kt`) are integrator-owned even though they sit in another agent's directory.
+`home/data/FakeAppsRepository.kt`, `ui/icons/FieldIcons.kt` names, `ui/icons/FieldIcon.kt`) are integrator-owned even though they sit in another agent's directory.
 Implement them; don't change their signatures. If one must change, say so under "Requested shared changes".
 
 New dependencies: list them in your report; don't edit the version catalog.

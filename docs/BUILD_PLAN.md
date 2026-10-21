@@ -240,6 +240,7 @@ Per-app motif overrides (re-roll seed, mute) are stored by F alongside its own d
   B2 implements it with DataStore; B1 builds `AppsRepository` on top of it.
 - Fakes for previews and tests: `FakeAppsRepository`, `FakeSettingsRepository`, `FakeMotifOverrides`,
   `InMemoryLayoutStore`, `NoOpFieldSound`, `NoOpScreensaverController`.
+- `ui/icons/FieldIcons.kt` fixes the icon names (`FieldIcons.Play, Note, Pad, Tool, Wave, Port, Gear, Wifi, Search, Folder, Points`, plus `forCategory(AppCategory)`) with placeholder bodies, and `FieldIcon(icon, modifier, size, tint)` draws one. C5 fills in the glyphs; everyone else codes against the names now.
 - The manifest registers HOME on `.HomeAlias`; see `CLAUDE.md` "Home activity, previous home, and the crash fallback".
 
 ### 5.3 Wiring (done by the integrator in wave 3)
