@@ -38,8 +38,6 @@ import com.andrewevmiller.tvlauncher.theme.FieldDimens
 import com.andrewevmiller.tvlauncher.theme.FieldShapes
 import com.andrewevmiller.tvlauncher.theme.fieldTile
 import kotlinx.coroutines.android.awaitFrame
-import kotlin.math.exp
-import kotlin.math.hypot
 import kotlin.random.Random
 
 /** What the band shows: an app and a line about when it was last opened (null if never). */
@@ -111,22 +109,6 @@ private fun OpenButton(onClick: () -> Unit) {
             .background(if (focused) colors.accent else Color.Transparent, FieldShapes.tile)
             .padding(horizontal = 14.dp, vertical = 6.dp),
     )
-}
-
-internal class Ripple(val x: Float, val y: Float, val t0: Float, val speed: Float, val width: Float, val life: Float)
-
-/** How lit a dot at ([x], [y]) is at time [t] (seconds), 0 to 1. Ripples farther than 4 widths from a dot add under 0.04%, so they are skipped. */
-internal fun dotEnergy(x: Float, y: Float, t: Float, ripples: List<Ripple>): Float {
-    var e = 0f
-    for (r in ripples) {
-        val age = t - r.t0
-        val fade = 1 - age / r.life
-        if (fade <= 0f) continue
-        val diff = hypot(x - r.x, y - r.y) - age * r.speed
-        if (diff > 4 * r.width || diff < -4 * r.width) continue
-        e += exp(-(diff * diff) / (2 * r.width * r.width)) * fade
-    }
-    return minOf(1f, e)
 }
 
 private const val DOT_STEP = 18f
