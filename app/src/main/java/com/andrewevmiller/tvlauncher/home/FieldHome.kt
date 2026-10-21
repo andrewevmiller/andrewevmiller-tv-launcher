@@ -8,17 +8,18 @@ import android.media.tv.TvInputManager
 import android.provider.Settings
 import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import com.andrewevmiller.tvlauncher.AppContainer
+import com.andrewevmiller.tvlauncher.home.data.AppLoader
 import com.andrewevmiller.tvlauncher.home.data.HomeLaunchHistory
 import com.andrewevmiller.tvlauncher.home.data.InstalledApps
 import com.andrewevmiller.tvlauncher.home.data.LaunchRecord
@@ -26,10 +27,7 @@ import com.andrewevmiller.tvlauncher.home.data.LauncherApp
 import com.andrewevmiller.tvlauncher.settings.LauncherSettings
 import com.andrewevmiller.tvlauncher.sound.LocalFieldSound
 import com.andrewevmiller.tvlauncher.theme.FieldIcons
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -54,12 +52,14 @@ fun FieldHome(
 ) {
     val context = LocalContext.current
     val sound = LocalFieldSound.current
-    val scope = rememberCoroutineScope()
 
     val history = remember { HomeLaunchHistory(context) }
     val layoutPrefs = remember { context.getSharedPreferences("layout", Context.MODE_PRIVATE) }
 
     var apps by remember { mutableStateOf<List<LauncherApp>>(emptyList()) }
+    // Shows the saved list at once, then rescans only the apps whose package changed (publishes on the main thread).
+    val loader = remember { AppLoader(context) { apps = it } }
+    DisposableEffect(loader) { onDispose { loader.close() } }
     var records by remember { mutableStateOf<List<LaunchRecord>>(history.entries()) }
     var order by remember {
         mutableStateOf((layoutPrefs.getString("order", "") ?: "").split(';').filter { it.isNotEmpty() })
@@ -87,10 +87,8 @@ fun FieldHome(
         }
     }
 
-    // Reload on every return so installs and uninstalls show up.
-    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
-        scope.launch { apps = withContext(Dispatchers.IO) { InstalledApps.load(context) } }
-    }
+    // Cheap when nothing was installed, removed or updated, so installs and uninstalls still show up on return.
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { loader.refresh() }
     LaunchedEffect(ui.message) {
         if (ui.message != null) {
             delay(4_000)

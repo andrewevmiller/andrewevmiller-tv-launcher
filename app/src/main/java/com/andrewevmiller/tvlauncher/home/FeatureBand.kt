@@ -24,6 +24,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.PointMode
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.unit.dp
@@ -36,8 +38,6 @@ import com.andrewevmiller.tvlauncher.theme.FieldDimens
 import com.andrewevmiller.tvlauncher.theme.FieldShapes
 import com.andrewevmiller.tvlauncher.theme.fieldTile
 import kotlinx.coroutines.android.awaitFrame
-import kotlin.math.exp
-import kotlin.math.hypot
 import kotlin.random.Random
 
 /** What the band shows: an app and a line about when it was last opened (null if never). */
@@ -111,9 +111,16 @@ private fun OpenButton(onClick: () -> Unit) {
     )
 }
 
-private class Ripple(val x: Float, val y: Float, val t0: Float, val speed: Float, val width: Float, val life: Float)
+private const val DOT_STEP = 18f
+private const val DOT_FRAME_NS = 50_000_000L // the ripples are slow: 20 frames a second looks the same and costs a third
 
-/** Dots on an 18-unit grid (in a 600x216 space) lit by ripples that spread and fade; still when motion is reduced. */
+/**
+ * Dots on an 18-unit grid (in a 600x216 space) lit by ripples that spread and fade; still when motion is reduced.
+ *
+ * The clock is read only while drawing, so the animation never recomposes anything. Unlit dots are one
+ * cached point batch; only dots a ripple is clearly touching get their own circle, with a
+ * color from a precomputed ramp.
+ */
 @Composable
 private fun DotField(modifier: Modifier) {
     val colors = Field.colors
@@ -123,36 +130,53 @@ private fun DotField(modifier: Modifier) {
     LaunchedEffect(reduced) {
         if (reduced) { now = 1; return@LaunchedEffect }
         val start = System.nanoTime()
+        var last = -DOT_FRAME_NS
         while (true) {
             awaitFrame()
-            now = System.nanoTime() - start
+            val elapsed = System.nanoTime() - start
+            if (elapsed - last < DOT_FRAME_NS) continue
+            last = elapsed
+            val t = elapsed / 1e9f
+            ripples.removeAll { t - it.t0 > it.life }
+            if (ripples.size < 2 && (ripples.isEmpty() || t - ripples.last().t0 > 1.8f)) {
+                ripples += Ripple(60 + Random.nextFloat() * 480, 30 + Random.nextFloat() * 160, t, 110f, 24f, 5f)
+            }
+            now = elapsed
         }
     }
-    val t = if (reduced) 0.2f else now / 1e9f
-    ripples.removeAll { t - it.t0 > it.life }
-    if (!reduced && ripples.size < 2 && (ripples.isEmpty() || t - ripples.last().t0 > 1.8f)) {
-        ripples += Ripple(60 + Random.nextFloat() * 480, 30 + Random.nextFloat() * 160, t, 110f, 24f, 5f)
+    val ramp = remember(colors.line, colors.muted, colors.accent) {
+        Array(RAMP) { i ->
+            val e = i / (RAMP - 1f)
+            if (e < 0.5f) lerp(colors.line, colors.muted, e * 2) else lerp(colors.muted, colors.accent, (e - 0.5f) * 2)
+        }
     }
+    val cache = remember { arrayOfNulls<Pair<Float, List<Offset>>>(1) }
     Canvas(modifier.background(colors.bg).border(FieldDimens.hairline, colors.line, androidx.compose.foundation.shape.RoundedCornerShape(4.dp))) {
+        val t = if (reduced) 0.2f else now / 1e9f // the only read of the clock: draw phase
         val k = size.width / 600f
-        val step = 18f
-        var y = step / 2
-        while (y < 216f) {
-            var x = step / 2
-            while (x < 600f) {
-                var e = 0f
-                for (r in ripples) {
-                    val age = t - r.t0
-                    val d = hypot(x - r.x, y - r.y)
-                    val diff = d - age * r.speed
-                    e += exp(-(diff * diff) / (2 * r.width * r.width)) * maxOf(0f, 1 - age / r.life)
-                }
-                e = minOf(1f, e)
-                val c = if (e < 0.5f) lerp(colors.line, colors.muted, e * 2) else lerp(colors.muted, colors.accent, (e - 0.5f) * 2)
-                drawCircle(c, 1.6f * (1 + e * 1.3f) * k, Offset(x * k, y * k))
-                x += step
+        val all = cache[0]?.takeIf { it.first == k }?.second ?: buildList {
+            var y = DOT_STEP / 2
+            while (y < 216f) {
+                var x = DOT_STEP / 2
+                while (x < 600f) { add(Offset(x * k, y * k)); x += DOT_STEP }
+                y += DOT_STEP
             }
-            y += step
+        }.also { cache[0] = k to it }
+        drawPoints(all, PointMode.Points, ramp[0], strokeWidth = 3.2f * k, cap = StrokeCap.Round)
+        var y = DOT_STEP / 2
+        while (y < 216f) {
+            var x = DOT_STEP / 2
+            while (x < 600f) {
+                val e = dotEnergy(x, y, t, ripples)
+                if (e > LIT) drawCircle(ramp[(e * (RAMP - 1)).toInt()], 1.6f * (1 + e * 1.3f) * k, Offset(x * k, y * k))
+                x += DOT_STEP
+            }
+            y += DOT_STEP
         }
     }
 }
+
+private const val RAMP = 65
+
+/** Below this a dot is indistinguishable from an unlit one (under 4% bigger, color within 6% of the base). */
+private const val LIT = 0.03f

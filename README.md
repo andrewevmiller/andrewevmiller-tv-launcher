@@ -99,6 +99,25 @@ Things worth tuning by eye and ear on the TV:
 | Dot-grid visibility | Settings → Appearance → Dot-grid brightness |
 | Banner sharpness | `BANNER_WIDTH_PX` / `BANNER_HEIGHT_PX` in `home/data/ArtworkLoader.kt` |
 
+### Judging speed (release build)
+
+```bash
+./gradlew installRelease    # use this one to judge speed: R8-optimized, like the real thing
+./gradlew installDebug      # for development; noticeably slower on the TV
+```
+
+Debug and release share an application id and signing key, so either installs over the other.
+
+After every install, precompile the app on the TV so it runs ahead-of-time compiled instead of
+warming up on every cold start. Reinstalling resets this, so repeat it each time:
+
+```bash
+adb shell cmd package compile -f -m speed com.andrewevmiller.tvlauncher
+adb shell dumpsys package com.andrewevmiller.tvlauncher | grep -i "status="   # expect status=speed
+```
+
+Release crashes can be deobfuscated with `app/build/outputs/mapping/release/mapping.txt`.
+
 ### Keeping your pins
 Pins and their order are kept in the app's saved data. Updating with `./gradlew installDebug` keeps them. An uninstall, or installing a build signed with a different debug key, deletes them. Around those, back them up:
 
