@@ -31,9 +31,13 @@ object FieldIcons {
     val Pin = icon("pin", "M9 3h6l-1 6 3.5 4h-12L10 9z", "M12 13v8")
     val Grid = icon("grid", rect(4f, 4f, 6.5f), rect(13.5f, 4f, 6.5f), rect(4f, 13.5f, 6.5f), rect(13.5f, 13.5f, 6.5f))
     val Port = icon("port", "M4 8h16v5l-2 3H6l-2-3z", "M8 11h8")
+    /** Six-tooth cog: same path as `ui/icons/IconPaths.kt` "gear" and the mockup's `ICON.gear`. */
     val Gear = icon(
         "gear", circle(12f, 12f, 3f),
-        "M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1",
+        "M10.08 4.85L10.26 2.15L13.74 2.15L13.92 4.85A7.4 7.4 0 0 1 17.23 6.77L19.66 5.57L21.4 8.58L19.15 10.08" +
+            "A7.4 7.4 0 0 1 19.15 13.92L21.4 15.42L19.66 18.43L17.23 17.23A7.4 7.4 0 0 1 13.92 19.15L13.74 21.85" +
+            "L10.26 21.85L10.08 19.15A7.4 7.4 0 0 1 6.77 17.23L4.34 18.43L2.6 15.42L4.85 13.92A7.4 7.4 0 0 1 4.85 10.08" +
+            "L2.6 8.58L4.34 5.57L6.77 6.77A7.4 7.4 0 0 1 10.08 4.85z",
     )
     val Wifi = icon("wifi", "M2.5 9a14 14 0 0 1 19 0M5.5 12.5a9.5 9.5 0 0 1 13 0M8.5 16a5 5 0 0 1 7 0", circle(12f, 19f, 0.8f))
     val Search = icon("search", circle(10.5f, 10.5f, 6f), "m15 15 5.5 5.5")
