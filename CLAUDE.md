@@ -19,6 +19,11 @@ A personal Android TV launcher for one Hisense TV, in the andrewevmiller.com
   wavefolder -> tanh saturation (optional amplitude bitcrush) -> resonant low-pass sweep, with a
   band-passed noise click on the attack. Master high-pass ~70Hz and a compressor. The reference
   recipe is the `sfx` block in `docs/mockup/field-launcher-mockup.html`; match it by ear.
+  Oscillator shape is under evaluation (sawtooth vs triangle); the mockup has a switch.
+- Per-app launch motifs: FNV-1a of the package name seeds mulberry32; 3–4 always-rising notes in
+  A minor pentatonic from A3, 35–70ms apart, optional held last note, timbre by `AppCategory`, plus a
+  sub two octaves under the first note. Per-launch humanizing: ±5 cents, ±10% level. Port the
+  generator exactly (same hash, PRNG and draw order) so the TV plays the motifs auditioned in the mockup.
 
 ## Product decisions
 - App tiles are 192x108dp (`FieldDimens.bannerWidth/Height`). Apps without a 16:9 banner show

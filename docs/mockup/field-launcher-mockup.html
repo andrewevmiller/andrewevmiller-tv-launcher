@@ -184,6 +184,10 @@ h2 { font-family: var(--serif); font-weight: 700; letter-spacing: -0.01em; font-
 .toggle[aria-pressed="true"] { border-color: var(--accent); }
 .toggle[aria-pressed="true"] .state { color: var(--accent-ink); }
 
+.motif { border-top: 1px solid var(--line); padding-top: 8px; display: grid; gap: 2px; font-family: var(--mono); font-size: 0.76rem; color: var(--muted); overflow-wrap: anywhere; min-height: 7.5em; }
+.motif b { color: var(--ink); font-weight: 500; }
+.motif-notes { color: var(--accent-ink); font-size: 0.9rem; letter-spacing: 0.04em; }
+
 /* ---------- plan ---------- */
 .plan { display: grid; gap: 14px; border-top: 1px solid var(--line); padding-top: 22px; }
 .plan-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
@@ -253,9 +257,15 @@ h2 { font-family: var(--serif); font-weight: 700; letter-spacing: -0.01em; font-
           <button class="toggle" id="t-amb" aria-pressed="false"><span>Oxyfield screensaver</span><span class="state">off</span></button>
           <button class="toggle" id="t-photos" aria-pressed="false"><span>Photos slideshow</span><span class="state">off</span></button>
           <button class="toggle" id="t-sound" aria-pressed="false"><span>Interface sounds</span><span class="state">off</span></button>
+          <button class="toggle" id="t-voice"><span>Synth voice</span><span class="state">sawtooth</span></button>
           <button class="toggle" id="t-motion" aria-pressed="false"><span>Reduced motion</span><span class="state">off</span></button>
           <button class="toggle" id="t-own" aria-pressed="false"><span>Build owners</span><span class="state">off</span></button>
         </div>
+      </div>
+      <div>
+        <div class="panel-label">Launch motif</div>
+        <div class="motif" id="motif" aria-live="polite"><div>Launch an app to see the motif generated from its package name.</div></div>
+        <div class="row-btns"><button id="r-allmotifs">Play all motifs</button></div>
       </div>
     </aside>
   </div>
@@ -287,11 +297,15 @@ h2 { font-family: var(--serif); font-weight: 700; letter-spacing: -0.01em; font-
   const svg = n => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON[n]}</svg>`;
 
   const APPS = [
-    { name: 'YouTube', cat: 'video', icon: 'play' }, { name: 'Netflix', cat: 'video', icon: 'play' },
-    { name: 'Plex', cat: 'video', icon: 'play' }, { name: 'Spotify', cat: 'music', icon: 'note' },
-    { name: 'Tidal', cat: 'music', icon: 'note' }, { name: 'Moonlight', cat: 'games', icon: 'pad' },
-    { name: 'RetroArch', cat: 'games', icon: 'pad' }, { name: 'File Manager', cat: 'tools', icon: 'folder' },
-    { name: 'Analyzer', cat: 'tools', icon: 'tool' }
+    { name: 'YouTube', cat: 'video', icon: 'play', pkg: 'com.google.android.youtube.tv' },
+    { name: 'Netflix', cat: 'video', icon: 'play', pkg: 'com.netflix.ninja' },
+    { name: 'Plex', cat: 'video', icon: 'play', pkg: 'com.plexapp.android' },
+    { name: 'Spotify', cat: 'music', icon: 'note', pkg: 'com.spotify.tv.android' },
+    { name: 'Tidal', cat: 'music', icon: 'note', pkg: 'com.aspiro.tidal' },
+    { name: 'Moonlight', cat: 'games', icon: 'pad', pkg: 'com.limelight' },
+    { name: 'RetroArch', cat: 'games', icon: 'pad', pkg: 'com.retroarch' },
+    { name: 'File Manager', cat: 'tools', icon: 'folder', pkg: 'com.alphainventor.filemanager' },
+    { name: 'Analyzer', cat: 'tools', icon: 'tool', pkg: 'com.andrewevmiller.analyzer' }
   ];
   const CHIPS = ['all', 'video', 'music', 'games', 'tools'];
   const RECENT = [
@@ -362,14 +376,15 @@ h2 { font-family: var(--serif); font-weight: 700; letter-spacing: -0.01em; font-
       if (ctx.state === 'suspended') ctx.resume();
       return ctx;
     };
-    function tri(f, { at = 0, dur = 0.1, gain = 0.03, voices = 2, detune = 9, glide = null,
+    api.wave = 'sawtooth';
+    function tri(f, { at = 0, dur = 0.1, gain = 0.03, voices = 2, detune = 9, glide = null, wave = api.wave,
                       lpFrom = 7000, lpTo = 2500, q = 1.5, drive = 6, fold = 2.2, crush = 0, click = 0 } = {}) {
       const c = audio(); if (!c) return;
       const t = c.currentTime + at;
       const sum = c.createGain(); sum.gain.value = 1 / Math.sqrt(voices);
       const spread = voices === 1 ? [0] : Array.from({ length: voices }, (_, i) => -1 + (2 * i) / (voices - 1));
       spread.forEach(s => {
-        const o = c.createOscillator(); o.type = 'triangle';
+        const o = c.createOscillator(); o.type = wave;
         o.frequency.setValueAtTime(f, t); o.detune.value = s * detune;
         if (glide) o.frequency.exponentialRampToValueAtTime(glide, t + dur);
         o.connect(sum);
@@ -424,6 +439,51 @@ h2 { font-family: var(--serif); font-weight: 700; letter-spacing: -0.01em; font-
     // screensaver in: a slow detuned swell with the filter creeping open; wake: short bright sweep
     api.sleep = () => { if (!api.on) return; tri(110, { dur: 1.7, gain: 0.024, detune: 25, glide: 165, fold: 1.5, drive: 5, lpFrom: 600, lpTo: 4000, q: 4 }); };
     api.wake = () => { if (!api.on) return; tri(220, { dur: 0.26, gain: 0.028, glide: 330, fold: 3, drive: 8, lpFrom: 1500, lpTo: 7000, click: 0.02 }); };
+
+    /* Per-app launch motifs. The package name seeds everything, so an app always gets the same
+       tune; every motif is in A minor pentatonic so they read as one family. Category picks timbre. */
+    const SCALE = [0, 3, 5, 7, 10];
+    const ROOT_MIDI = 57;                       // A3
+    const NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+    const TIMBRE = {
+      video: { label: 'warm', voices: 2, detune: 14, drive: 4, fold: 0, crush: 0, lpFrom: 2400, lpTo: 900, q: 2, click: 0.015 },
+      music: { label: 'resonant', voices: 3, detune: 10, drive: 5, fold: 1.3, crush: 0, lpFrom: 3200, lpTo: 1100, q: 7, click: 0.02 },
+      games: { label: 'crushed', voices: 2, detune: 6, drive: 8, fold: 0, crush: 8, lpFrom: 7000, lpTo: 3000, q: 1.5, click: 0.02 },
+      tools: { label: 'clipped', voices: 1, detune: 0, drive: 10, fold: 2, crush: 0, lpFrom: 5000, lpTo: 2000, q: 1.5, click: 0.045 },
+      other: { label: 'plain', voices: 2, detune: 9, drive: 6, fold: 1.5, crush: 0, lpFrom: 4000, lpTo: 1500, q: 2, click: 0.02 }
+    };
+    function fnv1a(s) { let h = 0x811c9dc5; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193); } return h >>> 0; }
+    function mulberry32(seed) {
+      return () => { seed = (seed + 0x6D2B79F5) >>> 0; let t = seed; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+    }
+    api.motifFor = app => {
+      const seed = fnv1a(app.pkg), r = mulberry32(seed);
+      const count = r() < 0.3 ? 4 : 3;
+      let deg = Math.floor(r() * 5);
+      const degs = [deg];
+      for (let i = 1; i < count; i++) { deg += 1 + Math.floor(r() * 2); degs.push(deg); }   // always rising
+      const gap = Math.round(35 + r() * 35);
+      const hold = r() < 0.5;
+      const notes = degs.map(d => {
+        const midi = ROOT_MIDI + SCALE[d % 5] + 12 * Math.floor(d / 5);
+        return { midi, f: 440 * Math.pow(2, (midi - 69) / 12), name: NAMES[midi % 12] + (Math.floor(midi / 12) - 1) };
+      });
+      return { seed, notes, gap, hold, timbre: TIMBRE[app.cat] || TIMBRE.other };
+    };
+    api.motif = app => {
+      const m = api.motifFor(app);
+      if (!api.on) return m;
+      const tb = m.timbre;
+      const cents = Math.random() * 10 - 5;     // per-launch humanizing: same tune, never identical
+      const vel = 0.9 + Math.random() * 0.2;
+      m.notes.forEach((n, i) => {
+        const lastNote = i === m.notes.length - 1;
+        tri(n.f * Math.pow(2, cents / 1200), { ...tb, at: (i * m.gap) / 1000 + Math.random() * 0.003,
+          dur: lastNote ? (m.hold ? 0.24 : 0.1) : 0.11, gain: 0.026 * vel, click: i === 0 ? tb.click : 0 });
+      });
+      tri(m.notes[0].f / 4, { voices: 1, detune: 0, dur: 0.26, gain: 0.03 * vel, fold: 0, drive: 3, lpFrom: 400, lpTo: 150 });
+      return m;
+    };
     return api;
   })();
 
@@ -553,13 +613,41 @@ h2 { font-family: var(--serif); font-weight: 700; letter-spacing: -0.01em; font-
   function select() {
     if (exitAmbient()) return;
     const el = rows[state.r][state.c];
-    if (state.r === 0) { sfx.launch(); return toast('Opening Plex · resume 31:08'); }
+    if (state.r === 0) { launchApp('Plex'); return toast('Opening Plex · resume 31:08'); }
     if (state.r === 1) { sfx.select(); state.chip = CHIPS[state.c]; const c = state.c; render(); focus(1, c); return; }
-    if (state.r === 2) { sfx.launch(); return toast('Launching ' + el.querySelector('.app-name').textContent + '…'); }
+    if (state.r === 2) { const n = el.querySelector('.app-name').textContent; launchApp(n); return toast('Launching ' + n + '…'); }
     if (state.r === 3 && state.c === 0) { sfx.select(); state.recentOpen = !state.recentOpen; render(); return; }
-    if (state.r === 3) { sfx.launch(); return toast('Reopening ' + el.querySelector('.entry-title').textContent + '…'); }
+    if (state.r === 3) { const n = el.querySelector('.entry-title').textContent; launchApp(n); return toast('Reopening ' + n + '…'); }
     if (state.r === 4) return setSlides(true, state.c);
     if (state.r === 5) { sfx.select(); return toast(el.textContent.trim().startsWith('HDMI') ? 'Switching to ' + el.textContent.trim() : 'Opening ' + el.textContent.trim()); }
+  }
+
+  const motifEl = document.getElementById('motif');
+  function showMotif(app, m) {
+    motifEl.innerHTML = `
+      <div><b>${app.name}</b></div>
+      <div>${app.pkg}</div>
+      <div>seed ${m.seed.toString(16).padStart(8, '0')}</div>
+      <div class="motif-notes">${m.notes.map(n => n.name).join(' → ')}</div>
+      <div>${app.cat} · ${m.timbre.label} · ${sfx.wave} · ${m.gap}ms${m.hold ? ' · held' : ''}</div>`;
+  }
+  function launchApp(name) {
+    const app = APPS.find(a => a.name === name);
+    if (!app) return sfx.launch();
+    showMotif(app, sfx.motif(app));
+  }
+  let allTimer = 0;
+  function playAllMotifs() {
+    clearTimeout(allTimer);
+    if (!sfx.on) { sfx.on = true; setToggle('t-sound', true); }
+    let i = 0;
+    const step = () => {
+      if (i >= APPS.length) return;
+      const app = APPS[i++];
+      showMotif(app, sfx.motif(app));
+      allTimer = setTimeout(step, 750);
+    };
+    step();
   }
 
   function back() {
@@ -600,6 +688,12 @@ h2 { font-family: var(--serif); font-weight: 700; letter-spacing: -0.01em; font-
   bind('t-mode', () => { state.light = !state.light; screen.dataset.mode = state.light ? 'light' : 'dark'; setToggle('t-mode', state.light); });
   bind('t-amb', () => { if (state.ambient) exitAmbient(); else { if (state.slides) setSlides(false); setAmbient(true); } });
   bind('t-photos', () => { if (state.slides) exitAmbient(); else { if (state.ambient) setAmbient(false); setSlides(true, 0); } });
+  bind('r-allmotifs', playAllMotifs);
+  bind('t-voice', () => {
+    sfx.wave = sfx.wave === 'sawtooth' ? 'triangle' : 'sawtooth';
+    document.querySelector('#t-voice .state').textContent = sfx.wave;
+    sfx.select();
+  });
   bind('t-sound', () => { sfx.on = !sfx.on; setToggle('t-sound', sfx.on); if (sfx.on) { sfx.select(); toast('Interface sounds on · try moving around'); } });
   bind('t-motion', () => { state.reduced = !state.reduced; screen.classList.toggle('reduced', state.reduced); setToggle('t-motion', state.reduced); drawBand(performance.now()); });
   bind('t-own', () => { state.owners = !state.owners; if (!state.owners) state.solo = null; setToggle('t-own', state.owners); applyOwners(); renderAgents(); });
