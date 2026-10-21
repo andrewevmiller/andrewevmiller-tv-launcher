@@ -14,6 +14,9 @@ import org.robolectric.shadows.ShadowLooper
  * Off by default so the normal test run stays fast: set FIELD_SCREENSHOTS=1 (or -Dfield.screenshots=1) to
  * produce PNGs in app/build/screenshots/. They are a visual aid, not assertions.
  *
+ * Limits: focus rings do not render in this setup (Compose holds no focus in the native-graphics window, although
+ * the same focus requests do work in the plain harness; see the behaviour tests), so shots show the resting state.
+ *
  * Compose's own captureToImage() waits for a frame that Robolectric's paused looper never delivers, so the
  * decor view is laid out and drawn into a bitmap by hand. Needs `@GraphicsMode(NATIVE)` and a
  * `w960dp-h540dp-xhdpi` qualifier on the test class.
