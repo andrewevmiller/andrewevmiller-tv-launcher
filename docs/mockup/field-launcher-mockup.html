@@ -144,6 +144,18 @@ h2 { font-family: var(--serif); font-weight: 700; letter-spacing: -0.01em; font-
 .sys.tool { width: 168px; }
 .sys .lbl { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .sys .cap { font-family: var(--mono); font-size: 10px; letter-spacing: 0.06em; color: var(--t-muted); line-height: 1.2; white-space: nowrap; }
+/* pin badge: a small pin on drawer tiles for apps that are on Home */
+.app { position: relative; }
+.app .pin-badge { position: absolute; top: 8px; right: 8px; width: 22px; height: 22px; border-radius: 999px; display: flex; align-items: center; justify-content: center; background: var(--t-bg); background: color-mix(in srgb, var(--t-bg) 75%, transparent); }
+.app .pin-badge svg, .app.on .pin-badge svg { width: 14px; height: 14px; stroke-width: 1.7; color: var(--t-ink); }
+/* long-press menu: a small panel over a dimmed screen. Move / Pin to Home / Unpin from Home. Focus stays inside it. */
+.menu { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; }
+.menu.show { display: flex; }
+.menu::before { content: ""; position: absolute; inset: 0; background: var(--t-bg); opacity: 0.72; }
+.menu-panel { position: relative; width: 260px; background: var(--t-panel); border: 1px solid var(--t-line); border-radius: 6px; padding: 16px; }
+.menu-title { font-family: var(--mono); font-size: 11.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--t-muted); margin-bottom: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.f.mi { display: block; margin: 3px 0; padding: 6px 10px; font-size: 14px; font-weight: 500; line-height: 18px; color: var(--t-ink); text-align: left; }
+.f.mi.on { transform: scale(1.03); }
 /* inline sleep picker: a chip row under the Tools tiles, opened in place like the Recent chip */
 .viewport.pick { margin-top: 4px; }
 .pick-label { align-self: center; flex: none; font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--t-muted); }
@@ -268,7 +280,7 @@ h2 { font-family: var(--serif); font-weight: 700; letter-spacing: -0.01em; font-
   <header>
     <div class="eyebrow">ANDREWEVMILLER-TV-LAUNCHER · MOCKUP · REV 0.1</div>
     <h1>Field Launcher</h1>
-    <p class="lede">A working mockup of the home screen on a 960×540dp TV canvas, in the site's field-notebook language. Click the screen, then drive it with <kbd>←</kbd> <kbd>↑</kbd> <kbd>→</kbd> <kbd>↓</kbd>, <kbd>Enter</kbd> and <kbd>Esc</kbd>, or use the remote. Apps sit in a four-column grid that ends in an All apps tile; hold <kbd>Enter</kbd> on an app to rearrange it. The Tools row at the bottom holds the sleep timer, the viewing log and the readout; the margin note under the title is yours to edit. Turn on build owners to see which agent ships each part.</p>
+    <p class="lede">A working mockup of the home screen on a 960×540dp TV canvas, in the site's field-notebook language. Click the screen, then drive it with <kbd>←</kbd> <kbd>↑</kbd> <kbd>→</kbd> <kbd>↓</kbd>, <kbd>Enter</kbd> and <kbd>Esc</kbd>, or use the remote. Apps sit in a four-column grid that ends in an All apps tile; hold <kbd>Enter</kbd> on an app for its menu (Move, Pin to Home, Unpin from Home). The Tools row at the bottom holds the sleep timer, the viewing log and the readout; the margin note under the title is yours to edit. Turn on build owners to see which agent ships each part.</p>
   </header>
 
   <div class="workbench">
@@ -278,6 +290,7 @@ h2 { font-family: var(--serif); font-weight: 700; letter-spacing: -0.01em; font-
           <div class="screen" id="screen" data-mode="dark">
             <div class="content" id="content"></div>
             <div class="toast" id="toast"></div>
+            <div class="menu" id="menu" aria-hidden="true"></div>
             <div class="ambient" id="ambient" data-owner="D">
               <span class="own-tag">D · Ambient</span>
               <div class="amb-pic" id="ambPic"><canvas id="ambCanvas" width="1920" height="1080"></canvas></div>
@@ -518,7 +531,7 @@ h2 { font-family: var(--serif); font-weight: 700; letter-spacing: -0.01em; font-
      Notebook features: sleep = the running timer { endsAt, len } or null; dim = the sleep dim screen is up (it reuses the ambient overlay);
      note = the margin note; noteEdit = its editor is open. */
   const state = { view: 'home', chip: 'all', r: 0, c: 0, scrollX: {}, order: APPS.filter(a => a.pinned).map(a => a.pkg), edit: null, ambient: false, slides: false, recentOpen: false, light: false, reduced: matchMedia('(prefers-reduced-motion: reduce)').matches, owners: false, solo: null,
-    sleep: null, sleepOpen: false, sleepDefault: SLEEP_DEFAULT, dim: false, fast: false,
+    menu: null, sleep: null, sleepOpen: false, sleepDefault: SLEEP_DEFAULT, dim: false, fast: false,
     note: (() => { const s = noteStore.get(); return s === null ? NOTE_SAMPLE : cleanNote(s); })(), noteEdit: false,
     usage: true, logOn: true, logCleared: false, logRange: 'week', clearArmed: false };
 
@@ -723,7 +736,10 @@ h2 { font-family: var(--serif); font-weight: 700; letter-spacing: -0.01em; font-
   const homeApps = () => state.order.map(p => BY_PKG[p]).filter(chipMatch);
   const drawerApps = () => APPS.filter(chipMatch).sort((a, b) => a.name.localeCompare(b.name));
 
-  const appTile = a => `<div class="f app" data-pkg="${a.pkg}">${svg(a.icon)}<div><div class="app-name">${a.name}</div><div class="app-cat">${a.cat}</div></div></div>`;
+  /* main's FieldIcons.Pin. Not in the ICON map: that map is pinned to the app's icon set by IconPathsTest; add it to both together. */
+  const PIN_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 3h6l-1 6 3.5 4h-12L10 9z"/><path d="M12 13v8"/></svg>';
+  const isPinned = pkg => state.order.includes(pkg);
+  const appTile = a => `<div class="f app" data-pkg="${a.pkg}">${state.view === 'drawer' && isPinned(a.pkg) ? `<span class="pin-badge" title="On Home">${PIN_SVG}</span>` : ''}${svg(a.icon)}<div><div class="app-name">${a.name}</div><div class="app-cat">${a.cat}</div></div></div>`;
   const allTile = () => `<div class="f app all" data-act="all">${svg('grid')}<div><div class="app-name">All apps</div><div class="app-cat">${APPS.length} installed</div></div></div>`;
   const chipsSec = () => `
       <div class="sec" data-owner="C">${tag('C', 'Chips')}
@@ -989,6 +1005,7 @@ h2 { font-family: var(--serif); font-weight: 700; letter-spacing: -0.01em; font-
 
   function move(dir) {
     if (exitAmbient()) return;
+    if (state.menu) return menuMove(dir);
     if (state.noteEdit) return;   // the editor's input owns the keys; the remote's arrows do nothing meanwhile
     if (state.edit) return editMove(dir);
     const row = rows[state.r];
@@ -1129,6 +1146,7 @@ h2 { font-family: var(--serif); font-weight: 700; letter-spacing: -0.01em; font-
      The mockup has no now-playing indicator, so "pause" is a one-line note. The key presses do not cancel it. */
   function fireSleep() {
     state.sleep = null; state.sleepOpen = false;
+    if (state.menu) closeMenu(false);
     if (state.edit) { state.order = state.edit.orig; state.edit = null; }
     if (state.view === 'home') render();   // the tile reads Off, the picker is closed
     toast('Media paused', false, 1100);
@@ -1197,7 +1215,51 @@ h2 { font-family: var(--serif); font-weight: 700; letter-spacing: -0.01em; font-
     render(() => focusWhere(el => el.dataset.act === 'all'));
   }
 
-  /* Edit mode (long-press OK on a pinned app): the tile lifts, arrows move it (left/right one place, up/down one
+  /* Long-press menu (hold OK on an app tile, on Home or in the drawer). Items: on Home with the All filter, a pinned app gets
+     Move and Unpin from Home; anywhere else (the drawer, or Home under a category chip) Pin to Home or Unpin from Home.
+     Up/Down choose (clamped, the edge thud at the ends), Left/Right do nothing, OK picks, Back closes; focus never leaves the
+     menu. Move closes it and starts edit mode below. A pin goes to the end of Home; an unpin removes the tile. */
+  const MENU_LABEL = { move: 'Move', pin: 'Pin to Home', unpin: 'Unpin from Home' };
+  const menuActions = pkg => [...(state.view === 'home' && state.chip === 'all' && isPinned(pkg) ? ['move'] : []), isPinned(pkg) ? 'unpin' : 'pin'];
+  const menuEl = document.getElementById('menu');
+  function renderMenu() {
+    const m = state.menu;
+    menuEl.classList.toggle('show', !!m);
+    menuEl.setAttribute('aria-hidden', m ? 'false' : 'true');
+    menuEl.innerHTML = !m ? '' : `<div class="menu-panel" role="menu"><div class="menu-title">${esc(BY_PKG[m.pkg].name)}</div>${
+      m.actions.map((a, i) => `<div class="f mi${i === m.sel ? ' on' : ''}" role="menuitem" data-i="${i}">${MENU_LABEL[a]}</div>`).join('')}</div>`;
+  }
+  function openMenu() {
+    const pkg = rows[state.r].items[state.c].dataset.pkg;
+    state.menu = { pkg, actions: menuActions(pkg), sel: 0 };
+    sfx.select(); renderMenu();
+  }
+  function closeMenu(withSound) { state.menu = null; renderMenu(); if (withSound) sfx.back(); }
+  function menuMove(dir) {
+    const m = state.menu;
+    if (dir === 'left' || dir === 'right') return;
+    const n = m.sel + (dir === 'down' ? 1 : -1);
+    if (n < 0 || n >= m.actions.length) return sfx.edge();
+    m.sel = n; sfx.tick(n); renderMenu();
+  }
+  function menuPick() {
+    const m = state.menu, pkg = m.pkg, action = m.actions[m.sel], name = BY_PKG[pkg].name;
+    closeMenu(false);
+    if (action === 'move') return enterEdit();   // the tile the menu opened on is still the focused one
+    sfx.select();
+    if (state.view === 'drawer') {
+      state.order = action === 'pin' ? state.order.concat(pkg) : state.order.filter(p => p !== pkg);
+      render(() => focusWhere(el => el.dataset.pkg === pkg));   // same tile; its badge appeared or went
+    } else {
+      const i = homeApps().findIndex(a => a.pkg === pkg);
+      state.order = state.order.filter(p => p !== pkg);
+      // focus lands where the tile was: on the app that moved up into its place, or on All apps when it was the last
+      render(() => { const flat = rows.filter(r => r.key === 'apps').flatMap(r => r.items), t = flat[Math.min(i, flat.length - 1)]; focusWhere(el => el === t); });
+    }
+    toast(action === 'pin' ? 'Pinned ' + name + ' to Home · at the end' : 'Unpinned ' + name + ' from Home');
+  }
+
+  /* Edit mode (Move in the long-press menu): the tile lifts, arrows move it (left/right one place, up/down one
      grid row, clamped), OK drops it, Back puts everything back. The order lives in state.order for the session. */
   const reorder = (list, from, to) => { const a = list.slice(); a.splice(to, 0, a.splice(from, 1)[0]); return a; };
   const LONG_PRESS_MS = 600;
@@ -1227,18 +1289,20 @@ h2 { font-family: var(--serif); font-weight: 700; letter-spacing: -0.01em; font-
     else { sfx.back(); toast('Move cancelled'); }
   }
 
-  /* OK key / button: a short press selects (on release); holding on a pinned app lifts it. Everything else selects at once. */
+  /* OK key / button: a short press selects (on release); holding on an app tile opens its menu. Everything else selects at once.
+     While the menu is open a fresh OK press picks the highlighted item (the release of the press that opened it does nothing). */
   let pressTimer = 0, pressing = false, pressDone = false, pressSrc = '';
-  function canLift() {
+  function canMenu() {
     const row = rows[state.r];
-    return state.view === 'home' && !state.edit && !state.ambient && !state.slides && !!row && row.key === 'apps' && !!row.items[state.c].dataset.pkg;
+    return (state.view === 'home' || state.view === 'drawer') && !state.edit && !state.menu && !state.ambient && !state.slides && !state.noteEdit && !!row && row.key === 'apps' && !!row.items[state.c].dataset.pkg;
   }
   function pressStart(src) {
     if (pressing) return;
     pressing = true; pressDone = false; pressSrc = src;
+    if (state.menu) { pressDone = true; return menuPick(); }
     if (state.edit) { pressDone = true; return endEdit(true); }
-    if (!canLift()) { pressDone = true; return select(); }
-    pressTimer = setTimeout(() => { pressDone = true; enterEdit(); }, LONG_PRESS_MS);
+    if (!canMenu()) { pressDone = true; return select(); }
+    pressTimer = setTimeout(() => { pressDone = true; openMenu(); }, LONG_PRESS_MS);
   }
   function pressEnd() {
     if (!pressing) return;
@@ -1278,6 +1342,7 @@ h2 { font-family: var(--serif); font-weight: 700; letter-spacing: -0.01em; font-
   function back() {
     if (exitAmbient()) return;
     if (state.noteEdit) return cancelNoteEdit();   // Back discards the note being typed
+    if (state.menu) return closeMenu(true);        // Back closes the long-press menu; the tile keeps focus
     if (state.edit) return endEdit(false);
     sfx.back();
     if (state.view === 'drawer') return closeDrawer();   // Back from the drawer: Home, focus on the All apps tile
@@ -1291,6 +1356,7 @@ h2 { font-family: var(--serif); font-weight: 700; letter-spacing: -0.01em; font-
     sfx.back();
     if (state.edit) { state.order = state.edit.orig; state.edit = null; }   // Home abandons a move, like Back
     clearTimeout(toastTimer); toastEl.classList.remove('show');
+    state.menu = null; renderMenu();
     state.chip = 'all'; state.sleepOpen = false; state.noteEdit = false; state.clearArmed = false; routeFrom = null;
     if (state.view !== 'home') setView('home');
     render(() => focus(firstRow('apps'), 0));
@@ -1306,11 +1372,16 @@ h2 { font-family: var(--serif); font-weight: 700; letter-spacing: -0.01em; font-
     else if (e.key === 'h' || e.key === 'H') home();
   });
   stage.addEventListener('keyup', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pressEnd(); } });
-  stage.addEventListener('focus', () => { hint.textContent = 'Keyboard connected: arrows move, Enter selects (hold it on an app to rearrange), Esc goes back, H goes home.'; hint.classList.add('live'); });
+  stage.addEventListener('focus', () => { hint.textContent = 'Keyboard connected: arrows move, Enter selects (hold it on an app for its menu), Esc goes back, H goes home.'; hint.classList.add('live'); });
   // a key held while the stage loses focus would never see its keyup; a pointer press on the OK button moves focus by design
   stage.addEventListener('blur', e => { if (e.relatedTarget && stage.contains(e.relatedTarget)) return; if (pressSrc === 'key') pressCancel(); hint.textContent = 'Click the screen to take control with the keyboard.'; hint.classList.remove('live'); });
   stage.addEventListener('click', e => {
     if (exitAmbient()) return;
+    if (state.menu) {   // a click on an item picks it, anywhere else closes the menu
+      const mi = e.target.closest('.mi');
+      if (mi) { state.menu.sel = +mi.dataset.i; menuPick(); } else closeMenu(true);
+      return;
+    }
     if (state.noteEdit) return;   // clicks inside the editor are for the text field
     if (state.edit) return endEdit(true);
     const f = e.target.closest('.f');
