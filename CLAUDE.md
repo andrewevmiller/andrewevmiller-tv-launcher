@@ -103,6 +103,21 @@ storm). The Android layer can be compiled in the cloud now that `dl.google.com` 
 `~/android-sdk`: `bash <main-checkout>/tools/compile.sh [gradle tasks]` (default `:app:compileDebugKotlin`) is likewise
 serialised. The integrator runs it on each merged batch; do not run it in a loop.
 
+## How the app is put together (as built)
+- `FieldApplication` owns an `AppContainer` (lazy singletons: settings, apps + launch history, motif overrides, sound
+  engine, screensaver controller). `MainActivity` hosts `FieldRoot`, which switches between Home, the all-apps drawer
+  and Settings, and resets Home when the Home button is pressed (`onNewIntent`). The Menu key opens Settings.
+- `HomeContent` takes a `HomeDeps` interface (implemented by `AppContainer`), so tests pass fakes.
+- Recent and the feature band come from the launcher's own launch history (`home/data/LaunchHistory.kt`), recorded by
+  `RecordingAppsRepository`, until the spike says Watch Next is readable.
+- Tests: pure JUnit in `app/src/test/` runs under both purecheck and AGP; Robolectric Compose tests run the real
+  focus and key handling on the JVM (a Compose test clock quirk: avoid `captureToImage()`, see
+  `ui/ScreenshotSupport.kt`). Opt-in screenshots: `FIELD_SCREENSHOTS=1 tools/compile.sh :app:testDebugUnitTest
+  --tests '*ScreenshotTest*'` writes PNGs to `app/build/screenshots/` at the TV's 1920x1080 / density 320.
+- `tools/sound` renders every sound to WAV for desktop listening, with the app's own code.
+- Look at screenshots after any visual change: several real layout problems (blank captions, a clipped time, an
+  indented row, two entries both called "Settings") were invisible to every test and obvious in a render.
+
 ## Home activity, previous home, and the crash fallback (shared by scripts/ and safety/)
 - The manifest registers HOME on `.HomeAlias` (an `activity-alias` of `MainActivity`), not on `MainActivity`.
   The default home is set with `cmd package set-home-activity com.andrewevmiller.tvlauncher/.HomeAlias`.
