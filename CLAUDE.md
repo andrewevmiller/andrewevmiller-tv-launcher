@@ -73,9 +73,12 @@ Hisense "SmartTV 4K", **Google TV on Android 12 (API 31)**, MediaTek SoC. Probe 
   already honors a non-Google default home. `deploy.sh` sets ours with
   `cmd package set-home-activity`; `rescue.sh` restores whatever deploy recorded as the previous
   default (today: the gathin launcher), not necessarily Google's.
-- Stock packages present: `com.google.android.apps.tv.launcherx`,
-  `com.google.android.tungsten.setupwraith`. Leave their enabled/disabled state as deploy finds it;
-  record it so rescue can put it back.
+- Stock packages `com.google.android.apps.tv.launcherx` and
+  `com.google.android.tungsten.setupwraith` are installed but **disabled** (checked 2026-10-21).
+  Deploy leaves them disabled; rescue does not re-enable them unless run with `--stock`.
+- Because Google's launcher is disabled, every fallback (crash-loop handler, rescue) targets the
+  previous home recorded by deploy (`com.gathin.tvhome/.WiiMenuActivity`). If that package is
+  missing, fall back to re-enabling launcherx + setupwraith; never leave the TV with no HOME.
 - Screensaver today: `com.google.android.apps.tv.dreamx/.service.Backdrop` (Google TV ambient mode,
   the Google Photos slideshow). This is the `GOOGLE_PHOTOS` choice in settings.
 - TV inputs go through the MediaTek TV Input Framework (`com.mediatek.dtv.tvinput.*`), so system

@@ -136,7 +136,7 @@ adb shell wm size; adb shell wm density
 **Probe result (2026-10-21):** Google TV, Android 12 / API 31, 1920×1080 override at density 320,
 current default home `com.gathin.tvhome/.WiiMenuActivity`, screensaver
 `com.google.android.apps.tv.dreamx/.service.Backdrop`, MediaTek TV Input Framework. Decisions applied:
-`minSdk = 31`; deploy uses `cmd package set-home-activity` and records the previous home, launcher
+`minSdk = 31`; launcherx and setupwraith are already disabled; deploy uses `cmd package set-home-activity` and records the previous home, launcher
 enabled states and screensaver for rescue; Google photo screensaver = `dreamx/.service.Backdrop`.
 
 **Decisions keyed to the probe**
@@ -236,8 +236,8 @@ Each task lists model, owner area, inputs, deliverables and the acceptance check
 | I2 | Apply probe decisions (§4): minSdk, manifest tweaks, notes in `CLAUDE.md` | Sonnet | Integrator | Updated build + docs | Owner confirms on device in G1 |
 | A1 | `probe.sh`: run the probe, print a summary that names TV type, SDK, launcher packages, screensaver component | Haiku | `scripts/` | Script | Shellcheck clean; owner runs it once |
 | A2 | `deploy.sh`: build, install, grant `WRITE_SECURE_SETTINGS`, set HOME default, disable stock launcher on Google TV, `--dry-run` flag | Haiku | `scripts/` | Script | Dry run prints the exact adb commands; owner runs for real in G1 |
-| A3 | `rescue.sh`: re-enable stock launcher(s), clear our HOME default, restore the screensaver component recorded by deploy | Haiku | `scripts/` | Script | Owner runs it after G1 and gets the stock home back |
-| A4 | Crash-loop fallback: two crashes within 60s of start → hand HOME to the stock launcher and show a notice on next start | Sonnet | `safety/` | Code + unit test of the counter | Unit test passes; forced-crash test on device in G2 |
+| A3 | `rescue.sh`: set HOME back to the previous home recorded by deploy, restore the screensaver component; `--stock` re-enables launcherx + setupwraith instead; if the recorded home is gone, use `--stock` behavior automatically | Haiku | `scripts/` | Script | Owner runs it after G1 and gets the stock home back |
+| A4 | Crash-loop fallback: two crashes within 60s of start → hand HOME to the previous home recorded by deploy (gathin launcher; Google's launcher is disabled on this TV) and show a notice on next start | Sonnet | `safety/` | Code + unit test of the counter | Unit test passes; forced-crash test on device in G2 |
 
 Gate **G1** (owner): `./scripts/deploy.sh` → TV shows the placeholder home with correct fonts, dot grid and focus; `./scripts/rescue.sh` restores stock.
 
