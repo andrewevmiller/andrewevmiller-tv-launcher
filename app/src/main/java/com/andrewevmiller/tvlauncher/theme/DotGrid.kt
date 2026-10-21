@@ -21,15 +21,12 @@ fun Modifier.dotGrid(
     radius: Dp = FieldDimens.dotRadius,
 ): Modifier = drawWithCache {
     val step = spacing.toPx()
-    val stroke = radius.toPx() * 2f
-    // Read the draw scope's size first: inside buildList, `size` would be the list's Int size.
-    val width = size.width
-    val height = size.height
+    val bounds = size; val stroke = radius.toPx() * 2f
     val points = buildList {
         var y = step / 2f
-        while (y < height) {
+        while (y < bounds.height) {
             var x = step / 2f
-            while (x < width) {
+            while (x < bounds.width) {
                 add(Offset(x, y))
                 x += step
             }

@@ -14,6 +14,8 @@ data class LauncherApp(
     val artwork: ImageBitmap?,
     /** True when [artwork] is a real 16:9 banner (draw full-bleed); false for a square icon (draw centered). */
     val artworkIsBanner: Boolean,
+    /** True for apps that declare a TV (leanback) launcher; these fill the Home grid. */
+    val pinned: Boolean = false,
 )
 
 /**

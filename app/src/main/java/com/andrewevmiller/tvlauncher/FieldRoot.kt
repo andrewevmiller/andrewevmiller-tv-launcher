@@ -7,6 +7,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -15,10 +16,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.andrewevmiller.tvlauncher.home.FieldToast
-import com.andrewevmiller.tvlauncher.home.HomeCategoryChips
-import com.andrewevmiller.tvlauncher.home.HomeContent
+import com.andrewevmiller.tvlauncher.home.FieldHome
 import com.andrewevmiller.tvlauncher.home.HomeUiState
-import com.andrewevmiller.tvlauncher.home.apps.AppDrawerScreen
 import com.andrewevmiller.tvlauncher.safety.CrashGuard
 import com.andrewevmiller.tvlauncher.safety.FallbackNoticeBanner
 import com.andrewevmiller.tvlauncher.settings.LauncherSettings
@@ -26,14 +25,13 @@ import com.andrewevmiller.tvlauncher.settings.SettingsScreen
 import com.andrewevmiller.tvlauncher.sound.LocalFieldSound
 import com.andrewevmiller.tvlauncher.theme.FieldDimens
 import com.andrewevmiller.tvlauncher.theme.FieldTheme
-import com.andrewevmiller.tvlauncher.ui.components.ChipsRow
 
-private enum class Route { Home, Drawer, Settings }
+private enum class Route { Home, Settings }
 
 /**
  * The launcher's UI root. [homeResets] increments each time Home is pressed (MainActivity.onNewIntent): it
- * returns to the Home route with a fresh [HomeUiState], so Recent collapses, the chip filter clears and
- * focus returns to the apps. [settingsRequests] increments on the remote's Menu/Settings key.
+ * returns to the Home route with a fresh [HomeUiState] and a fresh [FieldHome], so Recent collapses, the chip
+ * filter clears and the drawer closes. [settingsRequests] increments on the remote's Menu/Settings key.
  */
 @Composable
 fun FieldRoot(container: AppContainer, homeResets: Int, settingsRequests: Int) {
@@ -54,14 +52,15 @@ fun FieldRoot(container: AppContainer, homeResets: Int, settingsRequests: Int) {
 
             when (route) {
                 Route.Home -> Box(Modifier.fillMaxSize()) {
-                    HomeContent(
-                        deps = container,
-                        ui = ui,
-                        settings = settings,
-                        onOpenDrawer = { route = Route.Drawer },
-                        onOpenSettings = { route = Route.Settings },
-                        holdFocus = notice != null,
-                    )
+                    // Home pressed again: a fresh FieldHome, so Recent collapses, the filter clears and the drawer closes.
+                    key(homeResets) {
+                        FieldHome(
+                            container = container,
+                            ui = ui,
+                            settings = settings,
+                            onOpenSettings = { route = Route.Settings },
+                        )
+                    }
                     notice?.let { n ->
                         FallbackNoticeBanner(
                             notice = n,
@@ -79,22 +78,6 @@ fun FieldRoot(container: AppContainer, homeResets: Int, settingsRequests: Int) {
                             .padding(end = FieldDimens.safeHorizontal, bottom = FieldDimens.safeVertical),
                     )
                 }
-
-                Route.Drawer -> AppDrawerScreen(
-                    repository = container.apps,
-                    onBack = {
-                        ui.focusAllApps = true
-                        route = Route.Home
-                    },
-                    category = ui.category,
-                    header = {
-                        ChipsRow(
-                            options = HomeCategoryChips,
-                            selected = ui.category,
-                            onSelect = { ui.category = it },
-                        )
-                    },
-                )
 
                 Route.Settings -> SettingsScreen(
                     settings = container.settings,
