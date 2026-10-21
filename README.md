@@ -128,6 +128,17 @@ Pins and their order are kept in the app's saved data. Updating with `./gradlew 
 
 The backup is written to `%USERPROFILE%\.field-launcher\pins.xml`. Add `-IncludeHistory` to keep Recent and the featured band too, `-Serial` to pick a device, `-File` to choose where the backup goes. It needs a debug build.
 
+### Featured band
+The band at the top of Home shows what is playing right now (title, artist or episode, a Play/Pause button, album art when the app provides it). When nothing is playing it turns through your four most recent apps every six seconds.
+
+Reading what other apps are playing needs notification-listener access, which the TV has no screen for. Grant it once over adb (the launcher never reads a notification):
+
+```powershell
+./tools/now-playing.ps1 enable    # also: disable, status
+```
+
+An update keeps the grant; an uninstall removes it, so run `enable` again after reinstalling.
+
 ## Fonts
 
 IBM Plex Serif, IBM Plex Mono and Geist are bundled under the SIL Open Font License; see `licenses/`.

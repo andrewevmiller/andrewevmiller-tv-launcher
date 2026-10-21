@@ -116,6 +116,8 @@ serialised. The integrator runs it on each merged batch; do not run it in a loop
   frame, HDMI/Wi-Fi/Search/Settings tiles and the screensaver tiles. It reads apps with `InstalledApps` and keeps
   pins and order in SharedPreferences `layout` and recents in `launch_history` (`HomeLaunchHistory`), the files the
   TV already has from the earlier build. Focus ticks take their pitch from `LocalSoundRow`, which `HomeScreen` sets per row.
+  The feature band turns through the four most recent apps every six seconds and shows what another app is playing
+  (`home/data/NowPlaying.kt`, which needs notification-listener access granted once with `tools/now-playing.ps1 enable`).
 - Merge note (2026-10-21): this branch met a separately built Home on `main` (PR #3/#4). Where the two built the same
   thing, the newer, `main`'s Home screen and its pin menu, won. The sound engine, Settings, crash fallback and
   screensavers stay from the first build, because `main` had only a subset of them. The earlier row-based Home

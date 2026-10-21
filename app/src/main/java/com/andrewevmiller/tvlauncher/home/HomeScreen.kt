@@ -69,6 +69,7 @@ import com.andrewevmiller.tvlauncher.home.data.AppCategory
 import com.andrewevmiller.tvlauncher.home.data.LauncherApp
 import com.andrewevmiller.tvlauncher.sound.LocalFieldSound
 import com.andrewevmiller.tvlauncher.sound.LocalSoundRow
+import com.andrewevmiller.tvlauncher.home.data.NowPlaying
 import com.andrewevmiller.tvlauncher.theme.Field
 import com.andrewevmiller.tvlauncher.theme.FieldDimens
 import com.andrewevmiller.tvlauncher.theme.FieldIcons
@@ -108,7 +109,9 @@ fun HomeScreen(
     onChip: (Chip) -> Unit,
     onOpenDrawer: () -> Unit,
     onLaunch: (LauncherApp) -> Unit,
-    feature: Feature?,
+    features: List<Feature>,
+    nowPlaying: NowPlaying?,
+    onOpenPlaying: (NowPlaying) -> Unit,
     recent: List<RecentEntry>,
     recentOpen: Boolean,
     onToggleRecent: () -> Unit,
@@ -210,10 +213,10 @@ fun HomeScreen(
                 ClockHeader(if (drawer) "All apps" else "Home", onOpenSettings = onOpenSettings)
                 Spacer(Modifier.height(18.dp))
             }
-            if (feature != null && !drawer) {
+            if ((features.isNotEmpty() || nowPlaying != null) && !drawer) {
                 item("band") {
                     CompositionLocalProvider(LocalSoundRow provides 0) {
-                        FeatureBand(feature, onOpen = { onLaunch(feature.app) }, modifier = toTop)
+                        FeatureBand(features, nowPlaying, onOpen = { onLaunch(it.app) }, onOpenPlaying = onOpenPlaying, modifier = toTop)
                     }
                     Spacer(Modifier.height(18.dp))
                 }
