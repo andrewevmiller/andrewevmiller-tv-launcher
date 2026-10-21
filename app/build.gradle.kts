@@ -34,6 +34,12 @@ android {
     buildFeatures {
         compose = true
     }
+    lint {
+        // Personal sideload, never published. Both are deliberate: WRITE_SECURE_SETTINGS is granted once over
+        // adb by scripts/deploy.sh (it lets Settings switch the screensaver), and QUERY_ALL_PACKAGES is how a
+        // launcher lists every installed app.
+        disable += setOf("ProtectedPermissions", "QueryAllPackagesPermission")
+    }
 }
 
 dependencies {
