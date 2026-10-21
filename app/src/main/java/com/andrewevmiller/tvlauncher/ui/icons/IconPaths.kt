@@ -11,7 +11,8 @@ data class IconPath(val d: String, val filled: Boolean = false)
 /**
  * Path data for the line-icon set, copied from the `const ICON = {...}` object in
  * docs/mockup/field-launcher-mockup.html. Primitive order is kept. Each `<circle cx cy r>` is written as the
- * arc path `M{cx-r},{cy} a{r},{r} 0 1,0 {2r},0 a{r},{r} 0 1,0 {-2r},0 z`.
+ * arc path `M{cx-r},{cy} a{r},{r} 0 1,0 {2r},0 a{r},{r} 0 1,0 {-2r},0 z`, and each rounded `<rect x y width height rx>`
+ * as `M{x+rx},{y} H{x+w-rx} A{rx},{rx} 0 0 1 {x+w},{y+rx} V{y+h-rx} A.. {x+w-rx},{y+h} H{x+rx} A.. {x},{y+h-rx} V{y+rx} A.. {x+rx},{y} z`.
  *
  * `IconPathsTest` re-reads the mockup and fails if any entry here drifts from it.
  * Pure Kotlin on purpose: no Android imports, so `tools/purecheck` can compile and test it.
@@ -57,6 +58,12 @@ object IconPaths {
         ),
         "folder" to listOf(
             IconPath("M3 6.5h6l2 2h10V18H3z"),
+        ),
+        "grid" to listOf(
+            IconPath("M5.2,4 H9.3 A1.2,1.2 0 0 1 10.5,5.2 V9.3 A1.2,1.2 0 0 1 9.3,10.5 H5.2 A1.2,1.2 0 0 1 4,9.3 V5.2 A1.2,1.2 0 0 1 5.2,4 z"),
+            IconPath("M14.7,4 H18.8 A1.2,1.2 0 0 1 20,5.2 V9.3 A1.2,1.2 0 0 1 18.8,10.5 H14.7 A1.2,1.2 0 0 1 13.5,9.3 V5.2 A1.2,1.2 0 0 1 14.7,4 z"),
+            IconPath("M5.2,13.5 H9.3 A1.2,1.2 0 0 1 10.5,14.7 V18.8 A1.2,1.2 0 0 1 9.3,20 H5.2 A1.2,1.2 0 0 1 4,18.8 V14.7 A1.2,1.2 0 0 1 5.2,13.5 z"),
+            IconPath("M14.7,13.5 H18.8 A1.2,1.2 0 0 1 20,14.7 V18.8 A1.2,1.2 0 0 1 18.8,20 H14.7 A1.2,1.2 0 0 1 13.5,18.8 V14.7 A1.2,1.2 0 0 1 14.7,13.5 z"),
         ),
         "points" to listOf(
             IconPath("M5,16 a1,1 0 1,0 2,0 a1,1 0 1,0 -2,0 z", filled = true),

@@ -11,16 +11,17 @@ import org.junit.Test
  * truth; this test re-reads it, converts each SVG primitive with the same rules, and compares.
  *
  * Conversion rules: `<path d>` is copied verbatim; `<circle cx cy r>` becomes
- * `M{cx-r},{cy} a{r},{r} 0 1,0 {2r},0 a{r},{r} 0 1,0 {-2r},0 z`; `fill="currentColor"` marks a filled primitive.
+ * `M{cx-r},{cy} a{r},{r} 0 1,0 {2r},0 a{r},{r} 0 1,0 {-2r},0 z`; a rounded `<rect x y width height rx>` becomes a closed
+ * path (see rectAsPath); `fill="currentColor"` marks a filled primitive.
  */
 class IconPathsTest {
     private val expectedNames = setOf(
-        "play", "note", "pad", "tool", "wave", "port", "gear", "wifi", "search", "folder", "points",
+        "play", "note", "pad", "tool", "wave", "port", "gear", "wifi", "search", "folder", "grid", "points",
     )
 
     @Test
-    fun hasExactlyTheElevenNamedIcons() {
-        assertEquals(11, IconPaths.all.size)
+    fun hasExactlyTheTwelveNamedIcons() {
+        assertEquals(12, IconPaths.all.size)
         assertEquals(expectedNames, IconPaths.all.keys)
     }
 
@@ -86,6 +87,16 @@ class IconPathsTest {
                     ),
                     filled,
                 )
+                "rect" -> IconPath(
+                    rectAsPath(
+                        x = BigDecimal(attrs.getValue("x")),
+                        y = BigDecimal(attrs.getValue("y")),
+                        w = BigDecimal(attrs.getValue("width")),
+                        h = BigDecimal(attrs.getValue("height")),
+                        rx = BigDecimal(attrs.getValue("rx")),
+                    ),
+                    filled,
+                )
                 else -> throw AssertionError("unsupported primitive <$tag>")
             }
         }.toList()
@@ -96,6 +107,20 @@ class IconPathsTest {
         val twoR = r.multiply(BigDecimal(2))
         return "M${plain(cx.subtract(r))},${plain(cy)} a$rs,$rs 0 1,0 ${plain(twoR)},0 " +
             "a$rs,$rs 0 1,0 ${plain(twoR.negate())},0 z"
+    }
+
+    /** Rounded rect (ry = rx) as a closed path, clockwise from the top edge. */
+    private fun rectAsPath(x: BigDecimal, y: BigDecimal, w: BigDecimal, h: BigDecimal, rx: BigDecimal): String {
+        val r = plain(rx)
+        val left = x
+        val right = x.add(w)
+        val top = y
+        val bottom = y.add(h)
+        return "M${plain(left.add(rx))},${plain(top)} H${plain(right.subtract(rx))} " +
+            "A$r,$r 0 0 1 ${plain(right)},${plain(top.add(rx))} V${plain(bottom.subtract(rx))} " +
+            "A$r,$r 0 0 1 ${plain(right.subtract(rx))},${plain(bottom)} H${plain(left.add(rx))} " +
+            "A$r,$r 0 0 1 ${plain(left)},${plain(bottom.subtract(rx))} V${plain(top.add(rx))} " +
+            "A$r,$r 0 0 1 ${plain(left.add(rx))},${plain(top)} z"
     }
 
     /** Plain decimal with no trailing zeros, so 15.4 prints as "15.4" and 10 as "10". */
@@ -133,9 +158,9 @@ class IconPathsTest {
         const val MOCKUP_PATH = "docs/mockup/field-launcher-mockup.html"
         val iconObject = Regex("""const ICON = \{(.*?)\n\s*\};""", RegexOption.DOT_MATCHES_ALL)
         val iconEntry = Regex("""(\w+): '([^']*)'""")
-        val primitive = Regex("""<(path|circle)\b([^>]*?)/>""")
+        val primitive = Regex("""<(path|circle|rect)\b([^>]*?)/>""")
         val attribute = Regex("""(\w+)="([^"]*)"""")
-        val knownAttributes = setOf("d", "cx", "cy", "r", "fill")
+        val knownAttributes = setOf("d", "cx", "cy", "r", "fill", "x", "y", "width", "height", "rx")
         val allowedChars = Regex("""[MmLlHhVvCcSsQqTtAaZz0-9 ,.-]+""")
         val pathToken = Regex("""[A-Za-z]|-?(?:\d+\.?\d*|\.\d+)""")
         val argumentCount = mapOf(

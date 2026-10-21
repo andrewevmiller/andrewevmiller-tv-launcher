@@ -12,8 +12,7 @@ import com.andrewevmiller.tvlauncher.home.data.AppCategory
 /**
  * The line-icon set (24dp viewport, 1.7 stroke, round caps and joins), drawn from the mockup's SVG paths.
  *
- * CONTRACT: the names and types below are fixed so other modules can use them now. Task C5 replaces the
- * placeholder bodies with the real glyphs and must not rename or remove anything here.
+ * CONTRACT: the names and types below are fixed; add new glyphs, never rename or remove one.
  * Draw them with [FieldIcon], which tints them (`muted` at rest, `accent` only when focused).
  */
 object FieldIcons {
@@ -27,6 +26,8 @@ object FieldIcons {
     val Wifi: ImageVector by lazy { buildIcon("wifi") }
     val Search: ImageVector by lazy { buildIcon("search") }
     val Folder: ImageVector by lazy { buildIcon("folder") }
+    /** Four rounded squares: the "All apps" tile. */
+    val Grid: ImageVector by lazy { buildIcon("grid") }
     val Points: ImageVector by lazy { buildIcon("points") }
 
     /** Fallback glyph for an app with no banner and no usable icon. */
