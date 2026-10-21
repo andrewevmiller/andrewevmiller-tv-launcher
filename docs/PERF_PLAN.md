@@ -490,6 +490,8 @@ Do these only if the PF0 and post-PF5 traces show them mattering. Each is indepe
 | ID | Change | Where | Do it when | Acceptance |
 |---|---|---|---|---|
 | 6a | Wrap the derived `apps`, `cells`, `gridRows` in `remember(allApps, chip, drawer)` | `HomeScreen.kt:73-77` | always (trivial) | Layout Inspector: `HomeScreen` body does not rerun on focus moves |
+
+**6a status:** implemented, building, tests pass; not measured. `apps`, `cells` and `gridRows` in `HomeScreen` are now `remember`ed on their inputs, so a recomposition that changes none of them (a chip focus, a sound, the menu opening) no longer refilters and rechunks. Expected to be a small gain; the frame-time work is elsewhere.
 | 6b | Preload fonts off the main thread at startup: `createFontFamilyResolver(context).preload(...)` for the four families, launched before `setContent` | `MainActivity.kt` | the trace shows font loading on the main thread during first composition | no font-load slice on the main thread in the first-composition trace |
 | 6c | Render the dot grid as one tiled `ImageShader` fill instead of about 780 round points; fall back to the current path when the cell size in px is not an integer | `theme/DotGrid.kt` | the draw slice is over 1 ms per frame while scrolling | pixel-identical screenshot; slice time drops |
 | 6d | Clear the window background after the first frame (`window.setBackgroundDrawable(null)`), since the root `Box` already paints `bg` | `MainActivity.kt` | overdraw check shows two full-screen fills | `adb shell setprop debug.hwui.overdraw show`; no cold-start flash |

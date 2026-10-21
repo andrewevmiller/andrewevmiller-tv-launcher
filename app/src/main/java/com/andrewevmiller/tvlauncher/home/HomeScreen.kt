@@ -117,8 +117,11 @@ fun HomeScreen(
     modifier: Modifier = Modifier,
 ) {
     val colors = Field.colors
-    val matches = { a: LauncherApp -> chip.category == null || a.category == chip.category }
-    val apps = if (drawer) allApps.filter(matches) else orderPinned(allApps, order, pinnedSet).filter(matches)
+    // Worked out only when an input changes, not on every recomposition (the lists are replaced, never edited).
+    val apps = remember(allApps, order, pinnedSet, chip, drawer) {
+        val matches = { a: LauncherApp -> chip.category == null || a.category == chip.category }
+        if (drawer) allApps.filter(matches) else orderPinned(allApps, order, pinnedSet).filter(matches)
+    }
     val requesters = remember { mutableMapOf<String, FocusRequester>() }
     val gesture = remember { OkGesture() }
     val listState = rememberLazyListState()
@@ -166,8 +169,10 @@ fun HomeScreen(
             scrollGuard.holding = false
         }
     }
-    val cells: List<Cell> = apps.map { Cell.App(it) } + if (drawer) emptyList() else listOf(Cell.All(allApps.size))
-    val gridRows = cells.chunked(COLUMNS)
+    val cells: List<Cell> = remember(apps, drawer, allApps.size) {
+        apps.map { Cell.App(it) } + if (drawer) emptyList() else listOf(Cell.All(allApps.size))
+    }
+    val gridRows = remember(cells) { cells.chunked(COLUMNS) }
     Box(modifier.fillMaxSize().background(colors.bg).dotGrid(colors.line)) {
         CompositionLocalProvider(LocalBringIntoViewSpec provides NoAutoScroll) {
         LazyColumn(
