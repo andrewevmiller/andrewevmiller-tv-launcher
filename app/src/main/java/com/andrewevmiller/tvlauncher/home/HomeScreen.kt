@@ -16,6 +16,13 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.runtime.Composable
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.layout.offset
+import androidx.compose.runtime.key
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.unit.Dp
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.focus.onFocusChanged
@@ -97,7 +104,6 @@ fun HomeScreen(
     val colors = Field.colors
     val matches = { a: LauncherApp -> chip.category == null || a.category == chip.category }
     val apps = if (drawer) allApps.filter(matches) else orderPinned(allApps, order).filter(matches)
-    // Tiles are recreated when they move between rows, so focus is put back on the moved tile by key.
     val requesters = remember { mutableMapOf<String, FocusRequester>() }
     val gesture = remember { OkGesture() }
     val listState = rememberLazyListState()
@@ -113,12 +119,6 @@ fun HomeScreen(
         }
     }
     val reorderable = !drawer && chip == Chip.ALL
-    LaunchedEffect(apps.map { it.component.packageName }, editingPkg) {
-        if (editingPkg != null) {
-            awaitFrame()
-            runCatching { requesters[editingPkg]?.requestFocus() }
-        }
-    }
     val cells: List<Cell> = apps.map { Cell.App(it) } + if (drawer) emptyList() else listOf(Cell.All(allApps.size))
     val gridRows = cells.chunked(COLUMNS)
     Box(modifier.fillMaxSize().background(colors.bg).dotGrid(colors.line)) {
@@ -148,26 +148,43 @@ fun HomeScreen(
             item("apps-head") {
                 SectionHead(if (drawer) "Every app · A–Z · ${apps.size}" else "Apps · ${apps.size} pinned")
             }
-            items(gridRows.size, key = { "apps-$it" }) { i ->
-                Row(
-                    Modifier.padding(start = 6.dp, end = 6.dp, bottom = gridRowGap),
-                    horizontalArrangement = Arrangement.spacedBy(gridColumnGap),
+            // One block with every tile placed by index. A tile keeps its identity (and focus) when it
+            // changes place, and slides to its new spot instead of being rebuilt in another row.
+            item("apps-grid") {
+                val rowCount = gridRows.size
+                val stepX = FieldDimens.bannerWidth + gridColumnGap
+                val stepY = FieldDimens.bannerHeight + gridRowGap
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .height(stepY * rowCount),
                 ) {
-                    gridRows[i].forEach { cell ->
-                        when (cell) {
-                            is Cell.App -> AppTile(
-                                app = cell.app,
-                                requester = requesters.getOrPut(cell.app.component.packageName) { FocusRequester() },
-                                gesture = gesture,
-                                reorderable = reorderable,
-                                editing = editingPkg != null,
-                                lifted = editingPkg == cell.app.component.packageName,
-                                onMove = { onMove(cell.app, it) },
-                                onReorderStart = { onReorderStart(cell.app) },
-                                onEditEnd = onEditEnd,
-                                onClick = { onLaunch(cell.app) },
-                            )
-                            is Cell.All -> AllAppsTile(cell.count, onOpenDrawer)
+                    cells.forEachIndexed { index, cell ->
+                        val id = when (cell) {
+                            is Cell.App -> cell.app.component.flattenToString()
+                            is Cell.All -> "all"
+                        }
+                        key(id) {
+                            val spec = if (Field.reducedMotion) snap<Dp>() else tween(durationMillis = 180)
+                            val x by animateDpAsState(stepX * (index % COLUMNS), spec, label = "tileX")
+                            val y by animateDpAsState(stepY * (index / COLUMNS), spec, label = "tileY")
+                            Box(Modifier.offset(x, y)) {
+                                when (cell) {
+                                    is Cell.App -> AppTile(
+                                        app = cell.app,
+                                        requester = requesters.getOrPut(cell.app.component.packageName) { FocusRequester() },
+                                        gesture = gesture,
+                                        reorderable = reorderable,
+                                        editing = editingPkg != null,
+                                        lifted = editingPkg == cell.app.component.packageName,
+                                        onMove = { onMove(cell.app, it) },
+                                        onReorderStart = { onReorderStart(cell.app) },
+                                        onEditEnd = onEditEnd,
+                                        onClick = { onLaunch(cell.app) },
+                                    )
+                                    is Cell.All -> AllAppsTile(cell.count, onOpenDrawer)
+                                }
+                            }
                         }
                     }
                 }
