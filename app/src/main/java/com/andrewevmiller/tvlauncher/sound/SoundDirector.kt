@@ -48,6 +48,7 @@ class SoundDirector(
     fun back() = fixed("back") { it.back }
     fun sleep() = fixed("sleep") { it.sleep }
     fun wake() = fixed("wake") { it.wake }
+    fun windDown() = fixed("windDown") { it.windDown }
 
     /** The app's own motif, humanized; nothing if the app is muted; the generic launch sound if it cannot be rendered. */
     fun launch(packageName: String, category: AppCategory) {

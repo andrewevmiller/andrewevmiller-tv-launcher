@@ -2,6 +2,7 @@ package com.andrewevmiller.tvlauncher.sound.synth
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /** Pins the §8.1 'Fixed sounds' table: any drift from the plan/mockup shows up here. */
@@ -148,5 +149,34 @@ class FixedSoundsTest {
         assertEquals(7000.0, w.lpTo, 0.0)
         assertEquals(0.02, w.click, 0.0)
         assertEquals(1.5, w.q, 0.0)
+    }
+
+    @Test
+    fun windDownIsTheCounterpartOfSleep() {
+        val w = FixedSounds.windDown().single()
+        assertEquals(165.0, w.freq, 0.0)
+        assertEquals(82.4, w.glideTo!!, 0.0)
+        assertEquals(2.6, w.dur, 0.0)
+        assertEquals(0.011, w.gain, 0.0)
+        assertEquals(25.0, w.detune, 0.0)
+        assertEquals(1.2, w.fold, 0.0)
+        assertEquals(4.0, w.drive, 0.0)
+        assertEquals(2600.0, w.lpFrom, 0.0)
+        assertEquals(350.0, w.lpTo, 0.0)
+        assertEquals(3.0, w.q, 0.0)
+        assertEquals(0.0, w.click, 0.0) // nothing to announce: no attack click
+        assertEquals(2, w.voices)
+        assertEquals(0.0, w.atSec, 0.0)
+
+        // sleep rises from A2 to E3 with the filter opening; windDown picks up at E3 and sinks an octave with the
+        // filter closing, longer and quieter than sleep and quieter than the voiced select
+        val s = FixedSounds.sleep().single()
+        assertEquals(s.glideTo!!, w.freq, 0.0)
+        assertEquals(2.0, w.freq / w.glideTo!!, 0.01)
+        assertTrue(s.glideTo!! > s.freq && s.lpTo > s.lpFrom)
+        assertTrue(w.glideTo!! < w.freq && w.lpTo < w.lpFrom)
+        assertTrue(w.dur > s.dur)
+        assertTrue(w.gain < s.gain)
+        assertTrue(w.gain < FixedSounds.select().minOf { it.gain } / 2)
     }
 }

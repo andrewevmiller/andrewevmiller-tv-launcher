@@ -498,6 +498,9 @@ h2 { font-family: var(--serif); font-weight: 700; letter-spacing: -0.01em; font-
     // screensaver in: a slow detuned swell with the filter creeping open; wake: short bright sweep
     api.sleep = () => { if (!api.on) return; tri(110, { dur: 1.7, gain: 0.024, detune: 25, glide: 165, fold: 1.5, drive: 5, lpFrom: 600, lpTo: 4000, q: 4 }); };
     api.wake = () => { if (!api.on) return; tri(220, { dur: 0.26, gain: 0.028, glide: 330, fold: 3, drive: 8, lpFrom: 1500, lpTo: 7000, click: 0.02 }); };
+    // sleep timer ran out: sleep's counterpart. One quiet detuned note sinks an octave (E3 to E2) while the filter closes
+    // and the level fades; no click. Quieter than select (gain is the one knob). Same helper, so the same master chain.
+    api.windDown = () => { if (!api.on) return; tri(165, { dur: 2.6, gain: 0.011, detune: 25, glide: 82.4, fold: 1.2, drive: 4, lpFrom: 2600, lpTo: 350, q: 3 }); };
 
     /* Per-app launch motifs. The package name seeds everything, so an app always gets the same
        tune; every motif is in A minor pentatonic so they read as one family. Category picks timbre. */

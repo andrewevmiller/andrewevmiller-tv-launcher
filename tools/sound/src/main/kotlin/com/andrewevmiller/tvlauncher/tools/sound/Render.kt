@@ -30,7 +30,7 @@ import kotlin.math.sqrt
  * the -1 dBFS ceiling and the 16-bit quantization, so the files cannot clip on a speaker.
  */
 
-internal const val SOUNDS_PER_WAVEFORM = 19
+internal const val SOUNDS_PER_WAVEFORM = 20
 
 /** Peak ceiling for every written file. Above it, the file is scaled down (and a warning printed). */
 internal const val CEILING_DBFS = -1.0
@@ -151,7 +151,7 @@ private fun previewClip(set: SoundSet, sound: PreviewSound): Clip = when (sound)
 }
 
 /**
- * Every WAV for one waveform, in file order: the 9 fixed sounds, the preview, and one motif per package at
+ * Every WAV for one waveform, in file order: the 10 fixed sounds, the preview, and one motif per package at
  * re-roll 0 (the motif an app gets before anyone re-rolls it). Motifs are rendered without the per-launch humanize,
  * so each file is the same every run.
  */
@@ -173,6 +173,7 @@ internal fun renderWaveform(waveform: Waveform, masterGain: Float, errors: Mutab
     single("launch-fallback", "Launch, app without a motif (fallback)", fixed.launchFallback)
     single("sleep", "Sleep: screensaver starts", fixed.sleep)
     single("wake", "Wake: screensaver ends", fixed.wake)
+    single("wind-down", "Wind down: sleep timer ran out", fixed.windDown)
 
     val preview = renderPreview(cache, set, masterGain, errors)
     sounds += Sound(PREVIEW_NAME, "Settings preview: tick, tick, select, Plex motif", toPcm16(preview))

@@ -25,13 +25,14 @@ internal val MOTIF_PACKAGES: List<MotifPackage> = listOf(
 /** File names (without .wav) of the fixed sounds, in render order. The held tick is row 0, to A/B against tick-row0. */
 internal val FIXED_SOUND_NAMES: List<String> = listOf(
     "tick-row0", "tick-row4", "tick-held-row0", "edge", "select", "back", "launch-fallback", "sleep", "wake",
+    "wind-down",
 )
 
 internal const val PREVIEW_NAME = "preview"
 
 internal fun motifName(p: MotifPackage): String = "motif-${p.packageName}"
 
-/** Every file name rendered per waveform: 9 fixed sounds, the preview, and one motif per package. */
+/** Every file name rendered per waveform: 10 fixed sounds, the preview, and one motif per package. */
 internal fun soundNames(): List<String> =
     FIXED_SOUND_NAMES + PREVIEW_NAME + MOTIF_PACKAGES.map(::motifName)
 

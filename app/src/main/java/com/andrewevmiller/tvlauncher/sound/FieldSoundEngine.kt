@@ -118,6 +118,8 @@ class FieldSoundEngine(
 
     override fun wake() = director.wake()
 
+    override fun windDown() = director.windDown()
+
     /**
      * Two ticks, select, a launch motif, against the latest waveform: if a re-render for a just-changed waveform is
      * still running this waits for it (at most [PREVIEW_MAX_WAIT_MS]) and then plays whatever is ready.

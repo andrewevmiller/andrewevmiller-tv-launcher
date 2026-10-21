@@ -33,8 +33,8 @@ class SoundCacheTest {
             all += fixed.tick(row, TickKind.NORMAL)
             all += fixed.tick(row, TickKind.HELD)
         }
-        all += listOf(fixed.edge, fixed.select, fixed.back, fixed.launchFallback, fixed.sleep, fixed.wake)
-        assertEquals(24 + 6, all.size)
+        all += listOf(fixed.edge, fixed.select, fixed.back, fixed.launchFallback, fixed.sleep, fixed.wake, fixed.windDown)
+        assertEquals(24 + 7, all.size)
         for (clip in all) {
             assertTrue(clip.size > 0)
             assertTrue(TestDsp.allFinite(clip.samples))
@@ -49,6 +49,12 @@ class SoundCacheTest {
         assertSame(fixed.tick(11, TickKind.HELD), fixed.tick(99, TickKind.HELD))
         // the sleep sound is the long one: 1.7 s + 30 ms + tail
         assertTrue(fixed.sleep.size > 1.7 * SAMPLE_RATE)
+        // windDown is longer than sleep (2.6 s + 30 ms + tail) and well inside 2.0..3.2 s, and not the sleep clip
+        assertTrue(fixed.windDown.size > 2.6 * SAMPLE_RATE)
+        assertTrue("windDown ${fixed.windDown.size.toDouble() / SAMPLE_RATE} s", fixed.windDown.size in (2.0 * SAMPLE_RATE).toInt()..(3.2 * SAMPLE_RATE).toInt())
+        assertFalse(fixed.windDown.samples.contentEquals(fixed.sleep.samples))
+        // quieter than the voiced select (the exact bound is asserted per waveform in VoiceRendererTest)
+        assertTrue(TestDsp.peak(fixed.windDown.samples) < 0.65 * TestDsp.peak(fixed.select.samples))
     }
 
     private fun assertNotEquals(a: Clip, b: Clip) = assertFalse(a.samples.contentEquals(b.samples))
@@ -59,8 +65,23 @@ class SoundCacheTest {
         val b = SoundCache().renderFixed(Waveform.SQUARE)
         assertTrue(a.select.samples.contentEquals(b.select.samples))
         assertTrue(a.tick(3, TickKind.NORMAL).samples.contentEquals(b.tick(3, TickKind.NORMAL).samples))
+        assertTrue(a.windDown.samples.contentEquals(b.windDown.samples))
         val other = SoundCache().renderFixed(Waveform.SINE)
         assertFalse(a.select.samples.contentEquals(other.select.samples))
+        assertFalse(a.windDown.samples.contentEquals(other.windDown.samples))
+    }
+
+    @Test
+    fun changingTheWaveformReRendersTheWindDownClipToo() {
+        val cache = SoundCache()
+        val saw = cache.prepare(Waveform.SAW).fixed.windDown
+        val pink = cache.prepare(Waveform.PINK_NOISE).fixed.windDown
+        assertNotEquals(saw, pink)
+        // the new active set carries its own clip, identical to a cold render of that waveform
+        assertSame(pink, cache.active()!!.fixed.windDown)
+        assertTrue(pink.samples.contentEquals(SoundCache().renderFixed(Waveform.PINK_NOISE).windDown.samples))
+        // going back re-renders SAW rather than serving the noise clip
+        assertTrue(saw.samples.contentEquals(cache.prepare(Waveform.SAW).fixed.windDown.samples))
     }
 
     @Test
