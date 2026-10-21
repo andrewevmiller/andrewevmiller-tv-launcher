@@ -66,7 +66,11 @@ class MainActivity : ComponentActivity() {
             }
         }
         sound = FieldSound(this)
-        loader = AppLoader(this) { apps = it }
+        loader = AppLoader(this) {
+            apps = it
+            // Render Home's launch motifs in the background now, so a launch never waits for them.
+            sound.prepareMotifs(it)
+        }
         history = LaunchHistory(this)
         layoutPrefs = getSharedPreferences("layout", MODE_PRIVATE)
         order = (layoutPrefs.getString("order", "") ?: "").split(';').filter { it.isNotEmpty() }

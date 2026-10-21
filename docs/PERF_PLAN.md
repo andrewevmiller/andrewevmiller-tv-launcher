@@ -396,91 +396,90 @@ covers PF2 too, which had only been compiled before)**
 
 ## PF5: Sound
 
-All of this stays inside `sound/` (agent F). The motif generator (FNV-1a, mulberry32, draw order,
-scale, timing) is **not touched**, so the auditioned motifs do not change.
+All of this stays inside `sound/` (agent F), plus one line in `MainActivity`. The motif generator is
+unchanged in behavior: it now passes the golden vectors in `BUILD_PLAN.md` 8.3, which it had never been
+checked against.
 
-### 5a. Tick path and policy (worker)
+**Status:** 5a to 5d implemented, building, and verified on the JVM and in a Robolectric harness. **Not
+yet heard or run on the TV.**
 
-**Why.** `tick()` runs on the main thread inside `onFocusChanged`. It reads
-`Settings.System.getInt` and calls `SoundPool.play` in the same frame as the focus change
-(`Focus.kt:46-48`, `FieldSound.kt:66-96`). The guard at `FieldSound.kt:74` can never fire because
-`lastTick = now` runs on the line before it, so held-key repeats are never throttled.
+**Files:** `FieldSound.kt` (now a thin Android shell), new pure files `Synth.kt` (the DSP), `Motif.kt`
+(generator and humanizing), `FixedSounds.kt`, `SoundPolicy.kt` (tick throttle, cache file rules, motif
+cache); `MainActivity.kt` (calls `sound.prepareMotifs` when the app list arrives). Tests: `MotifTest`,
+`SoundPolicyTest`, `SynthParityTest`, with `ReferenceSynth` (the original renderer, kept verbatim, only
+the random source injected).
 
-**Steps**
-1. Extract the throttle into a small pure class and fix the semantics: the existing `< 90 ms` rule
-   chooses `tick_held`; add a hard floor (skip when under about 35 ms since the last tick, which also
-   absorbs duplicate callbacks).
-2. Cache `allowed()` in a `@Volatile` field kept current by a `ContentObserver` on
-   `Settings.System.getUriFor(SOUND_EFFECTS_ENABLED)`; register in `init`, unregister in `release()`.
-3. Post `pool.play` to a single-thread playback executor so the UI thread only enqueues.
-4. `Trace.beginSection("FieldSound.tick")` around the enqueue.
+### 5a. Tick path and policy
+- `TickThrottle` replaces the dead guard (`lastTick = now` ran before the check, so it never fired). A tick
+  under 35 ms after the last one that played is skipped (this also absorbs a focus callback that fires
+  twice); under 90 ms is the quiet "held" tick at 0.6 volume; otherwise normal. Uses the monotonic clock.
+- "Sound effects" is read once and kept current by a `ContentObserver`, instead of a settings read per sound.
+- Every call into `SoundPool` or `AudioTrack` now runs on a separate playback thread; the UI thread only
+  enqueues (`FieldSound.tick` is a Perfetto section). Rendering has its own background-priority thread.
+- Fixed along the way: `ids` was a plain `HashMap` written by the render thread and read by the UI thread.
+  And an exception on any background thread kills the whole app on Android, so every sound task is now
+  guarded (logged, not fatal) and an `AudioTrack` that fails part-way is released.
 
-**Acceptance:** JVM unit tests for the throttle (floor, held threshold, first tick). Perfetto: the
-`FieldSound.tick` slice on the main thread is under 1 ms.
+### 5b. Cached fixed sounds
+- Files are named `fs_<sound>_<waveform>_v<RENDER_VERSION>.wav`, written via a temp file and rename, and
+  reused on the next start instead of being re-rendered. Files from other waveforms, older versions,
+  earlier builds (`fs_tick.wav`) and leftover temp files are deleted; nothing else is touched.
+  **Bump `SoundFiles.RENDER_VERSION` whenever the DSP or a fixed sound's parameters change.**
+- Setting `waveform` re-renders the fixed set under the new names, unloads the old samples and clears the
+  motif cache (the settings screen that sets it does not exist yet).
 
-### 5b. Cache the fixed sound set (worker)
+### 5c. Cheaper DSP
+- Hoisted out of the per-sample loop: detune ratios, the glide (now a running multiply), the envelope (a
+  running multiply instead of two `pow`s per sample), the click filter and its decay, phase wrapping.
+  The low-pass coefficients are refreshed every `CONTROL_PERIOD` samples instead of every sample.
+- **Parity against the original renderer** (same random draws; 5 waveforms x 5 categories x 4 packages,
+  plus the five fixed sounds on every waveform, 145 renders):
+  - Refreshing the filter every sample: **identical at 16-bit output**, so the hoisting is exact.
+  - Every 16 samples (first attempt): 65 of 32000 peak, 1.0% RMS, worst on the short bright supersaw ticks.
+  - Every 4 samples (shipped): **13 of 32000 peak (-68 dB), 0.25% relative RMS.** Chosen because the saving
+    from 16 was only about 0.4 ms per motif while the error was four times larger.
+- **Speed: about 2.5x on a desktop JVM (3.3x for supersaw), below the 5x this plan guessed.** What remains
+  per sample is the shaper's `sin` and `tanh` and the master's `tanh`, which are the sound itself. The
+  bigger win is 5d, which takes rendering off the launch path entirely.
 
-**Why.** `renderFixedSet` re-renders and rewrites five WAVs on every Activity creation, on a
-normal-priority thread, during first composition (`FieldSound.kt:55-58`, `118-143`).
+### 5d. Pre-rendered motifs
+- `prepareMotifs` renders Home's apps (up to 24) in the background whenever the app list is published; an
+  app launched without having been prepared renders once on demand and is cached. LRU of 64 (about 58 KB each).
+  The cache key is package, category, waveform and render version, **not** the humanizing.
+- Humanizing is applied when playing: pitch as `AudioTrack` playback rate (+-5 cents is about +-139 Hz of
+  48000), level as track volume. Level is now applied after the master soft limiter rather than before it,
+  so +-10% is exactly +-10% instead of slightly less; this is the one deliberate change in how it sounds.
+- Not done: a single long-lived streaming `AudioTrack` instead of a new static one per launch
+  (`BUILD_PLAN.md` F5). Worth doing only if a trace shows track creation costing real time.
 
-**Steps**
-1. Name files `fs_<name>_<waveform>_v<RENDER_VERSION>.wav`. Bump `RENDER_VERSION` whenever DSP changes.
-2. If the file exists, load it into `SoundPool` and skip rendering; otherwise render, write, load.
-3. Delete cached files for other waveforms or older versions.
-4. Run rendering on a background-priority executor, separate from the playback executor in 5a.
+**Verified**
+- JVM unit tests (**69 total, all pass**): fnv1a and mulberry32 reference values; **all nine golden
+  motifs** (seed, notes, gap, hold); the timbre table; voice layout; humanize ranges and draw order; the
+  throttle (first tick, floor, held window, repeat rates, clock moving back); cache file naming and cleanup;
+  the LRU; DSP parity and speed as above.
+- Robolectric, the real `FieldSound` with SoundPool and AudioTrack shadows: stale files cleaned and others
+  left alone; 10 ticks 10 ms apart play as exactly one normal and two held ticks; a tick after a pause is
+  normal again; pre-render skips unpinned apps; a launch is a cache hit when prepared and a render-then-cache
+  when not; turning the system sound-effects setting off silences everything and turning it on restores it;
+  switching waveform swaps the files and clears motifs; a second start reuses the files untouched; a failing
+  playback is logged and the next one still works.
 
-**Acceptance:** unit test for file naming and stale cleanup. Device: second launch of the app renders
-nothing (logcat), ticks still play on the first focus move.
+**Not verified (needs the TV)**
+- How it sounds. The parity numbers say the output matches the original to 0.25% RMS, and the one
+  deliberate change is the level handling above, but nothing here can be listened to.
+- The `AudioTrack` path itself: Robolectric's shadow cannot play a static buffer, so `setPlaybackRate`,
+  `setVolume` and the latency are untested.
 
-### 5c. Cheaper DSP (builder)
+**Acceptance (owner)**
+- Listen to a few apps' launch motifs and the focus, select and back sounds against the previous build.
+- `adb logcat -s FieldSound`: a launch of a Home app logs `cache hit`, then `playing N ms after the
+  request` (target under 60 ms); a first launch of a non-Home app logs `cache miss, rendering`.
+- Perfetto (PF0 step 4): the `FieldSound.tick` slice on the main thread is well under 1 ms and no
+  `renderMotif` slice overlaps an app launch.
+- Turn "sound effects" off in system settings: no sounds. A launch with no audio output must not crash.
 
-**Why.** The inner sample loop in `render` calls `pow`, `sin`, `cos` for values that do not change per
-sample: the detune ratio (`FieldSound.kt:251`), `qLin` (`262`), the filter coefficients (`263-267`), the
-envelope (`268-269`) and the click-filter coefficients (`273-277`). A 4-note motif is roughly 40,000
-voice-samples at up to ten transcendental calls each. This runs on the worker at the exact moment an app is
-starting, delaying the sound and taking CPU from the app.
-
-**Steps**
-1. **Parity harness first.** Make phases and noise deterministic by injecting a `Random` (tests only;
-   production keeps `Math.random()`), and keep the current implementation as a test-only
-   `renderReference`. Moving the pure DSP (`Voice`, `Biquad`, `render`) into `sound/synth/`, as
-   BUILD_PLAN F2/F3 already plan, lets it run as a plain JVM test without the Android SDK.
-2. Hoist per-voice constants: detune ratios, `qLin`, `norm`.
-3. Update low-pass coefficients every 16 samples (about 0.3 ms at 48 kHz) instead of every sample. The
-   cutoff sweep is smooth, so this is inaudible.
-4. Replace per-sample envelope `pow` with a per-sample multiply by a precomputed ratio; handle the
-   attack-to-decay switch at 3 ms explicitly.
-5. Hoist the noise-click coefficients and decay.
-6. Replace `% 1.0` on phases with a compare-and-subtract.
-
-**Acceptance**
-- Parity test: for every category timbre and every waveform, `max |new − reference|` is under 1e-3 of
-  full scale (tighten if it passes easily) with the same seed.
-- Device: logged `render` time for a motif drops by at least 5× (log with `System.nanoTime`, compare debug
-  and release). A/B listening against the previous APK for a few apps and all waveforms; no audible change.
-- Checker C-X3: generator signatures untouched.
-
-### 5d. Pre-render motifs (builder; aligns with BUILD_PLAN F4/F5)
-
-**Why.** Even a cheaper render is work at the worst time. Render ahead of time instead.
-
-**Steps**
-1. After the app list settles (PF2), render motifs for pinned apps one at a time on the background
-   executor, yielding between apps. Cache PCM in an `LruCache` keyed
-   `(package, rerollCount, waveform, RENDER_VERSION)`. Humanize is **not** part of the key.
-2. `launch(app)`: on a cache hit, play immediately; on a miss, render, play, and cache.
-3. Apply humanize at playback: ±5 cents as `PlaybackParams.setPitch(2^(cents/1200))`, ±10% level as
-   track volume. This matches BUILD_PLAN §8.2 ("applied as playback rate on the pre-rendered buffer").
-4. Re-render and clear the cache when the waveform setting changes (already required by `CLAUDE.md`).
-5. Stretch: one long-lived streaming low-latency `AudioTrack` instead of a new static track per launch
-   (BUILD_PLAN F5). Only if track creation shows up in the trace.
-
-**Acceptance:** cache hit/miss unit tests (key includes waveform and reroll, excludes humanize). Device:
-OK press to audible launch motif under 60 ms for a pre-rendered app (log from `launch()` entry to
-`track.play()`, then confirm by ear); no pop or click at the start; Perfetto shows no render slice
-overlapping an app launch.
-
-**Rollback (all of PF5):** each sub-item is its own commit.
+**Rollback:** each of 5a to 5d is separable in the history of `sound/`; reverting the PF5 commit restores
+the previous engine.
 
 ---
 
@@ -496,6 +495,7 @@ Do these only if the PF0 and post-PF5 traces show them mattering. Each is indepe
 | 6d | Clear the window background after the first frame (`window.setBackgroundDrawable(null)`), since the root `Box` already paints `bg` | `MainActivity.kt` | overdraw check shows two full-screen fills | `adb shell setprop debug.hwui.overdraw show`; no cold-start flash |
 | 6e | Move the inline `Field.type.x.copy(fontSize = …)` styles into named entries on `FieldType` (`tileTitle`, `tileCaption`, `sectionLabel`, `chip`) | `theme/Type.kt`, `HomeScreen.kt`, `ClockHeader.kt` | after PF3; also tightens the "type only from `Field.type`" rule | identical rendering; no allocation in tile composables |
 | 6f | StrictMode in debuggable builds: thread policy for disk and network on the main thread, `penaltyLog()` only. Check `applicationInfo.flags and FLAG_DEBUGGABLE`; AGP 8 does not generate `BuildConfig` by default | `MainActivity.kt` | always (debug only) | no `StrictMode` violations in logcat during Home, drawer and launch |
+| 6g | **The feature band's dot animation** (`FeatureBand.kt`, `DotField`). It wakes on every frame (`awaitFrame()` in a never-ending loop) and writes `now`, which is read in composition, so it **recomposes every frame for as long as Home is showing**; each frame it then draws about 408 circles (34x12 dots), with an `exp` per ripple per dot and an Oklab color `lerp` per dot. Fix: read the time only in the draw phase; skip dots outside every ripple's ring and draw the rest as one cached layer; use a precomputed color ramp; cap at 20 to 30 fps; stop when the drawer is open, the band is off screen, or focus is moving. Same mistake PF3 fixed for focus. | `home/FeatureBand.kt` | **first**: found by reading after the owner's frame stats (median 42 ms) | Layout Inspector: `DotField` recompositions 0 when nothing changes; `gfxinfo reset` on idle Home then compare janky frames before and after |
 
 ---
 
@@ -529,6 +529,27 @@ Fill in as items land. "n/a" means not measured at that stage.
 | `AppTile` recompositions per focus move | | | | | | | |
 | Java heap / Graphics (MB) | | | | | | | |
 | Open file descriptors, drawer loaded | | | | | | | |
+
+### Owner-reported baseline (from the TV)
+
+Reported after the PF4 checks, from a build **without** `AppLoader` (no `AppLoader` log tag), so it is
+not this branch and PF2/PF4 have not been measured yet. Whether it was a debug or release build, and whether
+it was `compile -m speed`, is not known. Counts include app start-up and the earlier navigation, since
+`gfxinfo` was not reset before the drawer scroll.
+
+| Metric | Reported |
+|---|---|
+| Frames / janky | 2375 / 512 (21.6%) |
+| Frame time 50th / 90th / 99th percentile | 42 / 53 / 89 ms (about 24 fps at the median) |
+| Slow bitmap uploads | 1 |
+| Open file descriptors / limit | 143 / 32768 |
+| App memory | about 95 MB |
+| Images | sharp on Home and in the drawer; the Recent row's thumbnails slightly soft |
+
+Reading: bitmap uploads and memory are not the problem on that build; frame time is. Work every frame
+points first at `DotField` (PF6, 6g), which runs only on Home.
+
+---
 
 ## 6. Risks
 
