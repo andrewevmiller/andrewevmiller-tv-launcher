@@ -1,0 +1,5 @@
+<resources>
+    <!-- Mirrors theme/Tokens.kt (dark). Only used before Compose is attached. -->
+    <color name="bg">#FF171716</color>
+    <color name="accent">#FFB98FD6</color>
+</resources>
