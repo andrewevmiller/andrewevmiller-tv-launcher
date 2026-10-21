@@ -14,11 +14,25 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 
 /**
- * Exists only so Android will let the launcher read other apps' media sessions: that permission is
- * granted to notification listeners. It never reads a notification. Enable it once with
+ * Android only lets the launcher read other apps' media sessions (Now playing) and notifications
+ * (the notifications panel) if it is a notification listener. Enable it once with
  * `tools/now-playing.ps1 enable` (the TV has no screen for it).
  */
-class NowPlayingListener : NotificationListenerService()
+class NowPlayingListener : NotificationListenerService() {
+    override fun onListenerConnected() {
+        instance = this
+    }
+
+    override fun onListenerDisconnected() {
+        if (instance === this) instance = null
+    }
+
+    companion object {
+        /** The live listener, for the notifications panel; null until access is granted and bound. */
+        @Volatile
+        var instance: NowPlayingListener? = null
+    }
+}
 
 /** What some app is playing right now, for the featured band. */
 @Immutable
