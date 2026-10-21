@@ -14,12 +14,12 @@ design language. This document is the operating plan for building it with a team
 ## 1. Goals and non-goals
 
 **Goals**
-- Replace the stock home screen on the owner's Hisense TV with a launcher that looks and behaves like the mockup.
+- Replace the current home screen (the gathin "Wii Menu" launcher) on the owner's Hisense TV with a launcher that looks and behaves like the mockup.
 - Dark mode by default, light (parchment) as a setting.
 - D-pad first: every screen is fully usable with arrows, OK, Back and Home.
 - An interface sound system with selectable waveforms and per-app generative launch motifs.
 - Two screensaver options: our Oxyfield animation, and Google's own photo screensaver (ambient mode) with your Google Photos albums.
-- A safe install loop: one script deploys, one script restores the stock launcher.
+- A safe install loop: one script deploys, one script restores the previous home screen.
 
 **Non-goals**
 - Play Store distribution, multiple user profiles, our own content recommendations.
@@ -32,7 +32,7 @@ design language. This document is the operating plan for building it with a team
 
 | Item | Status |
 |---|---|
-| Gradle project, Compose for TV, minSdk 28 / target 34 | Done (`616ebf3`) |
+| Gradle project, Compose for TV, minSdk 31 / target 34 | Done |
 | Theme tokens, bundled fonts (Plex Serif, Plex Mono, Geist), focus style, dot grid | Done |
 | Home frame (header, hairline rows, slots), `AppsRepository` interface | Done |
 | Interactive mockup with sound engine, motifs, waveforms, screensavers | Done (`docs/mockup/`) |
@@ -139,12 +139,19 @@ current default home `com.gathin.tvhome/.WiiMenuActivity`, screensaver
 `minSdk = 31`; launcherx and setupwraith are already disabled; deploy uses `cmd package set-home-activity` and records the previous home, launcher
 enabled states and screensaver for rescue; Google photo screensaver = `dreamx/.service.Backdrop`.
 
-**Decisions keyed to the probe**
-- `com.google.android.apps.tv.launcherx` present → Google TV. `deploy.sh` disables it (and `com.google.android.tungsten.setupwraith`); `rescue.sh` re-enables both.
-- `com.google.android.tvlauncher` present → classic Android TV. Register for HOME only; no disabling.
-- SDK < 28 → lower `minSdk` and replace `java.time` in `ClockHeader` (integrator).
-- `screensaver_components` value → the component name of Google's photo screensaver to switch back to.
-- Hisense input packages present → system tiles launch Hisense's input app rather than TIF intents.
+**Device facts (resolved)**
+
+| Fact | Value | Consequence |
+|---|---|---|
+| Platform | Google TV, Android 12, API 31 | `minSdk = 31` (done) |
+| Panel / UI | 3840×2160 panel, 1920×1080 override, density 320 | 960×540dp canvas; 1dp = 2px; `FieldDimens` already fits |
+| Current default home | `com.gathin.tvhome/.WiiMenuActivity` (third-party) | The TV honors non-Google homes; deploy uses `cmd package set-home-activity` |
+| Google launcher | `launcherx` and `tungsten.setupwraith` installed but **disabled** | Deploy leaves them disabled. Rescue and the crash fallback return to the recorded previous home; `rescue.sh --stock` re-enables Google's launcher, and is used automatically if the previous home is uninstalled |
+| Screensaver | `com.google.android.apps.tv.dreamx/.service.Backdrop` | Google TV ambient mode = the `GOOGLE_PHOTOS` screensaver option |
+| TV inputs | MediaTek TV Input Framework (`com.mediatek.dtv.tvinput.*`) | Input tiles try standard TIF passthrough intents first (B5 verifies on device) |
+| Hisense / VIDAA packages | `net.vidaatv.hisense.android.tv`, `com.vt.tv.customerlauncher`, `com.vidaa.oemtabcontentprovider` | Fallback targets for input tiles if TIF intents don't work |
+
+To re-check the launcher state later: `adb shell pm list packages -d | grep -E "launcherx|setupwraith"`.
 
 ---
 
@@ -233,13 +240,13 @@ Each task lists model, owner area, inputs, deliverables and the acceptance check
 | ID | Task | Model | Area | Deliverables | Acceptance |
 |---|---|---|---|---|---|
 | I1 | Add contracts §5.2, `NoOpFieldSound`, fake repos for previews | Sonnet | Integrator | Interfaces + fakes | Compiles (G0/G1); checker C-X1 clean |
-| I2 | Apply probe decisions (§4): minSdk, manifest tweaks, notes in `CLAUDE.md` | Sonnet | Integrator | Updated build + docs | Owner confirms on device in G1 |
+| I2 | ~~Apply probe decisions~~ Done: minSdk 31, device facts in §4 and `CLAUDE.md` | Sonnet | Integrator | — | — |
 | A1 | `probe.sh`: run the probe, print a summary that names TV type, SDK, launcher packages, screensaver component | Haiku | `scripts/` | Script | Shellcheck clean; owner runs it once |
-| A2 | `deploy.sh`: build, install, grant `WRITE_SECURE_SETTINGS`, set HOME default, disable stock launcher on Google TV, `--dry-run` flag | Haiku | `scripts/` | Script | Dry run prints the exact adb commands; owner runs for real in G1 |
-| A3 | `rescue.sh`: set HOME back to the previous home recorded by deploy, restore the screensaver component; `--stock` re-enables launcherx + setupwraith instead; if the recorded home is gone, use `--stock` behavior automatically | Haiku | `scripts/` | Script | Owner runs it after G1 and gets the stock home back |
+| A2 | `deploy.sh`: build, install, grant `WRITE_SECURE_SETTINGS`, record previous HOME + launcher enabled states + screensaver to `scripts/.deploy-state`, set our HOME default with `cmd package set-home-activity`, leave Google's launcher as found, `--dry-run` flag | Haiku | `scripts/` | Script | Dry run prints the exact adb commands; owner runs for real in G1 |
+| A3 | `rescue.sh`: set HOME back to the previous home recorded by deploy, restore the screensaver component; `--stock` re-enables launcherx + setupwraith instead; if the recorded home is gone, use `--stock` behavior automatically | Haiku | `scripts/` | Script | Owner runs it after G1 and gets the gathin launcher back |
 | A4 | Crash-loop fallback: two crashes within 60s of start → hand HOME to the previous home recorded by deploy (gathin launcher; Google's launcher is disabled on this TV) and show a notice on next start | Sonnet | `safety/` | Code + unit test of the counter | Unit test passes; forced-crash test on device in G2 |
 
-Gate **G1** (owner): `./scripts/deploy.sh` → TV shows the placeholder home with correct fonts, dot grid and focus; `./scripts/rescue.sh` restores stock.
+Gate **G1** (owner): `./scripts/deploy.sh` → TV shows the placeholder home with correct fonts, dot grid and focus; `./scripts/rescue.sh` brings back the gathin launcher.
 
 ### Wave 2: features (parallel, after G1 or at least after I1 merges)
 
@@ -505,8 +512,8 @@ Motifs:
 
 **Install and safety**
 - [ ] `deploy.sh` from a clean state makes Field Launcher the home screen; Home button returns to it
-- [ ] `rescue.sh` restores the stock launcher and screensaver
-- [ ] Two forced crashes hand Home back to stock and show a notice
+- [ ] `rescue.sh` restores the previous home (gathin) and screensaver; `rescue.sh --stock` brings back Google TV's home
+- [ ] Two forced crashes hand Home back to the previous home and show a notice
 
 **Home**
 - [ ] Fonts are Plex Serif / Geist / Plex Mono; dot grid visible but quiet; everything inside the safe area
