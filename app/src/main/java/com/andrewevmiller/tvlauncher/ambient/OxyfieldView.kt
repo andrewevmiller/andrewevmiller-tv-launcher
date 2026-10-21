@@ -23,6 +23,11 @@ import kotlin.random.Random
  * Animation runs off Choreographer and only invalidates at [OxyfieldSpec.MAX_FPS]; it stops when the view
  * is detached or its window is hidden. With [reducedMotion] it paints one still frame and never loops
  * (the clock alone repaints, driven by the system's minute tick).
+ *
+ * Sleep mode ([startSleepDim]) is a pure addition: the whole picture fades to near-black over
+ * [SleepDimMath.FADE_MILLIS], the clock leaves sooner, and once settled the view draws one final frame and
+ * stops animating for good. It does not listen for keys; waking is the host's job (the dream wakes on any key).
+ * Until [startSleepDim] is called every colour and code path is exactly the normal one.
  */
 class OxyfieldView(
     context: Context,
@@ -64,14 +69,20 @@ class OxyfieldView(
     private var running = false
     private var frameMs = 0L
 
+    // Sleep fade. Inactive (both levels exactly 1) until startSleepDim().
+    private val sleep = SleepDimState(reducedMotion)
+
     private val frameCallback = object : Choreographer.FrameCallback {
         override fun doFrame(frameTimeNanos: Long) {
             if (!running) return
             val nowMs = frameTimeNanos / 1_000_000L
             if (gate.shouldRender(nowMs)) {
-                frameMs = nowMs
-                rippleField?.advance(nowMs)
-                invalidate()
+                advanceTo(nowMs)
+                if (sleep.settled) {
+                    // The fade is over and its last frame is queued: stop for good. A still frame costs no CPU.
+                    running = false
+                    return
+                }
             }
             Choreographer.getInstance().postFrameCallback(this)
         }
@@ -81,7 +92,8 @@ class OxyfieldView(
     private val clockReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             clockDirty = true
-            invalidate()
+            // A settled sleep frame has no clock on it: repainting would only wake the GPU for nothing.
+            if (!sleep.settled) invalidate()
         }
     }
     private var clockReceiverRegistered = false
@@ -124,9 +136,13 @@ class OxyfieldView(
         if (visibility == View.VISIBLE) start() else stop()
     }
 
-    /** Starts the 30 fps loop. Safe to call repeatedly. */
+    /** Starts the 30 fps loop. Safe to call repeatedly. A settled sleep frame stays still: it only repaints. */
     fun start() {
         if (reducedMotion || running || !isAttachedToWindow) return
+        if (sleep.settled) {
+            invalidate()
+            return
+        }
         running = true
         gate.reset()
         frameMs = System.nanoTime() / 1_000_000L
@@ -139,6 +155,41 @@ class OxyfieldView(
     fun stop() {
         running = false
         Choreographer.getInstance().removeFrameCallback(frameCallback)
+    }
+
+    /**
+     * Begins the sleep fade at [nowMillis], a time on the Choreographer clock (the default is now). Call it
+     * when the sleep screen goes up; calling it again restarts the fade. With reduced motion the dim still frame
+     * is shown at once. It never starts the loop by itself: the host still calls [start], as for the normal
+     * screensaver (and must call it again to animate after a settled fade).
+     */
+    fun startSleepDim(nowMillis: Long = System.nanoTime() / 1_000_000L) {
+        sleep.start(nowMillis)
+        invalidate()
+    }
+
+    /** Back to the normal bright screensaver. Call [start] afterwards if the loop had stopped. */
+    fun clearSleepDim() {
+        sleep.clear()
+        invalidate()
+    }
+
+    /** True while the sleep fade is running or held. */
+    val isSleepDimming: Boolean get() = sleep.active
+
+    /** True once the fade is over and the view holds its final still frame. */
+    val isSleepSettled: Boolean get() = sleep.settled
+
+    /**
+     * One animation step at [nowMs]: the loop calls this, and tests drive it without a Choreographer.
+     * After the sleep fade settles it does nothing, so the final frame never changes.
+     */
+    internal fun advanceTo(nowMs: Long) {
+        if (sleep.settled) return
+        frameMs = nowMs
+        rippleField?.advance(nowMs)
+        sleep.update(nowMs)
+        invalidate()
     }
 
     private fun registerClockReceiver() {
@@ -164,7 +215,10 @@ class OxyfieldView(
     }
 
     override fun onDraw(canvas: Canvas) {
-        canvas.drawColor(palette.bg)
+        // 1 unless the sleep fade is on, in which case the whole picture is the normal frame at this brightness.
+        val level = sleep.level(frameMs)
+        val dimmed = level < 1f
+        canvas.drawColor(if (dimmed) SleepDimMath.scaleColor(palette.bg, level) else palette.bg)
         val g = grid ?: return
 
         val ripples: List<Ripple>
@@ -178,6 +232,7 @@ class OxyfieldView(
             nowMs = frameMs
         }
 
+        idlePaint.color = if (dimmed) SleepDimMath.scaleColor(palette.dot, level) else palette.dot
         var idle = 0
         for (row in 0 until g.rows) {
             val y = g.y(row)
@@ -189,18 +244,22 @@ class OxyfieldView(
                     idlePoints[idle + 1] = y
                     idle += 2
                 } else {
-                    dotPaint.color = oxyfieldDotColor(e, palette)
+                    val color = oxyfieldDotColor(e, palette)
+                    dotPaint.color = if (dimmed) SleepDimMath.scaleColor(color, level) else color
                     canvas.drawCircle(x, y, oxyfieldDotRadius(e, g.dotRadius), dotPaint)
                 }
             }
         }
         if (idle > 0) canvas.drawPoints(idlePoints, 0, idle, idlePaint)
 
-        drawClock(canvas)
+        drawClock(canvas, sleep.clockLevel(frameMs))
     }
 
-    private fun drawClock(canvas: Canvas) {
+    private fun drawClock(canvas: Canvas, clockLevel: Float) {
         val layout = clockLayout ?: return
+        if (clockLevel <= 0f) return // faded out (or settled): nothing to draw, nothing to refresh
+        timePaint.color = if (clockLevel < 1f) SleepDimMath.scaleColor(palette.ink, clockLevel) else palette.ink
+        datePaint.color = if (clockLevel < 1f) SleepDimMath.scaleColor(palette.muted, clockLevel) else palette.muted
         refreshClockText()
         canvas.drawText(timeText, layout.left, layout.timeBaseline, timePaint)
         canvas.drawText(dateText, layout.left, layout.dateBaseline, datePaint)
