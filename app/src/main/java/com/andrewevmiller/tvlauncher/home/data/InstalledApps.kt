@@ -13,10 +13,10 @@ import android.graphics.drawable.Drawable
  * Listing and caching the apps is [AppLoader]'s job.
  */
 object InstalledApps {
-    /** Rasterizes [d] at the size its tile needs: 16:9 for a banner, square for an icon. */
+    /** Rasterizes [d] at the size its tile needs ([ArtLimits]): 16:9 for a banner, square for an icon. */
     internal fun toBitmap(d: Drawable, banner: Boolean): Bitmap {
-        val w = if (banner) 384 else 192
-        val h = if (banner) 216 else 192
+        val w = if (banner) ArtLimits.BANNER_W else ArtLimits.ICON
+        val h = if (banner) ArtLimits.BANNER_H else ArtLimits.ICON
         return Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888).also {
             d.setBounds(0, 0, w, h)
             d.draw(Canvas(it))

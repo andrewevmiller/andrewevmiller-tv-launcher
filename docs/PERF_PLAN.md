@@ -39,6 +39,15 @@ beforeSettings {
 }
 ```
 
+The Robolectric harness used for PF3 and PF4 verification (native graphics, a fake PackageManager, the
+old and new modifiers side by side) is not in the repo. It needs `org.robolectric:robolectric`,
+`androidx.compose.ui:ui-test-junit4` and `ui-test-manifest` as test dependencies,
+`isIncludeAndroidResources = true`, and the system properties `robolectric.pixelCopyRenderMode=hardware`
+and (to avoid Maven Central rate limits) `robolectric.dependency.repo.url` pointing at the mirror above.
+Compose's `captureToImage` does not work under Robolectric's paused looper; capture with
+`PixelCopy.request(activity.window, …)` after `waitForIdle()` and `shadowOf(mainLooper).idleFor(…)`, and put
+Compose in keyboard input mode through `LocalInputModeManager` before requesting focus.
+
 ---
 
 ## 1. Approach
@@ -213,8 +222,9 @@ cancelled overlapping runs. The new bitmaps were different objects, so every til
 re-uploaded its texture just as the user landed on Home. On cold start the grid was empty until the
 whole scan finished.
 
-**Status:** implemented and building (debug unit tests and release/R8). The loader's device behavior is
-not verified yet; see Acceptance.
+**Status:** implemented and building (debug unit tests and release/R8). The loader has also been run end
+to end against a fake PackageManager in a Robolectric harness (see PF4, "Also verified"). Not yet run on
+the TV; see Acceptance.
 
 **Files:** new `home/data/AppLoader.kt` (Android side), `AppStamps.kt` and `AppSnapshot.kt` (pure
 logic), `InstalledApps.kt` (`load()` removed; `toBitmap` and `categoryOf` now `internal` and shared),
@@ -245,8 +255,7 @@ Tests: `AppStampsTest`, `SnapshotCodecTest` (29 cases).
   `Trace` sections for Perfetto, and Logcat tag `AppLoader` reports what happened.
 
 **Not done here (left for later items)**
-- Icon size (still 192×192) and hardware bitmaps: PF4. PF4 must write the PNG from the software bitmap
-  before converting, because a hardware bitmap cannot be compressed.
+- Icon size and hardware bitmaps: PF4 (done; see below).
 - The in-memory cache does not survive the Activity being destroyed while the process lives; the
   snapshot covers that case at the cost of one more restore.
 
@@ -329,31 +338,59 @@ Only the `graphicsLayer {}` block read `t` in the right phase.
 
 ## PF4: Bitmap pipeline (ships with PF2)
 
-**Why.** Icons are rasterized at 192×192 (about 144 KB each) but drawn at 44dp, which is 88 px at
-density 320 (`InstalledApps.kt:43-44`, `HomeScreen.kt:168`): roughly 4.7× too many pixels, scaled down
-without mipmaps. Software bitmaps are also uploaded to the GPU on the first frame that draws them, on
-the render thread, which is when scrolling the drawer stutters. Banners at 384×216 are already the
-right size.
+**Why.** Icons were rasterized at 192×192 (about 144 KB each) but drawn at 44dp, which is 88 px at
+density 320: roughly 4.7× too many pixels, scaled down without mipmaps. Software bitmaps are also
+uploaded to the GPU on the first frame that draws them, on the render thread, which is when scrolling
+the drawer stutters. Banners at 384×216 were already the right size.
 
-**Files:** `home/data/InstalledApps.kt` (agent B), same branch as PF2.
+**Status:** implemented, building, and the surrounding loader verified in a Robolectric harness. The
+hardware-bitmap step itself is **not** verified: Robolectric has no hardware bitmaps, so it needs the
+TV (see Acceptance).
 
-**Steps**
-1. Rasterize icons at 96×96 (88 px displayed, plus headroom for the 1.06 focus scale). Banners unchanged.
-2. Write the PNG to the disk cache (PF2) **from the software bitmap first**.
-3. Then `bitmap.copy(Bitmap.Config.HARDWARE, false)` on the loader thread and recycle the software copy.
-   If `copy` returns null, keep the software bitmap. This moves the texture upload off the first draw.
-4. **File descriptor guard.** Each hardware bitmap holds native handles. Count open descriptors with
-   the drawer fully loaded (PF0 step 5). If the count approaches a few hundred, keep hardware bitmaps
-   for pinned apps only and software bitmaps for the rest.
-5. Log `allocationByteCount` totals in debug builds.
+**Files:** `home/data/AppLoader.kt`, `InstalledApps.kt`, `AppSnapshot.kt` (new `ArtLimits`), new
+`ArtLimitsTest`.
+
+**Design (as built)**
+- **Sizes.** `ArtLimits`: banner 384×216 (exactly a 192×108dp tile at 2 px per dp), icon 96×96 (the 44dp
+  icon is 88 px; 96 covers the 1.06 focus scale). A test ties these to `FieldDimens` and the icon size so
+  a layout change can't silently leave art blurry or oversized. Per icon: 36,864 bytes, down from 147,456.
+- **Rendering.** Rasterize to a software bitmap, write the PNG from it, then copy into a hardware bitmap
+  and recycle the software one. The PNG is written first because a hardware bitmap can't be compressed.
+  Pixels now reach the GPU on the loader thread, not on the first frame that draws them.
+- **Decoding the cache.** `inPreferredConfig = HARDWARE` decodes straight into GPU memory, so a cold start
+  never holds a heap copy of the artwork. Falls back to a software decode and copy.
+- **Only real hardware bitmaps count.** If a copy comes back as an ordinary bitmap, it is discarded and
+  the original is kept (no duplicate in the heap), and it does not count against the cap.
+- **Descriptor guard.** `MAX_HARDWARE = 300` bitmaps on the GPU; past that, software bitmaps. The 300 is a
+  conservative guess, not a measured limit. After each load that changed anything, `adb logcat -s AppLoader`
+  prints `art: N on the GPU, M in heap (K KB), F open file descriptors`, so it can be tuned from real numbers.
+- **Cache migration.** `SnapshotCodec.VERSION` is now 2, so the first launch after this change ignores the
+  old snapshot, rescans, and overwrites the 192 px files with 96 px ones.
+
+**Also verified (same harness as PF3, driving the real `AppLoader` against a fake PackageManager;
+covers PF2 too, which had only been compiled before)**
+- First launch scans everything: apps sorted by label, pinned flag from the leanback entry, icons 96×96,
+  one PNG each, snapshot written.
+- A resume with nothing changed: no scan, no publish.
+- An app installed or updated: exactly one app rebuilt; the others are the very same instances (so
+  Compose skips their tiles); the old cache file is deleted. An app removed: gone.
+- A new loader after "process death": the first publish comes from the snapshot with Home's apps already
+  carrying artwork; no rescan; the rest of the artwork fills in.
+- Cache directory purged: artwork is re-rendered from the packages and cached again.
 
 **Acceptance**
-- gfxinfo while scrolling the full drawer: slow bitmap uploads drop to 0 or near 0 (PF0 step 1).
-- `dumpsys meminfo` Java Heap and Graphics reported before and after; no regression in total PSS.
-- Visual parity of icons at rest and focused; no shimmer at 96 px.
-- Open descriptor count recorded in the handoff report.
+- JVM unit tests: raster sizes match the tile and icon sizes; the cap rule; version 1 snapshots are
+  ignored. **Done: 4 new, all pass (41 total).**
+- Loader behavior: **done in the harness above.**
+- Device: after a cold start and after opening the drawer, `adb logcat -s AppLoader` should show
+  `art: N on the GPU` with N equal to the number of apps that have artwork (0 means the hardware copy
+  isn't happening on this TV), and a file-descriptor count that is far from the process limit
+  (`adb shell cat /proc/$(pidof com.andrewevmiller.tvlauncher)/limits | grep "open files"`).
+- Device: gfxinfo while scrolling the full drawer: "Number Slow bitmap uploads" drops to 0 or near 0
+  (PF0 step 1). `dumpsys meminfo`: Java heap and graphics compared with PF0 step 5.
+- Visual: icons look the same on Home, in the drawer and in the Recent row; no shimmer or blur.
 
-**Rollback:** keep the old `toBitmap` behind a constant while testing; revert is one commit.
+**Rollback:** `git revert` of the PF4 commit; the snapshot version bump makes the cache rebuild either way.
 
 ---
 

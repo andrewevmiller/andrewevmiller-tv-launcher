@@ -27,7 +27,8 @@ data class Snapshot(val signature: String, val savedAt: Long, val entries: List<
  * escaping. Anything unreadable decodes to null and is treated as "no snapshot".
  */
 object SnapshotCodec {
-    const val VERSION = 1
+    /** Version 2: artwork is now rasterized at [ArtLimits] sizes, so snapshots (and their files) from version 1 are rebuilt. */
+    const val VERSION = 2
     private const val MAX_ENTRIES = 10_000
 
     fun encode(snapshot: Snapshot): ByteArray {
@@ -82,6 +83,28 @@ object SnapshotCodec {
     } catch (e: IOException) {
         null
     }
+}
+
+/**
+ * How big tile artwork is rasterized, in pixels at the TV's 2 px per dp, and how many bitmaps may live
+ * in GPU memory. Anything drawn bigger than this would be upscaled; anything bigger than needed wastes memory.
+ */
+object ArtLimits {
+    /** A 16:9 banner fills a 192x108dp tile exactly. */
+    const val BANNER_W = 384
+    const val BANNER_H = 216
+
+    /** The tile icon is 44dp (88 px); the extra covers the 1.06 focus scale (about 93 px). */
+    const val ICON = 96
+
+    /**
+     * Cap on bitmaps held as hardware bitmaps. Each holds native buffer handles, so a runaway count could
+     * run a process out of file descriptors. 300 is a conservative guess, not a measured limit; the loader
+     * logs the open-descriptor count so it can be tuned.
+     */
+    const val MAX_HARDWARE = 300
+
+    fun hardwareAllowed(inUse: Int): Boolean = inUse < MAX_HARDWARE
 }
 
 /** Naming and cleanup rules for the cached artwork files. Keyed by build, so an update gets a new file. */

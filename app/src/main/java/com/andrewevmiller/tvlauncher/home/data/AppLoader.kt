@@ -32,11 +32,19 @@ import java.util.concurrent.atomic.AtomicInteger
  *    [LauncherApp] instance so Compose skips their tiles.
  * 4. Fill in any artwork still missing (not yet decoded, or purged from the cache directory).
  *
+ * Artwork is rasterized at the size its tile needs ([ArtLimits]) and kept as hardware bitmaps, so the
+ * pixels live in GPU memory and are uploaded here on the loader thread, not on the first frame that draws
+ * them. The PNG cache is always written from the software bitmap first, because a hardware bitmap can't be
+ * compressed.
+ *
  * A newer [refresh] makes an older one in flight stop early, so quick back-to-back resumes do one scan.
  * [publish] is always called on the main thread.
  */
 class AppLoader(context: Context, private val publish: (List<LauncherApp>) -> Unit) {
     private class Held(val entry: SnapshotEntry, val app: LauncherApp)
+
+    /** A freshly rendered software bitmap waiting to be written to the cache; [recycle] once it is not on screen. */
+    private class Pending(val entry: SnapshotEntry, val software: Bitmap, val recycle: Boolean)
 
     private val appContext = context.applicationContext
     private val pm = appContext.packageManager
@@ -56,6 +64,7 @@ class AppLoader(context: Context, private val publish: (List<LauncherApp>) -> Un
     private var held: Map<String, Held> = emptyMap()
     private var last: ScanRecord? = null
     private var restored = false
+    private var hardwareCount = 0
 
     /** Call from onResume. Cheap when nothing changed. */
     fun refresh() {
@@ -86,6 +95,7 @@ class AppLoader(context: Context, private val publish: (List<LauncherApp>) -> Un
         Trace.beginSection("AppLoader.load")
         try {
             val started = SystemClock.elapsedRealtime()
+            hardwareCount = countHardware()
             if (!restored) {
                 restored = true
                 restore()
@@ -123,12 +133,13 @@ class AppLoader(context: Context, private val publish: (List<LauncherApp>) -> Un
             held = restoredHeld
             publishNow()
             Log.d(TAG, "restored ${snapshot.entries.size} apps from snapshot in ${SystemClock.elapsedRealtime() - started} ms")
+            logArt()
         } finally {
             Trace.endSection()
         }
     }
 
-    private fun persist(all: Collection<Held>, signature: String, now: Long, fresh: List<Held>) {
+    private fun persist(all: Collection<Held>, signature: String, now: Long, pending: List<Pending>) {
         Trace.beginSection("AppLoader.persist")
         try {
             val entries = all.map { it.entry }.sortedBy { it.label.lowercase() }
@@ -137,7 +148,10 @@ class AppLoader(context: Context, private val publish: (List<LauncherApp>) -> Un
                 temp.writeBytes(SnapshotCodec.encode(Snapshot(signature, now, entries)))
                 if (!temp.renameTo(snapshotFile)) temp.delete()
             }.onFailure { Log.w(TAG, "snapshot write failed", it) }
-            for (h in fresh) h.app.artwork?.let { writeArt(h.entry, it.asAndroidBitmap()) }
+            for (p in pending) {
+                writeArt(p.entry, p.software)
+                if (p.recycle) p.software.recycle()
+            }
             val keep = entries.filter { it.art != ArtKind.NONE }.map { ArtFiles.name(it.packageName, it.lastUpdateTime) }.toSet()
             for (name in ArtFiles.stale(artDir.list()?.toList() ?: emptyList(), keep)) File(artDir, name).delete()
         } finally {
@@ -170,6 +184,7 @@ class AppLoader(context: Context, private val publish: (List<LauncherApp>) -> Un
             val seen = HashSet<String>()
             val next = LinkedHashMap<String, Held>()
             val fresh = ArrayList<Held>()
+            val pending = ArrayList<Pending>()
             for ((pass, category) in listOf(Intent.CATEGORY_LEANBACK_LAUNCHER, Intent.CATEGORY_LAUNCHER).withIndex()) {
                 val intent = Intent(Intent.ACTION_MAIN).addCategory(category)
                 for (info in pm.queryIntentActivities(intent, 0)) {
@@ -185,9 +200,10 @@ class AppLoader(context: Context, private val publish: (List<LauncherApp>) -> Un
                     }
                     val banner = runCatching { ai.loadBanner(pm) }.getOrNull()
                     val drawable = banner ?: runCatching { info.loadIcon(pm) }.getOrNull()
-                    val bitmap = drawable?.let { runCatching { InstalledApps.toBitmap(it, banner != null) }.getOrNull() }
+                    val software = drawable?.let { runCatching { InstalledApps.toBitmap(it, banner != null) }.getOrNull() }
+                    val shown = software?.let { toGpu(it) }
                     val kind = when {
-                        bitmap == null -> ArtKind.NONE
+                        software == null -> ArtKind.NONE
                         banner != null -> ArtKind.BANNER
                         else -> ArtKind.ICON
                     }
@@ -200,17 +216,19 @@ class AppLoader(context: Context, private val publish: (List<LauncherApp>) -> Un
                         art = kind,
                         lastUpdateTime = stamp,
                     )
-                    val built = Held(entry, appFor(entry, bitmap?.asImageBitmap()))
+                    val built = Held(entry, appFor(entry, shown?.asImageBitmap()))
                     next[ai.packageName] = built
                     fresh += built
+                    if (software != null) pending += Pending(entry, software, recycle = shown !== software)
                 }
             }
             if (g != generation.get()) return
             held = next
             last = ScanRecord(signature, now)
             publishNow()
-            persist(next.values, signature, now, fresh)
+            persist(next.values, signature, now, pending)
             Log.d(TAG, "scan: reused ${next.size - fresh.size}, rebuilt ${fresh.size}, took ${SystemClock.elapsedRealtime() - started} ms")
+            logArt()
         } finally {
             Trace.endSection()
         }
@@ -234,21 +252,77 @@ class AppLoader(context: Context, private val publish: (List<LauncherApp>) -> Un
             if (changed) {
                 held = next
                 publishNow()
+                logArt()
             }
         } finally {
             Trace.endSection()
         }
     }
 
-    /** The cached file if there is one, else render it from the package again (and cache that). */
+    /**
+     * The cached file if there is one, else render it from the package again (and cache that).
+     * The result is a hardware bitmap when the budget allows, with no software copy kept.
+     */
     private fun artFor(e: SnapshotEntry): ImageBitmap? {
         if (e.art == ArtKind.NONE) return null
         val file = File(artDir, ArtFiles.name(e.packageName, e.lastUpdateTime))
-        val decoded = runCatching { BitmapFactory.decodeFile(file.path) }.getOrNull()
-        if (decoded != null) return decoded.asImageBitmap()
+        if (file.exists()) {
+            if (ArtLimits.hardwareAllowed(hardwareCount)) {
+                // Decode straight into GPU memory: no heap copy to hold or recycle.
+                val options = BitmapFactory.Options().apply { inPreferredConfig = Bitmap.Config.HARDWARE }
+                val gpu = runCatching { BitmapFactory.decodeFile(file.path, options) }.getOrNull()
+                if (gpu != null) {
+                    if (gpu.config == Bitmap.Config.HARDWARE) hardwareCount++
+                    return gpu.asImageBitmap()
+                }
+            }
+            val decoded = runCatching { BitmapFactory.decodeFile(file.path) }.getOrNull()
+            if (decoded != null) return keepOnGpu(decoded).asImageBitmap()
+        }
         val rendered = renderArt(e) ?: return null
         writeArt(e, rendered)
-        return rendered.asImageBitmap()
+        return keepOnGpu(rendered).asImageBitmap()
+    }
+
+    /** [toGpu], then drop the software original if the copy replaced it. For bitmaps nothing else needs. */
+    private fun keepOnGpu(software: Bitmap): Bitmap {
+        val shown = toGpu(software)
+        if (shown !== software) software.recycle()
+        return shown
+    }
+
+    /** Copies [software] into GPU memory if the budget allows and the copy works; otherwise returns it unchanged. */
+    private fun toGpu(software: Bitmap): Bitmap {
+        if (!ArtLimits.hardwareAllowed(hardwareCount)) return software
+        val gpu = runCatching { software.copy(Bitmap.Config.HARDWARE, false) }.getOrNull() ?: return software
+        if (gpu.config != Bitmap.Config.HARDWARE) {
+            // The copy did not land in GPU memory, so it is no better than what we have; don't keep two.
+            gpu.recycle()
+            return software
+        }
+        hardwareCount++
+        return gpu
+    }
+
+    private fun countHardware(): Int =
+        held.values.count { it.app.artwork?.asAndroidBitmap()?.config == Bitmap.Config.HARDWARE }
+
+    /** What the artwork costs and how many file descriptors the process holds, so the cap can be tuned from real numbers. */
+    private fun logArt() {
+        var gpu = 0
+        var heap = 0
+        var heapBytes = 0L
+        for (h in held.values) {
+            val b = h.app.artwork?.asAndroidBitmap() ?: continue
+            if (b.config == Bitmap.Config.HARDWARE) {
+                gpu++
+            } else {
+                heap++
+                heapBytes += b.allocationByteCount
+            }
+        }
+        val fds = File("/proc/self/fd").list()?.size ?: -1
+        Log.d(TAG, "art: $gpu on the GPU, $heap in heap (${heapBytes / 1024} KB), $fds open file descriptors")
     }
 
     @Suppress("DEPRECATION")
