@@ -8,13 +8,11 @@ import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.andrewevmiller.tvlauncher.HomeDeps
-import com.andrewevmiller.tvlauncher.ambient.startPhotosSlideshow
 import com.andrewevmiller.tvlauncher.home.apps.AppGridState
 import com.andrewevmiller.tvlauncher.home.apps.AppsSection
 import com.andrewevmiller.tvlauncher.home.apps.system.SystemTilesRow
@@ -22,21 +20,17 @@ import com.andrewevmiller.tvlauncher.home.data.AppCategory
 import com.andrewevmiller.tvlauncher.home.data.LauncherApp
 import com.andrewevmiller.tvlauncher.home.data.LaunchLog
 import com.andrewevmiller.tvlauncher.settings.LauncherSettings
-import com.andrewevmiller.tvlauncher.settings.Screensaver
 import com.andrewevmiller.tvlauncher.sound.LocalFieldSound
 import com.andrewevmiller.tvlauncher.theme.FieldDimens
 import com.andrewevmiller.tvlauncher.ui.components.ChipOption
 import com.andrewevmiller.tvlauncher.ui.components.ChipsRow
 import com.andrewevmiller.tvlauncher.ui.components.FeatureBand
-import com.andrewevmiller.tvlauncher.ui.components.GalleryItem
-import com.andrewevmiller.tvlauncher.ui.components.GalleryRow
 import com.andrewevmiller.tvlauncher.ui.components.RecentRow
 import com.andrewevmiller.tvlauncher.ui.components.focusBleed
 import com.andrewevmiller.tvlauncher.ui.components.TimelineItem
 import com.andrewevmiller.tvlauncher.ui.components.recentSectionLabel
 import com.andrewevmiller.tvlauncher.ui.icons.FieldIcons
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 import java.time.ZoneId
 
 /**
@@ -65,10 +59,6 @@ val HomeCategoryChips: List<ChipOption<AppCategory?>> = listOf(
     ChipOption(AppCategory.TOOLS, "Tools"),
 )
 
-private const val PHOTOS_KEY = "photos"
-private const val OXYFIELD_KEY = "oxyfield"
-private const val NO_ON_DEMAND = "This TV won't start it on demand. It will run when idle."
-
 /**
  * Home: feature band (what you opened last), category chips, the app grid, Recent (your own launch history
  * until the Watch Next spike says more is possible), screensaver tiles and the input/system tiles.
@@ -87,7 +77,6 @@ fun HomeContent(
     val apps = deps.apps
     val sound = LocalFieldSound.current
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
 
     val favorites by apps.favorites.collectAsStateWithLifecycle<List<LauncherApp>?>(initialValue = null)
     val installed by apps.apps.collectAsStateWithLifecycle<List<LauncherApp>?>(initialValue = null)
@@ -168,34 +157,18 @@ fun HomeContent(
         }
         add(
             HomeRow("screensaver", "Screensaver · start one now") {
-                GalleryRow(
-                    items = listOf(
-                        GalleryItem(PHOTOS_KEY, "Google Photos · slideshow"),
-                        GalleryItem(OXYFIELD_KEY, "Oxyfield · dot field"),
-                    ),
-                    playSelect = false,
-                    onSelect = { item ->
-                        sound.sleep()
-                        when (item.key) {
-                            PHOTOS_KEY -> startPhotosSlideshow(context, deps.screensaver, settings.screensaver) {
-                                ui.message = it
-                            }
-                            OXYFIELD_KEY -> {
-                                if (deps.screensaver.canSwitch) {
-                                    deps.screensaver.apply(Screensaver.OXYFIELD)
-                                    scope.launch { deps.settings.update { it.copy(screensaver = Screensaver.OXYFIELD) } }
-                                }
-                                if (!deps.screensaver.startNow()) ui.message = NO_ON_DEMAND
-                            }
-                        }
-                    },
+                ScreensaverTiles(
+                    screensaver = deps.screensaver,
+                    settings = deps.settings,
+                    current = settings.screensaver,
+                    onMessage = { ui.message = it },
                 )
             },
         )
         add(HomeRow("system", "Inputs & system") { SystemTilesRow(Modifier.focusBleed()) })
     }
 
-    HomeScreen(
+    HomeFrame(
         rows = rows,
         modifier = modifier,
         dotAlpha = settings.dotGridAlpha,

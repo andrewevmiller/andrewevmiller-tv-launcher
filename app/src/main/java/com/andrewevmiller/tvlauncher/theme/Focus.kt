@@ -35,6 +35,7 @@ fun Modifier.fieldFocus(
     shape: Shape = FieldShapes.tile,
     restTilt: Float = 0f,
     focusedScale: Float = 1.06f,
+    bleed: Boolean = false,
 ): Modifier = composed {
     val colors = LocalFieldColors.current
     val reduced = LocalReducedMotion.current
@@ -59,8 +60,9 @@ fun Modifier.fieldFocus(
             rotationZ = restTilt * (1f - t)
         }
         .border(
-            width = lerp(1.dp, 3.dp, t),
-            color = lerp(colors.line, colors.accent, t),
+            // Full-bleed art has no resting frame: the border only appears with focus.
+            width = lerp(if (bleed) 0.5.dp else 1.dp, 3.dp, t),
+            color = lerp(if (bleed) androidx.compose.ui.graphics.Color.Transparent else colors.line, colors.accent, t),
             shape = shape,
         )
 }
@@ -71,9 +73,10 @@ fun Modifier.fieldTile(
     shape: Shape = FieldShapes.tile,
     restTilt: Float = 0f,
     focusedScale: Float = 1.06f,
+    bleed: Boolean = false,
 ): Modifier = composed {
     this
-        .fieldFocus(shape, restTilt, focusedScale)
+        .fieldFocus(shape, restTilt, focusedScale, bleed)
         .clickable(
             interactionSource = remember { MutableInteractionSource() },
             indication = null,

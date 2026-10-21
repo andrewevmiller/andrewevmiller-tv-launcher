@@ -105,11 +105,19 @@ serialised. The integrator runs it on each merged batch; do not run it in a loop
 
 ## How the app is put together (as built)
 - `FieldApplication` owns an `AppContainer` (lazy singletons: settings, apps + launch history, motif overrides, sound
-  engine, screensaver controller). `MainActivity` hosts `FieldRoot`, which switches between Home, the all-apps drawer
-  and Settings, and resets Home when the Home button is pressed (`onNewIntent`). The Menu key opens Settings.
+  engine, screensaver controller). `MainActivity` hosts `FieldRoot`, which switches between Home and Settings, and
+  resets Home when the Home button is pressed (`onNewIntent`). The Menu key opens Settings.
+- Home is `FieldHome` (`home/FieldHome.kt`) around `HomeScreen`: the layout from the mockup with the feature band,
+  a collapsed Recent row, the long-press pin menu (Move / Pin / Unpin), reorder, the All-apps drawer as the same
+  frame, HDMI/Wi-Fi/Search/Settings tiles and the screensaver tiles. It reads apps with `InstalledApps` and keeps
+  pins and order in SharedPreferences `layout` and recents in `launch_history` (`HomeLaunchHistory`), the files the
+  TV already has from the earlier build. Focus ticks take their pitch from `LocalSoundRow`, which `HomeScreen` sets per row.
+- Merge note (2026-10-21): this branch met a separately built Home on `main` (PR #3/#4). Where the two built the same
+  thing, the newer, `main`'s Home screen and its pin menu, won. The sound engine, Settings, crash fallback and
+  screensavers stay from the first build, because `main` had only a subset of them. The earlier row-based Home
+  (`HomeContent` on `HomeFrame`, `home/apps/` grid, drawer, edit mode, `RecordingAppsRepository`/`LaunchLog`) is still
+  in the tree and under test but is not routed from `FieldRoot`; delete it or switch back in one place.
 - `HomeContent` takes a `HomeDeps` interface (implemented by `AppContainer`), so tests pass fakes.
-- Recent and the feature band come from the launcher's own launch history (`home/data/LaunchHistory.kt`), recorded by
-  `RecordingAppsRepository`, until the spike says Watch Next is readable.
 - Tests: pure JUnit in `app/src/test/` runs under both purecheck and AGP; Robolectric Compose tests run the real
   focus and key handling on the JVM (a Compose test clock quirk: avoid `captureToImage()`, see
   `ui/ScreenshotSupport.kt`). Opt-in screenshots: `FIELD_SCREENSHOTS=1 tools/compile.sh :app:testDebugUnitTest
