@@ -10,8 +10,8 @@ android {
 
     defaultConfig {
         applicationId = "com.andrewevmiller.tvlauncher"
-        // Android 9+. Revisit once the Hisense probe output is in (scripts/probe.sh).
-        minSdk = 28
+        // The only target is the owner's Hisense Google TV (Android 12, API 31).
+        minSdk = 31
         targetSdk = 34
         versionCode = 1
         versionName = "0.1.0"

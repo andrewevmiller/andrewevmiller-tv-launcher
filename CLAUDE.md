@@ -66,6 +66,17 @@ machine with `./gradlew installDebug` against the TV over adb. Keep code conserv
 stable Compose / tv-material APIs, no experimental opt-ins unless unavoidable.
 
 ## Target device
-Hisense TV over adb; exact model/OS pending `scripts/probe.sh` output. minSdk 28 until then.
-If the TV is Google TV, `deploy.sh` must disable `com.google.android.apps.tv.launcherx`,
-and `rescue.sh` must re-enable it.
+Hisense "SmartTV 4K", **Google TV on Android 12 (API 31)**, MediaTek SoC. Probe taken 2026-10-21.
+- UI renders at 1920x1080 (override of a 3840x2160 panel), density 320 → a 960x540dp canvas,
+  which is what `FieldDimens` assumes. 1dp = 2px.
+- Current HOME default is a third-party launcher, `com.gathin.tvhome/.WiiMenuActivity`, so this TV
+  already honors a non-Google default home. `deploy.sh` sets ours with
+  `cmd package set-home-activity`; `rescue.sh` restores whatever deploy recorded as the previous
+  default (today: the gathin launcher), not necessarily Google's.
+- Stock packages present: `com.google.android.apps.tv.launcherx`,
+  `com.google.android.tungsten.setupwraith`. Leave their enabled/disabled state as deploy finds it;
+  record it so rescue can put it back.
+- Screensaver today: `com.google.android.apps.tv.dreamx/.service.Backdrop` (Google TV ambient mode,
+  the Google Photos slideshow). This is the `GOOGLE_PHOTOS` choice in settings.
+- TV inputs go through the MediaTek TV Input Framework (`com.mediatek.dtv.tvinput.*`), so system
+  input tiles use standard TIF passthrough intents first.

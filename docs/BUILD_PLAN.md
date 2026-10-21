@@ -36,8 +36,8 @@ design language. This document is the operating plan for building it with a team
 | Theme tokens, bundled fonts (Plex Serif, Plex Mono, Geist), focus style, dot grid | Done |
 | Home frame (header, hairline rows, slots), `AppsRepository` interface | Done |
 | Interactive mockup with sound engine, motifs, waveforms, screensavers | Done (`docs/mockup/`) |
-| Commits pushed to GitHub | **Blocked**: session needs access to `andrewevmiller/andrewevmiller-tv-launcher` |
-| Device facts (Google TV vs Android TV, SDK level, resolution, input app) | **Blocked**: needs `adb` probe output |
+| Commits pushed to GitHub | Done |
+| Device facts | Done: Google TV, Android 12 / API 31, 960×540dp, MediaTek TIF, see `CLAUDE.md` § Target device |
 | Compiling in the cloud | **Blocked**: `dl.google.com` not on the environment's allowed domains |
 
 Nothing in `app/` has been compiled yet. Treat the first owner-side `./gradlew installDebug` as a gate (G1 below).
@@ -132,6 +132,12 @@ adb shell cmd package resolve-activity -c android.intent.category.HOME -a androi
 adb shell settings get secure screensaver_components
 adb shell wm size; adb shell wm density
 ```
+
+**Probe result (2026-10-21):** Google TV, Android 12 / API 31, 1920×1080 override at density 320,
+current default home `com.gathin.tvhome/.WiiMenuActivity`, screensaver
+`com.google.android.apps.tv.dreamx/.service.Backdrop`, MediaTek TV Input Framework. Decisions applied:
+`minSdk = 31`; deploy uses `cmd package set-home-activity` and records the previous home, launcher
+enabled states and screensaver for rescue; Google photo screensaver = `dreamx/.service.Backdrop`.
 
 **Decisions keyed to the probe**
 - `com.google.android.apps.tv.launcherx` present → Google TV. `deploy.sh` disables it (and `com.google.android.tungsten.setupwraith`); `rescue.sh` re-enables both.
