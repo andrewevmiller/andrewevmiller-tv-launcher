@@ -48,5 +48,14 @@ Reading what other apps are playing needs notification-listener access, which th
 
 An update keeps the grant; an uninstall removes it, so run `enable` again after reinstalling.
 
+### Remote buttons
+Some buttons are taken by the TV's system before any app sees them. On this TV the Settings, Tuner and User buttons go to a Google TV launcher that is disabled, so they do nothing. The launcher can take them over as an accessibility service, which Android keeps off until you switch it on:
+
+```powershell
+./tools/remote.ps1 enable    # also: disable, status
+```
+
+Out of the box the Settings button opens a notifications panel (with an Open Settings shortcut) and the Tuner button opens Stremio. The service reads nothing from the screen, only key presses, and only touches the buttons listed in `RemoteKeys` (`app/.../remote/RemoteKeyService.kt`). Back, Home, Power, the arrows, OK and volume can never be remapped. `disable` puts every button back. An update keeps the setting; an uninstall removes it.
+
 ## Fonts
 IBM Plex Serif, IBM Plex Mono and Geist are bundled under the SIL Open Font License; see `licenses/`.
