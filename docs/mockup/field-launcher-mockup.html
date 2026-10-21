@@ -202,7 +202,7 @@ h2 { font-family: var(--serif); font-weight: 700; letter-spacing: -0.01em; font-
 .ambient { position: absolute; inset: 0; background: var(--t-bg); opacity: 0; pointer-events: none; transition: opacity 500ms; }
 .ambient.show { opacity: 1; pointer-events: auto; }
 .ambient canvas { width: 100%; height: 100%; display: block; }
-/* the picture (field + its background) is one layer so the sleep dim can scale all of it towards black; the clock sits above and leaves sooner */
+/* the picture (field + its background) is one layer so the sleep dim can scale all of it towards black; the clock sits above and settles to a faint floor sooner */
 .amb-pic { position: absolute; inset: 0; background: var(--t-bg); }
 .reduced .ambient { transition: none; }
 .amb-clock { position: absolute; left: 48px; bottom: 30px; }
@@ -433,7 +433,7 @@ h2 { font-family: var(--serif); font-weight: 700; letter-spacing: -0.01em; font-
 
   /* sleep timer: SleepPresets, SleepLogic.caption/clock, SleepDimMath */
   const SLEEP_MINUTES = [15, 30, 45, 60, 90, 120], SLEEP_EXTEND = 15, SLEEP_MAX = 240, SLEEP_DEFAULT = 45;
-  const FADE_MS = 45000, FAST_FADE_MS = 4000, DIM_FLOOR = 0.05, CLOCK_GONE = 0.6;
+  const FADE_MS = 45000, FAST_FADE_MS = 4000, DIM_FLOOR = 0.05, CLOCK_SETTLED = 0.6, CLOCK_FLOOR = 0.15;   // the clock fades to a faint floor by 60% of the fade and stays
   const SLEEP_SOUND_AFTER_PAUSE_MS = 600, SLEEP_DIM_AFTER_SOUND_MS = 1200;   // runSleepEnd's gaps
   function sleepCaption(ms) {
     if (ms <= 0) return '0 min';
@@ -452,11 +452,11 @@ h2 { font-family: var(--serif); font-weight: 700; letter-spacing: -0.01em; font-
     return DIM_FLOOR + (1 - DIM_FLOOR) * (1 - smooth(t));
   }
   function clockLevel(el, fade, reduced) {
-    if (reduced) return 0;
-    const t = dimProgress(el, fade) / CLOCK_GONE;
+    if (reduced) return CLOCK_FLOOR;
+    const t = dimProgress(el, fade) / CLOCK_SETTLED;
     if (t <= 0) return 1;
-    if (t >= 1) return 0;
-    return 1 - smooth(t);
+    if (t >= 1) return CLOCK_FLOOR;
+    return CLOCK_FLOOR + (1 - CLOCK_FLOOR) * (1 - smooth(t));
   }
 
   /* margin note: one line of the viewer's own text, 80 characters at most, no newlines */
@@ -1494,6 +1494,7 @@ h2 { font-family: var(--serif); font-weight: 700; letter-spacing: -0.01em; font-
 
   /* clock */
   function pad(n) { return String(n).padStart(2, '0'); }
+  const nowHM = () => { const d = new Date(); return `${pad(d.getHours())}:${pad(d.getMinutes())}`; };
   function tickClock() {
     const d = new Date();
     const ds = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
@@ -1501,7 +1502,9 @@ h2 { font-family: var(--serif); font-weight: 700; letter-spacing: -0.01em; font-
     // Home header: seconds and the short time-zone name, like the app: 2026-10-21 · 19:42:07 PDT
     const zone = (new Intl.DateTimeFormat('en-US', { timeZoneName: 'short' }).formatToParts(d).find(p => p.type === 'timeZoneName') || {}).value || '';
     const c = document.getElementById('clock'); if (c) c.textContent = `${ds} · ${ts}:${pad(d.getSeconds())} ${zone}`.trim();
-    document.getElementById('ambTime').textContent = ts;
+    // Oxyfield clock: with seconds on the screensaver; the sleep screen keeps a faint clock to the minute (no ticking second in a dark room)
+    document.getElementById('ambTime').textContent = state.dim ? ts : `${ts}:${pad(d.getSeconds())}`;
+    document.getElementById('slideTime').textContent = ts;   // Google's photo screen has its own clock; the mockup's stand-in shows hours and minutes
     document.getElementById('ambDate').textContent = d.toLocaleDateString('en-US', { weekday: 'long' }) + ' · ' + ds;
   }
   setInterval(tickClock, 1000);
@@ -1546,7 +1549,8 @@ h2 { font-family: var(--serif); font-weight: 700; letter-spacing: -0.01em; font-
   const ambPic = document.getElementById('ambPic'), ambClock = document.getElementById('ambClock');
   let ambRipples = [], ambRaf = 0, lastSpawn = 0, dimT0 = 0;
   /* dim = the sleep timer's screen: the same Oxyfield picture, the whole of it (dots and background) fading to a near-black floor
-     over 45 s (smoothstep, SleepDimMath), the clock gone by 60% of the fade, then one still frame. Reduced motion: the dim frame at once. */
+     over 45 s (smoothstep, SleepDimMath), the clock down to a faint floor by 60% of the fade (and kept, to the minute), then one still frame.
+     Reduced motion: the dim frame at once. */
   const dimFade = () => state.fast ? FAST_FADE_MS : FADE_MS;
   function applyDim(elapsed) {
     const lv = dimLevel(elapsed, dimFade(), state.reduced), cl = clockLevel(elapsed, dimFade(), state.reduced);
@@ -1557,6 +1561,7 @@ h2 { font-family: var(--serif); font-weight: 700; letter-spacing: -0.01em; font-
     state.ambient = on; state.dim = on && dim; amb.classList.toggle('show', on); setToggle('t-amb', on && !dim);
     cancelAnimationFrame(ambRaf);
     ambPic.style.filter = ''; ambClock.style.opacity = '';
+    tickClock();   // seconds on the screensaver, minutes only on the sleep screen, from the first frame
     if (on) {
       if (!dim) sfx.sleep();   // the sleep timer already played its own closing sound (windDown) before the dim screen came up
       const now = performance.now();
@@ -1609,7 +1614,7 @@ h2 { font-family: var(--serif); font-weight: 700; letter-spacing: -0.01em; font-
   function showSlide(i) {
     slideEls.forEach((el, k) => el.classList.toggle('cur', k === i));
     document.getElementById('slideCap').textContent = PHOTOS[i % PHOTOS.length].cap.replace(' · ', ' · ').toUpperCase();
-    document.getElementById('slideTime').textContent = document.getElementById('ambTime').textContent;
+    document.getElementById('slideTime').textContent = nowHM();
   }
   function setSlides(on, start = 0) {
     state.slides = on;

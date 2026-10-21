@@ -9,7 +9,7 @@ Pick a length (15, 30, 45, 60, 90, 120 min). When it runs out, with the TV still
 
 1. Pause the media that is playing.
 2. Play a short closing sound (a descending glide; `FieldSound.windDown()`).
-3. Fade the picture to a near-black Oxyfield dot field and hold a still frame. Any key wakes it; media stays paused.
+3. Fade the picture to a near-black Oxyfield dot field and hold a still frame with a faint clock (to the minute) on it. Any key wakes it; media stays paused.
 
 The TV does not power off from here (no permission for that). An LCD backlight also stays on. Real power-off stays
 with the TV's own "turn off after" setting; the README should say so.
@@ -39,7 +39,7 @@ The result decides the order of methods in the app, and whether `deploy.sh` must
 | S1 | Contracts: `SleepTimerController` (state, start, cancel, extend), `FieldSound.windDown()` (+ no-op), `FieldIcons.Moon`, a default length in settings | integrator | Old stored settings still load; compiles |
 | S2 | Pure logic: presets, countdown text ("42 min", "0:42:10"), deadline math, ignore a deadline that expired while the TV was off, cap on extending, order of pause attempts and the firing sequence | `sleep/` | Plain-JVM tests under purecheck |
 | S3 | Android side: scheduled with an alarm (survives the launcher process being killed), pause ladder, closing sound, start the dim screen by the method S0 proved | `sleep/` | Robolectric: alarm scheduled and cancelled; firing calls the steps in order |
-| S4 | Dim mode for `OxyfieldView`: fade to near-black over about 45 s, then a still frame; reduced motion snaps to it | `ambient/` | Frame-by-frame screenshot check; brightness steps unit-tested |
+| S4 | Dim mode for `OxyfieldView`: fade to near-black over about 45 s, then a still frame; the clock fades to a faint floor and stays, repainted each minute; reduced motion snaps to it | `ambient/` | Frame-by-frame screenshot check; brightness steps unit-tested |
 | S5 | Closing sound plus the matching `sfx.windDown` in the mockup so it can be auditioned; render it in `tools/sound` | `sound/`, mockup | No NaN, bounded level, plays only when sounds are on |
 | S6 | UI: "Sleep timer" tile in a new **Tools** row under "Inputs & system" (see `docs/NOTEBOOK_FEATURES_PLAN.md`; caption "Sleep · 42 min" while running), inline picker, Settings section | `home/`, `settings/` | D-pad behaviour tests; accent only on focus |
 | S7 | UI behaviour tests and screenshots (tile idle and running, picker, dim frames) | tests | Green under AGP |
