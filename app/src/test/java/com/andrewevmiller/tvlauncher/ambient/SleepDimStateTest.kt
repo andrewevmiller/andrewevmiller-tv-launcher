@@ -47,14 +47,25 @@ class SleepDimStateTest {
     }
 
     @Test
-    fun settledFrameHoldsTheFloorAndNoClockWhateverTheTime() {
+    fun settledFrameHoldsTheFloorAndTheFaintClockWhateverTheTime() {
         val s = SleepDimState(reducedMotion = false)
         s.start(t0)
         s.update(t0 + fade)
         for (dt in listOf(0L, 10L, fade, fade * 10, Long.MAX_VALUE / 4)) {
             assertEquals(SleepDimMath.FLOOR, s.level(t0 + dt), 0f)
-            assertEquals(0f, s.clockLevel(t0 + dt), 0f)
+            assertEquals(SleepDimMath.CLOCK_FLOOR, s.clockLevel(t0 + dt), 0f)
         }
+    }
+
+    @Test
+    fun theClockReachesItsFloorBeforeTheFadeSettles() {
+        val s = SleepDimState(reducedMotion = false)
+        s.start(t0)
+        // 28 s: past 60% of the fade, so the clock is on its floor while the fade is still running.
+        assertFalse(s.update(t0 + 28_000L))
+        assertFalse(s.settled)
+        assertEquals(SleepDimMath.CLOCK_FLOOR, s.clockLevel(t0 + 28_000L), 0f)
+        assertTrue(s.level(t0 + 28_000L) > SleepDimMath.FLOOR)
     }
 
     @Test
@@ -64,7 +75,7 @@ class SleepDimStateTest {
         assertTrue(s.active)
         assertTrue(s.settled)
         assertEquals(SleepDimMath.FLOOR, s.level(0L), 0f)
-        assertEquals(0f, s.clockLevel(0L), 0f)
+        assertEquals(SleepDimMath.CLOCK_FLOOR, s.clockLevel(0L), 0f)
         assertFalse(s.update(t0 + 1))
     }
 

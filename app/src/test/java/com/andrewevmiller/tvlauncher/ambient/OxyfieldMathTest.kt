@@ -198,4 +198,21 @@ class OxyfieldMathTest {
             assertTrue(abs(c.timeSize / w - 80f / 1920f) < 1e-6f)
         }
     }
+
+    @Test
+    fun theWidestTimeStringWithSecondsFitsTheSafeWidth() {
+        // Plex Mono (and the system monospace fallback) advance 0.6 em per character, digits included, so the width
+        // of a string is chars * 0.6 * size. The widest the clock can show is "12:59:59 PM".
+        val widest = (0..23).flatMap { h ->
+            listOf(true, false).map { is24 -> OxyfieldClockText.time(h, 59, 59, is24) }
+        }.maxOf { it.length }
+        assertEquals(11, widest)
+        for ((w, h) in listOf(1920 to 1080, 3840 to 2160, 1280 to 720)) {
+            val c = oxyfieldClockLayout(w, h)
+            val right = c.left + widest * 0.6f * c.timeSize
+            assertTrue("right edge $right of $w", right <= w * (1f - OxyfieldSpec.SAFE_FRACTION))
+            // And it does not run into the middle of the screen either: under half the width.
+            assertTrue(right < w * 0.5f)
+        }
+    }
 }

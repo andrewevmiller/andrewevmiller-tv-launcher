@@ -51,10 +51,10 @@ class SleepDimState(
         else -> SleepDimMath.level(nowMillis - startMillis, fadeMillis, reducedMotion)
     }
 
-    /** Brightness multiplier for the clock text at [nowMillis]; 1 when inactive, 0 once settled. */
+    /** Brightness multiplier for the clock text at [nowMillis]; 1 when inactive, the faint floor once settled. */
     fun clockLevel(nowMillis: Long): Float = when {
         !active -> 1f
-        settled -> 0f
+        settled -> SleepDimMath.CLOCK_FLOOR
         else -> SleepDimMath.clockLevel(nowMillis - startMillis, fadeMillis, reducedMotion)
     }
 }

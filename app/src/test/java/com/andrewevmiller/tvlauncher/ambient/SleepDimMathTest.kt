@@ -8,6 +8,7 @@ import org.junit.Test
 class SleepDimMathTest {
     private val fade = SleepDimMath.FADE_MILLIS
     private val floor = SleepDimMath.FLOOR
+    private val clockFloor = SleepDimMath.CLOCK_FLOOR
 
     private fun level(elapsed: Long, reduced: Boolean = false, fadeMillis: Long = fade) =
         SleepDimMath.level(elapsed, fadeMillis, reduced)
@@ -19,8 +20,17 @@ class SleepDimMathTest {
     fun theDocumentedConstants() {
         assertEquals(45_000L, SleepDimMath.FADE_MILLIS)
         assertEquals(0.05f, SleepDimMath.FLOOR, 0f)
-        assertEquals(0.6, SleepDimMath.CLOCK_GONE_FRACTION, 0.0)
+        assertEquals(0.15f, SleepDimMath.CLOCK_FLOOR, 0f)
+        assertEquals(0.6, SleepDimMath.CLOCK_SETTLED_FRACTION, 0.0)
     }
+
+    @Test
+    fun theClockFloorIsFaintButAboveTheDotsFloor() {
+        assertTrue(clockFloor > 0f)
+        assertTrue("the clock must stay readable: it is the one thing left on the screen", clockFloor > floor)
+        assertTrue(clockFloor < 0.5f)
+        // Ink is #ECEBE5 (236): at the floor that is about 35/255.
+        assertEquals(35, SleepDimMath.scaleColor(0xFFECEBE5.toInt(), clockFloor) shr 16 and 0xFF)    }
 
     @Test
     fun levelStartsAtOneAndEndsAtTheFloor() {
@@ -62,7 +72,10 @@ class SleepDimMathTest {
         assertEquals(floor, level(0, reduced = true), 0f)
         assertEquals(floor, level(-5, reduced = true), 0f)
         assertEquals(floor, level(fade / 2, reduced = true), 0f)
-        assertEquals(0f, clock(0, reduced = true), 0f)
+        assertEquals(clockFloor, clock(0, reduced = true), 0f)
+        assertEquals(clockFloor, clock(-5, reduced = true), 0f)
+        assertEquals(clockFloor, clock(fade / 2, reduced = true), 0f)
+        assertEquals(clockFloor, clock(fade * 3, reduced = true), 0f)
     }
 
     @Test
@@ -75,35 +88,53 @@ class SleepDimMathTest {
     @Test
     fun aZeroLengthFadeIsAlreadyDone() {
         assertEquals(floor, level(0, fadeMillis = 0L), 0f)
-        assertEquals(0f, clock(0, fadeMillis = 0L), 0f)
+        assertEquals(clockFloor, clock(0, fadeMillis = 0L), 0f)
         assertTrue(SleepDimMath.isSettled(0, 0L, false))
     }
 
     @Test
-    fun clockStartsAtOneAndIsGoneAtSixtyPercent() {
+    fun clockStartsAtOneAndReachesItsFloorAtSixtyPercent() {
         assertEquals(1f, clock(0), 0f)
-        val gone = (fade * SleepDimMath.CLOCK_GONE_FRACTION).toLong()
-        assertEquals(0f, clock(gone), 0f)
-        assertTrue(clock(gone - 1000L) > 0f)
-        assertEquals(0f, clock(gone + 1), 0f)
-        assertEquals(0f, clock(fade), 0f)
-        assertEquals(0f, clock(Long.MAX_VALUE), 0f)
+        val settled = (fade * SleepDimMath.CLOCK_SETTLED_FRACTION).toLong()
+        assertEquals(clockFloor, clock(settled), 0f)
+        assertTrue("still above the floor a second before", clock(settled - 1000L) > clockFloor)
+        assertEquals(clockFloor, clock(settled + 1), 0f)
+        assertEquals(clockFloor, clock(fade), 0f)
+        assertEquals(clockFloor, clock(Long.MAX_VALUE), 0f)
         assertEquals(1f, clock(-1), 0f)
+        assertEquals(1f, clock(Long.MIN_VALUE), 0f)
     }
 
     @Test
-    fun clockNeverIncreasesAndLeavesBeforeTheDots() {
+    fun clockNeverIncreasesNeverGoesBelowItsFloorAndSettlesBeforeTheDots() {
         var previous = Float.MAX_VALUE
         var t = 0L
+        var reachedFloorAt = -1L
         while (t <= fade) {
             val c = clock(t)
             assertTrue("clock($t) = $c rose above $previous", c <= previous)
-            assertTrue("clock($t) = $c out of range", c in 0f..1f)
-            // The text is never brighter than the dots, relative to where each started.
-            assertTrue("clock($t) = $c outshines level $t = ${level(t)}", c <= level(t) + 1e-6f)
+            assertTrue("clock($t) = $c out of range", c in clockFloor..1f)
+            // It falls faster than the dots at first (same curve over 60% of the time): never brighter than them
+            // while the dots are still well above their floor.
+            if (t <= (fade * 0.7).toLong()) {
+                assertTrue("clock($t) = $c outshines level $t = ${level(t)}", c <= level(t) + 1e-6f)
+            }
+            if (c == clockFloor && reachedFloorAt < 0) reachedFloorAt = t
             previous = c
             t += 100L
         }
+        // It is on its floor from 60% of the fade (27 s) on, while the dots are still falling.
+        assertEquals(27_000L, reachedFloorAt)
+        assertTrue(level(reachedFloorAt) > floor + 0.2f)
+    }
+
+    @Test
+    fun clockEasesLikeTheDotsButOverASixtyPercentWindow() {
+        // Same smoothstep: half way through its window it is half way between 1 and the floor.
+        val half = (fade * SleepDimMath.CLOCK_SETTLED_FRACTION / 2).toLong()
+        assertEquals(0.5f * (1f + clockFloor), clock(half), 0.001f)
+        // And it barely moves in the first 5% of its window.
+        assertTrue(clock((fade * SleepDimMath.CLOCK_SETTLED_FRACTION * 0.05).toLong()) > 0.99f)
     }
 
     @Test
@@ -125,6 +156,7 @@ class SleepDimMathTest {
         var t = fade
         val l = level(t)
         val c = clock(t)
+        assertEquals(clockFloor, c, 0f)
         while (t < fade + 30_000L) {
             assertEquals(l, level(t), 0f)
             assertEquals(c, clock(t), 0f)

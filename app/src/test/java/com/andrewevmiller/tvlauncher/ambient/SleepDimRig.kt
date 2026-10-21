@@ -9,6 +9,7 @@ import androidx.compose.ui.graphics.toArgb
 import com.andrewevmiller.tvlauncher.theme.DarkFieldColors
 import com.andrewevmiller.tvlauncher.ui.ScreenshotSupport
 import java.io.File
+import java.util.Calendar
 import kotlin.random.Random
 import org.robolectric.Robolectric
 import org.robolectric.shadows.ShadowLooper
@@ -20,8 +21,18 @@ import org.robolectric.shadows.ShadowLooper
  *
  * Time runs on the view's own millisecond clock: [advanceTo] moves it to `start + millis`, in steps of
  * [stepMillis] like the real loop would, so ripples spawn and expire as they would on the TV.
+ *
+ * The wall clock the screensaver clock shows is a separate, settable value ([wallMillis], default
+ * 2026-10-21 19:42:07.250 local time) and the 12/24 hour choice is [is24Hour], so frames are deterministic and a test
+ * can move the clock by a second or a minute. Moving them does not draw or notify anything: it is what the real
+ * clock does between two frames.
  */
-internal class SleepDimRig(reducedMotion: Boolean = false, seed: Int = 7) {
+internal class SleepDimRig(
+    reducedMotion: Boolean = false,
+    seed: Int = 7,
+    is24Hour: Boolean = true,
+    wallMillis: Long = DEFAULT_WALL_MILLIS,
+) {
     val palette = OxyfieldPalette(
         bg = DarkFieldColors.bg.toArgb(),
         dot = DarkFieldColors.line.toArgb(),
@@ -32,6 +43,12 @@ internal class SleepDimRig(reducedMotion: Boolean = false, seed: Int = 7) {
 
     val activity: Activity = Robolectric.buildActivity(Activity::class.java).setup().get()
     val view = OxyfieldView(activity, palette, reducedMotion, Typeface.MONOSPACE, Random(seed))
+
+    /** What the screensaver clock reads as "now". Change it between frames to move time on. */
+    var wallMillis: Long = wallMillis
+
+    /** The TV's 24-hour setting, as the view sees it. */
+    var is24Hour: Boolean = is24Hour
     val width: Int get() = view.width
     val height: Int get() = view.height
 
@@ -41,6 +58,8 @@ internal class SleepDimRig(reducedMotion: Boolean = false, seed: Int = 7) {
     private var cursor = 0L
 
     init {
+        view.wallClock = { this.wallMillis }
+        view.is24Hour = { this.is24Hour }
         activity.setContentView(view)
         view.stop() // we step frames ourselves; no Choreographer callbacks
         // Lay the decor out once so the view has its size (and its ripple field) before the clock starts.
@@ -77,6 +96,14 @@ internal class SleepDimRig(reducedMotion: Boolean = false, seed: Int = 7) {
     fun screenshot(name: String): File = ScreenshotSupport.capture(activity, name)
 
     companion object {
+        /** 2026-10-21 19:42:07.250 in the JVM's default time zone, which is also the view's. */
+        val DEFAULT_WALL_MILLIS: Long = Calendar.getInstance().run {
+            clear()
+            set(2026, Calendar.OCTOBER, 21, 19, 42, 7)
+            set(Calendar.MILLISECOND, 250)
+            timeInMillis
+        }
+
         /** The brightest channel of any pixel in the rectangle. */
         fun maxChannel(bitmap: Bitmap, left: Int, top: Int, right: Int, bottom: Int): Int {
             var best = 0
@@ -90,17 +117,78 @@ internal class SleepDimRig(reducedMotion: Boolean = false, seed: Int = 7) {
             return best
         }
 
-        /** Number of pixels whose brightest channel is above [threshold]. */
-        fun countAbove(bitmap: Bitmap, threshold: Int): Int {
+        /**
+         * Number of pixels whose brightest channel is above [threshold], not counting any inside [exclude]
+         * (left, top, right, bottom), e.g. the clock when only the dots are of interest.
+         */
+        fun countAbove(bitmap: Bitmap, threshold: Int, exclude: IntArray? = null): Int {
             var n = 0
             for (y in 0 until bitmap.height) {
                 for (x in 0 until bitmap.width) {
+                    if (exclude != null && x >= exclude[0] && x < exclude[2] && y >= exclude[1] && y < exclude[3]) continue
                     val p = bitmap.getPixel(x, y)
                     val m = maxOf((p shr 16) and 0xFF, (p shr 8) and 0xFF, p and 0xFF)
                     if (m > threshold) n++
                 }
             }
             return n
+        }
+
+        /** Number of pixels in the rectangle that are exactly [argb] (opaque), i.e. fully covered glyph pixels. */
+        fun countExact(bitmap: Bitmap, argb: Int, left: Int, top: Int, right: Int, bottom: Int): Int {
+            var n = 0
+            for (y in top until bottom) {
+                for (x in left until right) {
+                    if (bitmap.getPixel(x, y) == argb) n++
+                }
+            }
+            return n
+        }
+
+        /**
+         * The rectangle (left, top, right, bottom; right and bottom exclusive) that holds every pixel that differs
+         * between [a] and [b], or null if they are identical.
+         */
+        fun diffBounds(a: Bitmap, b: Bitmap): IntArray? {
+            var l = Int.MAX_VALUE
+            var t = Int.MAX_VALUE
+            var r = -1
+            var bt = -1
+            for (y in 0 until a.height) {
+                for (x in 0 until a.width) {
+                    if (a.getPixel(x, y) != b.getPixel(x, y)) {
+                        if (x < l) l = x
+                        if (x > r) r = x
+                        if (y < t) t = y
+                        if (y > bt) bt = y
+                    }
+                }
+            }
+            return if (r < 0) null else intArrayOf(l, t, r + 1, bt + 1)
+        }
+
+        /**
+         * The bounding box (left, top, right, bottom; right and bottom exclusive) of the pixels all three of whose
+         * channels are at least [minChannel], or null if there are none. With a high threshold that is the clock's
+         * time text alone: ink is near white, and no dot colour (muted, accent, line) reaches it.
+         */
+        fun brightBounds(bitmap: Bitmap, minChannel: Int): IntArray? {
+            var l = Int.MAX_VALUE
+            var t = Int.MAX_VALUE
+            var r = -1
+            var bt = -1
+            for (y in 0 until bitmap.height) {
+                for (x in 0 until bitmap.width) {
+                    val p = bitmap.getPixel(x, y)
+                    if (((p shr 16) and 0xFF) >= minChannel && ((p shr 8) and 0xFF) >= minChannel && (p and 0xFF) >= minChannel) {
+                        if (x < l) l = x
+                        if (x > r) r = x
+                        if (y < t) t = y
+                        if (y > bt) bt = y
+                    }
+                }
+            }
+            return if (r < 0) null else intArrayOf(l, t, r + 1, bt + 1)
         }
 
         /** Mean of the brightest channel over all pixels. */
