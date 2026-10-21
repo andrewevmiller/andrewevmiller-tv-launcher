@@ -14,8 +14,17 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.andrewevmiller.tvlauncher.home.Chip
+import com.andrewevmiller.tvlauncher.home.Feature
+import com.andrewevmiller.tvlauncher.home.RecentEntry
+import com.andrewevmiller.tvlauncher.home.data.LaunchHistory
+import com.andrewevmiller.tvlauncher.home.data.LaunchRecord
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import com.andrewevmiller.tvlauncher.home.HomeScreen
+import com.andrewevmiller.tvlauncher.home.MenuAction
 import com.andrewevmiller.tvlauncher.home.SystemTile
+import com.andrewevmiller.tvlauncher.home.orderPinned
 import com.andrewevmiller.tvlauncher.home.data.InstalledApps
 import com.andrewevmiller.tvlauncher.home.data.LauncherApp
 import androidx.compose.runtime.CompositionLocalProvider
@@ -27,6 +36,14 @@ import kotlin.concurrent.thread
 
 class MainActivity : ComponentActivity() {
     private lateinit var sound: FieldSound
+    private lateinit var history: LaunchHistory
+    private var records by mutableStateOf<List<LaunchRecord>>(emptyList())
+    private var recentOpen by mutableStateOf(false)
+    private lateinit var layoutPrefs: android.content.SharedPreferences
+    private var order by mutableStateOf<List<String>>(emptyList())
+    private var editing by mutableStateOf<String?>(null)
+    private var pinnedSet by mutableStateOf<Set<String>?>(null)
+    private var menuApp by mutableStateOf<LauncherApp?>(null)
     private var apps by mutableStateOf<List<LauncherApp>>(emptyList())
     private var chip by mutableStateOf(Chip.ALL)
     private var drawer by mutableStateOf(false)
@@ -36,12 +53,26 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         // A launcher is the bottom of the stack; Back only leaves the drawer.
         onBackPressedDispatcher.addCallback(this) {
-            if (drawer) {
+            if (menuApp != null) {
+                menuApp = null
+                sound.back()
+            } else if (editing != null) {
+                editing = null
+                sound.select()
+            } else if (drawer) {
                 drawer = false
                 chip = Chip.ALL
             }
         }
         sound = FieldSound(this)
+        history = LaunchHistory(this)
+        layoutPrefs = getSharedPreferences("layout", MODE_PRIVATE)
+        order = (layoutPrefs.getString("order", "") ?: "").split(';').filter { it.isNotEmpty() }
+        // No saved choice yet means Home shows every app with a TV launcher entry.
+        pinnedSet = if (layoutPrefs.contains("pinned")) {
+            (layoutPrefs.getString("pinned", "") ?: "").split(';').filter { it.isNotEmpty() }.toSet()
+        } else null
+        records = history.entries()
         systemTiles = buildSystemTiles()
         setContent {
             FieldTheme {
@@ -60,8 +91,30 @@ class MainActivity : ComponentActivity() {
                         drawer = true
                         chip = Chip.ALL
                     },
+                    feature = featureFor(),
+                    recent = recentFor(),
+                    recentOpen = recentOpen,
+                    order = order,
+                    editingPkg = editing,
+                    pinnedSet = pinnedSet,
+                    menuApp = menuApp,
+                    onMenuPick = { pick(it) },
+                    onLongPress = {
+                        menuApp = it
+                        sound.select()
+                    },
+                    onMove = { app, delta -> move(app, delta) },
+                    onEditEnd = {
+                        editing = null
+                        sound.select()
+                    },
+                    onToggleRecent = {
+                        sound.select()
+                        recentOpen = !recentOpen
+                    },
                     onLaunch = {
                         sound.launch(it)
+                        records = history.record(it.component.packageName)
                         InstalledApps.launch(this, it)
                     },
                 )
@@ -75,6 +128,9 @@ class MainActivity : ComponentActivity() {
         // Pressing Home always returns to the top of Home.
         drawer = false
         chip = Chip.ALL
+        recentOpen = false
+        editing = null
+        menuApp = null
     }
 
     override fun onResume() {
@@ -86,6 +142,63 @@ class MainActivity : ComponentActivity() {
     override fun onDestroy() {
         super.onDestroy()
         sound.release()
+    }
+
+    /** Moves [app] by [delta] places in the Home order and saves it; the edges answer with the thud. */
+    private fun move(app: LauncherApp, delta: Int) {
+        val current = orderPinned(apps, order, pinnedSet).map { it.component.packageName }.toMutableList()
+        val from = current.indexOf(app.component.packageName)
+        if (from < 0) return
+        val to = (from + delta).coerceIn(0, current.size - 1)
+        if (to == from) return sound.edge()
+        current.add(to, current.removeAt(from))
+        order = current
+        layoutPrefs.edit().putString("order", current.joinToString(";")).apply()
+        sound.tick()
+    }
+
+    private fun isPinned(app: LauncherApp) = pinnedSet?.contains(app.component.packageName) ?: app.pinned
+
+    /** Runs the choice from the long-press menu and saves the result on the TV. */
+    private fun pick(action: MenuAction) {
+        val app = menuApp ?: return
+        val pkg = app.component.packageName
+        menuApp = null
+        when (action) {
+            MenuAction.MOVE -> {
+                editing = pkg
+                sound.select()
+            }
+            MenuAction.PIN, MenuAction.UNPIN -> {
+                val current = apps.filter { isPinned(it) }.map { it.component.packageName }.toSet()
+                val nextSet = if (action == MenuAction.PIN) current + pkg else current - pkg
+                // A new pin goes to the end of Home; the saved order keeps everyone else where they were.
+                val nextOrder = orderPinned(apps, order, current).map { it.component.packageName }.filter { it != pkg } +
+                    if (action == MenuAction.PIN) listOf(pkg) else emptyList()
+                pinnedSet = nextSet
+                order = nextOrder
+                layoutPrefs.edit()
+                    .putString("pinned", nextSet.joinToString(";"))
+                    .putString("order", nextOrder.joinToString(";"))
+                    .apply()
+                sound.select()
+            }
+        }
+    }
+
+    private fun recentFor(): List<RecentEntry> {
+        val byPkg = apps.associateBy { it.component.packageName }
+        return records.mapNotNull { r -> byPkg[r.packageName]?.let { RecentEntry(it, r.at) } }.take(5)
+    }
+
+    /** The app opened most recently; before anything has been opened, the first pinned app. */
+    private fun featureFor(): Feature? {
+        val recent = recentFor().firstOrNull()
+        if (recent != null) {
+            val at = Instant.ofEpochMilli(recent.at).atZone(ZoneId.systemDefault())
+            return Feature(recent.app, DateTimeFormatter.ofPattern("yyyy-MM-dd 'at' HH:mm").format(at))
+        }
+        return apps.firstOrNull { it.pinned }?.let { Feature(it, null) }
     }
 
     private fun open(intent: Intent) {

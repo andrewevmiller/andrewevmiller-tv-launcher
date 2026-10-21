@@ -17,21 +17,21 @@ import androidx.compose.ui.unit.sp
 import androidx.tv.material3.Text
 import com.andrewevmiller.tvlauncher.theme.Field
 import kotlinx.coroutines.delay
-import java.time.LocalDateTime
+import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 
 /** Title on the left, a lab-notebook timestamp on the right: `2026-10-21 · 19:42`. */
 @Composable
 fun ClockHeader(title: String = "Home") {
     val context = LocalContext.current
-    val pattern = if (DateFormat.is24HourFormat(context)) "yyyy-MM-dd · HH:mm" else "yyyy-MM-dd · h:mm a"
+    val pattern = if (DateFormat.is24HourFormat(context)) "yyyy-MM-dd · HH:mm:ss z" else "yyyy-MM-dd · h:mm:ss a z"
     val formatter = remember(pattern) { DateTimeFormatter.ofPattern(pattern) }
-    var now by remember { mutableStateOf(LocalDateTime.now()) }
+    var now by remember { mutableStateOf(ZonedDateTime.now()) }
     LaunchedEffect(Unit) {
         while (true) {
-            now = LocalDateTime.now()
+            now = ZonedDateTime.now()
             // Wake at the top of the next minute.
-            delay((60 - now.second) * 1000L - now.nano / 1_000_000L)
+            delay(1000L - now.nano / 1_000_000L)
         }
     }
     Row(
