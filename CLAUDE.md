@@ -34,6 +34,11 @@ A personal Android TV launcher for one Hisense TV, in the andrewevmiller.com
   their icon large (~44dp), not a small glyph in the corner.
 - Settings → Sound: interface sounds on/off, waveform picker (see Design rules), per-app motif
   re-roll / mute.
+- Apps are a **grid**, not a carousel: `FieldDimens.appGridColumns` (4) columns of those tiles, wrapping. Home
+  shows the pinned apps with an "All apps" tile as the last cell, which opens a full-screen grid of every app.
+  Chips filter the grid in place. Recent, Photos and System tiles stay horizontal rows. D-pad rules, edit mode and
+  focus survival are specified in `docs/BUILD_PLAN.md` §5.4; grid navigation and reorder are pure functions with
+  unit tests.
 - The Recent row is collapsed by default: a single "Show recent" chip with a hidden count.
   Expanding is per-session; it collapses again on Home.
 

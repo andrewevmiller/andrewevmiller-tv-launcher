@@ -17,6 +17,14 @@ object FieldDimens {
     val bannerWidth = 192.dp
     val bannerHeight = 108.dp
 
+    /**
+     * Apps are a grid, not a carousel (BUILD_PLAN §5.4). 4 x 192dp tiles + 3 x 32dp gaps = 864dp,
+     * exactly the safe content width (960 - 2 x 48).
+     */
+    const val appGridColumns = 4
+    val appGridColumnGap = 32.dp
+    val appGridRowGap = 20.dp
+
     val dotSpacing = 26.dp
     val dotRadius = 1.dp
 }

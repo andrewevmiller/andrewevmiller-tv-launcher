@@ -5,7 +5,8 @@ design language. This document is the operating plan for building it with a team
 **Sonnet 5.5** and **Haiku 5.5** agents working in parallel, coordinated by one integrator.
 
 - Visual and interaction reference: [`docs/mockup/field-launcher-mockup.html`](mockup/field-launcher-mockup.html)
-  (also published at https://claude.ai/artifact/6tfS68Vrs7oQKB1oPWmcXS)
+  (also published at https://claude.ai/artifact/6tfS68Vrs7oQKB1oPWmcXS).
+  **Exception:** the mockup's Favorites section is still a carousel until task M1 lands; the app grid in §5.4 overrides it.
 - Agent rules and file ownership: [`CLAUDE.md`](../CLAUDE.md). **If this plan and `CLAUDE.md` disagree, `CLAUDE.md` wins.**
 - Design source: andrewevmiller.com design language (tokens already in `theme/Tokens.kt`)
 
@@ -16,6 +17,7 @@ design language. This document is the operating plan for building it with a team
 **Goals**
 - Replace the current home screen (the gathin "Wii Menu" launcher) on the owner's Hisense TV with a launcher that looks and behaves like the mockup.
 - Dark mode by default, light (parchment) as a setting.
+- Apps are shown as a **grid** (4 columns of 192×108dp tiles, wrapping), not a single scrolling carousel row. Spec in §5.4.
 - D-pad first: every screen is fully usable with arrows, OK, Back and Home.
 - An interface sound system with selectable waveforms and per-app generative launch motifs.
 - Two screensaver options: our Oxyfield animation, and Google's own photo screensaver (ambient mode) with your Google Photos albums.
@@ -167,7 +169,7 @@ app/src/main/java/com/andrewevmiller/tvlauncher/
   home/ClockHeader.kt             Integrator
   home/data/AppsRepository.kt     Integrator   contract
   home/data/*                     B            repository impl, persistence
-  home/apps/                      B            favorites row, drawer, system tiles, edit mode
+  home/apps/                      B            app grid (favorites), all-apps drawer grid, system tiles, edit mode
   ui/components/                  C            chips, feature band, timeline entry, gallery tile
   ui/icons/                       C            line icon set (ImageVector)
   ambient/                        D            Oxyfield DreamService, screensaver switcher
@@ -229,6 +231,38 @@ Per-app motif overrides (re-roll seed, mute) are stored by F alongside its own d
 
 `MainActivity` builds the repositories, provides `LocalFieldSound`, reads `LauncherSettings` into `FieldTheme(dark, reducedMotion)`, and passes real rows to `HomeScreen`.
 
+### 5.4 App grid (product decision)
+
+Apps are a grid, not a carousel. Recent, Photos and System tiles stay horizontal rows.
+
+**Geometry.** The canvas is 960×540dp, the safe content width is 864dp. Four 192dp tiles plus three 32dp gaps
+fill it exactly, so the grid's edges line up with the hairlines (5 columns would need 1024dp). Constants live in
+`FieldDimens`: `appGridColumns = 4`, `appGridColumnGap = 32.dp`, `appGridRowGap = 20.dp`. The tile is the same
+192×108 `fieldTile` as before; focus scale-up (1.06) fits inside the gaps.
+
+**Where it appears.**
+- Home: an "Apps" section showing the pinned apps as a wrapping grid. The last cell is always an "All apps" tile.
+  The section is non-lazy (a `Column` of `Row`s inside one `LazyColumn` item); pinned lists are short.
+- Drawer: "All apps" opens a full-screen grid of every non-hidden app (`LazyVerticalGrid`, same columns, same tile).
+  Back returns to Home with focus on the "All apps" tile.
+- The chips row filters the grid in place, on Home and in the drawer.
+
+**D-pad rules.** Pure function `gridMove(index, count, columns, direction)` returning a `GridMove` of
+`Stay(index)`, `Edge`, `ExitUp` or `ExitDown`, unit-tested in `tools/purecheck`:
+- ← →: move within the grid row; never wrap; at a row's end return `Edge` (plays `FieldSound.edge()`).
+- ↑ ↓: move to the same column in the adjacent grid row; if that row is shorter, land on its last tile.
+- ↑ from the first grid row returns `ExitUp` (focus goes to the chips row); ↓ from the last returns `ExitDown`
+  (focus goes to the next section).
+- Entering the grid from above or below lands on the column nearest the previously focused item.
+- `FieldSound.tick(row)` uses the visual row, so each grid row has its own pitch.
+
+**Edit mode** (long-press OK on a tile): the tile lifts. ← → swap with the neighbour, ↑ ↓ move it one grid row
+(±`columns` positions, clamped), OK drops it, Back cancels. Pin and Hide are actions on the focused tile.
+Reorder is a pure function `reorder(list, from, to)`, unit-tested in `tools/purecheck`.
+
+**Focus survival.** After any list change (pin, unpin, hide, install, uninstall, filter) focus is re-requested on
+the tile now at the previous index, clamped to the new size. Each tile owns a `FocusRequester` keyed by index.
+
 ---
 
 ## 6. Work breakdown
@@ -256,19 +290,25 @@ Gate **G1** (owner): `./scripts/deploy.sh` → TV shows the placeholder home wit
 |---|---|---|---|---|
 | B1 | `AppsRepository` impl: query `LEANBACK_LAUNCHER` + `LAUNCHER`, load banner (fallback icon), map category, refresh on package add/remove | Sonnet | `home/data/` | Unit tests with a fake `PackageManager` wrapper; real app list on device |
 | B2 | Layout persistence (DataStore): pinned order, hidden set | Haiku | `home/data/` | Round-trip unit tests |
-| B3 | Favorites row + app drawer: 192×108 tiles, icon ~44dp when no banner, `fieldTile` focus, launch via `FieldSound.launch` then `startActivity` | Sonnet | `home/apps/` | Matches mockup; focus never lost when list changes |
-| B4 | Edit mode: long-press OK → move/pin/hide with D-pad | Sonnet | `home/apps/` | Device check G3 |
+| B3 | App grid + all-apps drawer (§5.4): shared `AppTile` (192×108, icon ~44dp when no banner, `fieldTile` focus), 4-column favorites grid on Home ending in an "All apps" tile, full-screen `LazyVerticalGrid` drawer, 2D D-pad focus rules, launch via `FieldSound.launch` then `startActivity` | Sonnet | `home/apps/` | Matches §5.4; pure grid-navigation function unit-tested in `tools/purecheck`; focus never lost when list changes |
+| B4 | Edit mode: long-press OK → move (← → swap neighbour, ↑ ↓ jump one grid row) / pin / hide with D-pad | Sonnet | `home/apps/` | Pure reorder function unit-tested; device check G3 |
 | B5 | System tiles: inputs (per probe), Wi-Fi, Search, Settings | Sonnet | `home/apps/` | Each tile opens the right screen on the TV |
 
 **C: Components and icons**
 
 | ID | Task | Model | Deliverables | Acceptance |
 |---|---|---|---|---|
-| C1 | Chips row with filter callback | Sonnet | `ui/components/` | Preview + focus behaves like mockup |
+| C1 | Chips row with filter callback (filters the app grid in place, on Home and in the drawer) | Sonnet | `ui/components/` | Preview + focus behaves like mockup |
 | C2 | Feature band (panel, mono kicker, serif title, CTA that fills accent on focus, small Oxyfield canvas slot) | Sonnet | `ui/components/` | Matches mockup |
 | C3 | Timeline entry + collapsible Recent row ("Show recent · N hidden" chip, collapsed by default, collapses on Home) | Sonnet | `ui/components/` | Matches mockup |
 | C4 | Gallery tile (±0.8° alternating tilt, straightens on focus, mono caption on focus) | Sonnet | `ui/components/` | Matches mockup |
 | C5 | Icon set as `ImageVector`s from the mockup's SVG paths: play, note, pad, tool, wave, port, gear, wifi, search, folder, points. Stroke 1.7 @24dp, round caps/joins | Haiku | `ui/icons/` | Every icon renders in a preview grid; checker confirms stroke/cap values |
+
+**M: Mockup** (docs only; keeps the visual reference in step with the plan)
+
+| ID | Task | Model | Deliverables | Acceptance |
+|---|---|---|---|---|
+| M1 | Change the mockup's Favorites carousel to the §5.4 grid: 4 columns, 192×108 tiles, "All apps" last cell, 2D arrow-key focus with the §5.4 rules, chips filter the grid; row indices in `select()`/`move()` become key-based so adding grid rows doesn't break the other rows | Haiku (escalate to Sonnet after two failures) | `docs/mockup/` | Scripted Playwright check: arrow keys reproduce the §5.4 cases; no console errors; other rows still work |
 
 **D: Ambient**
 
@@ -505,6 +545,8 @@ Motifs:
 | Parallel agents conflict in shared files | Medium | Merge pain | Ownership table, contracts first, integrator-only shared edits, checker C-X2 |
 | No cloud compile (P3 not done) | Current | Errors found late | Batch owner builds per wave; keep APIs conservative |
 | Near-black dot grid invisible on the panel | Medium | Texture lost | Dot brightness setting, tuned in G1 |
+| Grid focus is lost when tiles scroll out of a lazy grid, or when pin/hide changes the list | Medium | D-pad dead until a key press | Keep grid navigation as a pure function (unit-tested); explicit `FocusRequester` per tile index; re-request focus at the clamped index after list changes; Home grid is non-lazy |
+| Home grid grows tall and pushes Recent/Photos/System far down | Medium | Long scroll to reach lower rows | Last cell is "All apps"; pinned apps beyond the Home grid's rows live in the drawer; tune row cap in I5 |
 
 ---
 
@@ -518,8 +560,10 @@ Motifs:
 **Home**
 - [ ] Fonts are Plex Serif / Geist / Plex Mono; dot grid visible but quiet; everything inside the safe area
 - [ ] Focus: accent border, scale-up, tilted gallery tiles straighten; never lost after installs/uninstalls
-- [ ] Favorites: real banners; apps without banners show a large icon; pin, reorder, hide work and persist across reboot
-- [ ] Chips filter favorites
+- [ ] Apps are a 4-column grid (not a carousel); the last cell is "All apps", which opens a full-screen grid of every app
+- [ ] Grid D-pad: ← → stay in the row (edge thud at the ends), ↑ ↓ keep the column, short last row lands on its last tile, ↑ from the top row reaches the chips, ↓ from the bottom row reaches the next section
+- [ ] Favorites: real banners; apps without banners show a large icon; pin, reorder (including ↑ ↓ across grid rows), hide work and persist across reboot
+- [ ] Chips filter the grid
 - [ ] Recent row collapsed by default, expands, collapses again on Home
 - [ ] System tiles open inputs, Wi-Fi, search, settings
 
