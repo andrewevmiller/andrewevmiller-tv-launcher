@@ -101,17 +101,38 @@ fun FeatureBand(
             Modifier.padding(horizontal = FieldDimens.safeHorizontal, vertical = 16.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            // A fixed height keeps the band from changing size as the text changes.
-            Box(Modifier.weight(1f).height(152.dp)) {
+            // A fixed height keeps the band from changing size as the text changes. Only the text
+            // swaps; the buttons sit outside it so they are never rebuilt, which would drop focus and
+            // play the focus sound every time the band turns over.
+            Column(Modifier.weight(1f).height(152.dp)) {
+                Box(Modifier.fillMaxWidth().height(92.dp)) {
+                    if (nowPlaying != null) {
+                        PlayingText(nowPlaying)
+                    } else {
+                        Crossfade(
+                            targetState = features[index],
+                            animationSpec = if (reduced) snap() else tween(350),
+                            label = "featureText",
+                        ) { f -> RecentText(f) }
+                    }
+                }
+                Spacer(Modifier.height(12.dp))
                 if (nowPlaying != null) {
-                    PlayingText(nowPlaying, onOpenPlaying)
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        BandButton(if (nowPlaying.playing) "Pause" else "Play") { nowPlaying.onToggle() }
+                        BandButton("Open →") { onOpenPlaying(nowPlaying) }
+                    }
                 } else {
-                    val shown = features[index]
-                    Crossfade(
-                        targetState = shown,
-                        animationSpec = if (reduced) snap() else tween(350),
-                        label = "featureText",
-                    ) { f -> RecentText(f, features.size, index, onOpen) }
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                        BandButton("Open →") { onOpen(features[index]) }
+                        if (features.size > 1) {
+                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                repeat(features.size) { i ->
+                                    Box(Modifier.size(6.dp).background(if (i == index) colors.ink else colors.line, CircleShape))
+                                }
+                            }
+                        }
+                    }
                 }
             }
             Spacer(Modifier.width(28.dp))
@@ -134,43 +155,24 @@ fun FeatureBand(
 }
 
 @Composable
-private fun RecentText(feature: Feature, count: Int, index: Int, onOpen: (Feature) -> Unit) {
-    val colors = Field.colors
+private fun RecentText(feature: Feature) {
     Column(Modifier.fillMaxWidth()) {
         Kicker("FEATURED · ${feature.app.label}")
         Spacer(Modifier.height(4.dp))
         Title(feature.app.label)
         Spacer(Modifier.height(4.dp))
         Body(feature.lastOpened?.let { "Last opened $it. Select to open it again." } ?: "Select to open it.")
-        Spacer(Modifier.height(12.dp))
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            BandButton("Open →") { onOpen(feature) }
-            if (count > 1) {
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    repeat(count) { i ->
-                        Box(
-                            Modifier.size(6.dp).background(if (i == index) colors.ink else colors.line, CircleShape),
-                        )
-                    }
-                }
-            }
-        }
     }
 }
 
 @Composable
-private fun PlayingText(playing: NowPlaying, onOpen: (NowPlaying) -> Unit) {
+private fun PlayingText(playing: NowPlaying) {
     Column(Modifier.fillMaxWidth()) {
         Kicker("NOW PLAYING · ${playing.appLabel}")
         Spacer(Modifier.height(4.dp))
         Title(playing.title)
         Spacer(Modifier.height(4.dp))
         Body(playing.subtitle ?: if (playing.playing) "Playing" else "Paused")
-        Spacer(Modifier.height(12.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            BandButton(if (playing.playing) "Pause" else "Play") { playing.onToggle() }
-            BandButton("Open →") { onOpen(playing) }
-        }
     }
 }
 
