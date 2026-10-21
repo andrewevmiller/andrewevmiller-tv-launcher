@@ -26,7 +26,7 @@ interface FieldSound {
     fun sleep()
     fun wake()
 
-    /** The sleep timer ran out: a short descending closing sound. Falls back to [sleep] until an engine gives it its own voice. */
+    /** The sleep timer ran out: a short, quiet, descending closing sound. The default body falls back to [sleep] for fakes. */
     fun windDown() = sleep()
 
     /** Two ticks, select, a launch motif. Used by Settings when the waveform changes. */
