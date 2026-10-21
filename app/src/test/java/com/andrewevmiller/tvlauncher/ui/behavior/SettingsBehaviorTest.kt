@@ -21,7 +21,6 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
-import org.junit.Ignore
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -143,10 +142,6 @@ class SettingsBehaviorTest {
         assertEquals(0, sound.previewCount)
     }
 
-    @Ignore(
-        "BUG: SettingsScreen.kt has no handler for Up at the first row or Down at the last: focus stays put but " +
-            "FieldSound.edge() is not played (Home plays it, HomeScreen.kt:75-82); spec gap, see report",
-    )
     @Test
     fun upFromTheFirstRowPlaysEdge() {
         show()

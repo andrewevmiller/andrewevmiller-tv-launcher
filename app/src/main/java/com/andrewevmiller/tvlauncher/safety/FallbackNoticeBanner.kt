@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -44,6 +45,7 @@ fun FallbackNoticeBanner(
     val colors = Field.colors
     val okFocus = remember { FocusRequester() }
     LaunchedEffect(notice) {
+        withFrameNanos { } // a request before the first layout is silently dropped
         try {
             okFocus.requestFocus()
         } catch (e: IllegalStateException) {

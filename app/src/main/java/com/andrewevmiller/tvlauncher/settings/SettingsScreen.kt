@@ -27,10 +27,17 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Text
@@ -121,6 +128,7 @@ private fun SettingsContent(
 ) {
     val colors = Field.colors
     val sound = LocalFieldSound.current
+    val focusManager = LocalFocusManager.current
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
 
@@ -203,7 +211,21 @@ private fun SettingsContent(
             .fillMaxSize()
             .background(colors.bg)
             // The brightness setting drives the live texture, so the stepper's effect is visible right here.
-            .dotGrid(colors.line.copy(alpha = DotBrightness.snap(current.dotGridAlpha))),
+            .dotGrid(colors.line.copy(alpha = DotBrightness.snap(current.dotGridAlpha)))
+            // Up / Down nobody below handled: move focus ourselves so the first and last rows can play the edge
+            // thud, like Home. Left / Right stay with the rows (the stepper plays its own edge).
+            .onKeyEvent { event ->
+                val direction = when (event.key) {
+                    Key.DirectionUp -> FocusDirection.Up
+                    Key.DirectionDown -> FocusDirection.Down
+                    else -> return@onKeyEvent false
+                }
+                if (event.type == KeyEventType.KeyDown) {
+                    val moved = focusManager.moveFocus(direction)
+                    if (!moved && event.nativeKeyEvent.repeatCount == 0) sound.edge()
+                }
+                true
+            },
     ) {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),

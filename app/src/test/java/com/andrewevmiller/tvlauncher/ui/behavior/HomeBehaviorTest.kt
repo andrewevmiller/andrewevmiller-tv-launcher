@@ -39,7 +39,7 @@ import org.robolectric.annotation.Config
  *
  * Top to bottom, with the preview apps and two launch-history entries:
  *
- *     Home                       [SETTINGS]  2026-10-21 · 18:05
+ *     Home                       [LAUNCHER SETTINGS]  2026-10-21 · 18:05
  *     feature band               "Open →"
  *     chips                      All Video Music Games Tools
  *     Apps                       YouTube Netflix Plex Spotify / Stadia Notes Files All apps
@@ -190,19 +190,19 @@ class HomeBehaviorTest {
 
         rule.pressUp()
 
-        rule.assertFocused("SETTINGS")
+        rule.assertFocused("LAUNCHER SETTINGS")
     }
 
     @Test
     fun upAtTheVeryTopPlaysEdgeAndKeepsFocus() {
         showHome()
         rule.pressRepeatedly(Key.DirectionUp, 3)
-        rule.assertFocused("SETTINGS")
+        rule.assertFocused("LAUNCHER SETTINGS")
         sound.clear()
 
         rule.pressUp()
 
-        rule.assertFocused("SETTINGS")
+        rule.assertFocused("LAUNCHER SETTINGS")
         assertEquals(1, sound.edgeCount)
     }
 
@@ -210,12 +210,12 @@ class HomeBehaviorTest {
     fun holdingUpAtTheVeryTopPlaysEdgeOnlyOnce() {
         showHome()
         rule.pressRepeatedly(Key.DirectionUp, 3)
-        rule.assertFocused("SETTINGS")
+        rule.assertFocused("LAUNCHER SETTINGS")
         sound.clear()
 
         rule.hold(Key.DirectionUp)
 
-        rule.assertFocused("SETTINGS")
+        rule.assertFocused("LAUNCHER SETTINGS")
         assertEquals(1, sound.edgeCount)
     }
 
@@ -223,7 +223,7 @@ class HomeBehaviorTest {
     fun theSettingsChipOpensSettingsOnEnter() {
         showHome()
         rule.pressRepeatedly(Key.DirectionUp, 3)
-        rule.assertFocused("SETTINGS")
+        rule.assertFocused("LAUNCHER SETTINGS")
         sound.clear()
 
         rule.pressEnter()
@@ -246,7 +246,7 @@ class HomeBehaviorTest {
     fun downFromTheSettingsChipComesBackDownTheFeatureBand() {
         showHome()
         rule.pressRepeatedly(Key.DirectionUp, 3)
-        rule.assertFocused("SETTINGS")
+        rule.assertFocused("LAUNCHER SETTINGS")
 
         rule.pressDown()
 
@@ -296,7 +296,7 @@ class HomeBehaviorTest {
     fun walkingFromTheTopOfHomeToTheBottomNeverLosesFocus() {
         showHome()
         rule.pressRepeatedly(Key.DirectionUp, 3)
-        rule.assertFocused("SETTINGS")
+        rule.assertFocused("LAUNCHER SETTINGS")
         val visited = mutableListOf<List<String>>()
 
         repeat(12) {
@@ -317,7 +317,7 @@ class HomeBehaviorTest {
     fun walkingDownTheWholeHomeNeverLowersTheFocusTickPitch() {
         showHome()
         rule.pressRepeatedly(Key.DirectionUp, 3)
-        rule.assertFocused("SETTINGS")
+        rule.assertFocused("LAUNCHER SETTINGS")
         sound.clear()
 
         rule.pressRepeatedly(Key.DirectionDown, 10)

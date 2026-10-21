@@ -15,7 +15,6 @@ import com.andrewevmiller.tvlauncher.safety.FallbackNotice
 import com.andrewevmiller.tvlauncher.safety.FallbackNoticeBanner
 import com.andrewevmiller.tvlauncher.settings.LauncherSettings
 import org.junit.Assert.assertEquals
-import org.junit.Ignore
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -45,10 +44,6 @@ class FallbackBannerBehaviorTest {
         rule.waitForIdle()
     }
 
-    @Ignore(
-        "BUG: FallbackNoticeBanner.kt:46-52 calls okFocus.requestFocus() in a LaunchedEffect before the first " +
-            "frame; Compose silently drops a request on a node that is not laid out yet, so OK is never focused",
-    )
     @Test
     fun theOkChipIsFocusedOnItsOwn() {
         show()
@@ -98,12 +93,6 @@ class FallbackBannerBehaviorTest {
         rule.assertFocused("OK")
     }
 
-    @Ignore(
-        "BUG: FieldRoot overlays the banner on HomeContent, whose first-focus loop (HomeContent.kt " +
-            "LaunchedEffect(ui, loaded)) focuses the first app tile even when the banner already holds focus, so " +
-            "OK on the remote launches an app instead of dismissing the notice (confirmed with a banner patched " +
-            "to request focus after the first frame)",
-    )
     @Test
     fun overHomeTheNoticeKeepsFocusOnOkUntilItIsDismissed() {
         val fx = RepoFixture(PreviewApps)
@@ -117,6 +106,7 @@ class FallbackBannerBehaviorTest {
                     settings = LauncherSettings(),
                     onOpenDrawer = {},
                     onOpenSettings = {},
+                    holdFocus = true, // FieldRoot: `notice != null`; the notice owns focus until it is dismissed
                 )
                 FallbackNoticeBanner(
                     notice = FallbackNotice.forPreviousHome("Wii Menu"),

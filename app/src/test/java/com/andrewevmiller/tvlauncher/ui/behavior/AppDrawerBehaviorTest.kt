@@ -17,7 +17,6 @@ import com.andrewevmiller.tvlauncher.ui.components.ChipsRow
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
-import org.junit.Ignore
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -272,11 +271,6 @@ class AppDrawerBehaviorTest {
         )
     }
 
-    @Ignore(
-        "BUG: AppDrawer.kt:257 sets state.rootHasFocus on the whole drawer column, header chips included, so the " +
-            "filter change that choosing a chip causes restores focus into the grid (onto the tile at the old " +
-            "index) instead of leaving it on the chip",
-    )
     @Test
     fun choosingAChipInTheDrawerFiltersTheGridAndFocusStaysOnTheChip() {
         show(realChips = true)

@@ -254,7 +254,6 @@ fun AppDrawer(
             .fillMaxSize()
             .background(colors.bg)
             .dotGrid(colors.line)
-            .onFocusChanged { state.rootHasFocus = it.hasFocus }
             .padding(horizontal = FieldDimens.safeHorizontal, vertical = FieldDimens.safeVertical),
     ) {
         Row(verticalAlignment = Alignment.Bottom) {
@@ -278,9 +277,11 @@ fun AppDrawer(
         LazyVerticalGrid(
             columns = GridCells.Fixed(columns),
             state = gridState,
+            // Only the grid counts for focus survival: the header chips filter the list, and focus must stay on them.
             modifier = Modifier
                 .weight(1f)
-                .fillMaxWidth(),
+                .fillMaxWidth()
+                .onFocusChanged { state.rootHasFocus = it.hasFocus },
             // Room above and below for the focused tile's scale-up.
             contentPadding = PaddingValues(vertical = 10.dp),
             horizontalArrangement = Arrangement.spacedBy(FieldDimens.appGridColumnGap),
