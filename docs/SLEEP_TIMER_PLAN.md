@@ -41,7 +41,7 @@ The result decides the order of methods in the app, and whether `deploy.sh` must
 | S3 | Android side: scheduled with an alarm (survives the launcher process being killed), pause ladder, closing sound, start the dim screen by the method S0 proved | `sleep/` | Robolectric: alarm scheduled and cancelled; firing calls the steps in order |
 | S4 | Dim mode for `OxyfieldView`: fade to near-black over about 45 s, then a still frame; reduced motion snaps to it | `ambient/` | Frame-by-frame screenshot check; brightness steps unit-tested |
 | S5 | Closing sound plus the matching `sfx.windDown` in the mockup so it can be auditioned; render it in `tools/sound` | `sound/`, mockup | No NaN, bounded level, plays only when sounds are on |
-| S6 | UI: "Sleep timer" tile in the Inputs and system row (caption "Sleep · 42 min" while running), inline picker, Settings section | `home/`, `settings/` | D-pad behaviour tests; accent only on focus |
+| S6 | UI: "Sleep timer" tile in a new **Tools** row under "Inputs & system" (see `docs/NOTEBOOK_FEATURES_PLAN.md`; caption "Sleep · 42 min" while running), inline picker, Settings section | `home/`, `settings/` | D-pad behaviour tests; accent only on focus |
 | S7 | UI behaviour tests and screenshots (tile idle and running, picker, dim frames) | tests | Green under AGP |
 | S8 | Mockup tile, picker and dim demo; republish; README, BUILD_PLAN, CLAUDE.md | docs | |
 
