@@ -7,8 +7,10 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.floatPreferencesKey
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.andrewevmiller.tvlauncher.sleep.SleepPresets
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -24,6 +26,7 @@ private object SettingsKeys {
     val waveform = stringPreferencesKey("waveform")
     val screensaver = stringPreferencesKey("screensaver")
     val dotGridAlpha = floatPreferencesKey("dot_grid_alpha")
+    val sleepMinutes = intPreferencesKey("sleep_minutes")
 }
 
 private fun Preferences.toSettings(): LauncherSettings = SettingsCodec.decode(
@@ -33,6 +36,7 @@ private fun Preferences.toSettings(): LauncherSettings = SettingsCodec.decode(
     waveform = this[SettingsKeys.waveform],
     screensaver = this[SettingsKeys.screensaver],
     dotGridAlpha = this[SettingsKeys.dotGridAlpha],
+    sleepMinutes = this[SettingsKeys.sleepMinutes],
 )
 
 /**
@@ -59,6 +63,7 @@ class DataStoreSettingsRepository(context: Context) : SettingsRepository {
             prefs[SettingsKeys.waveform] = SettingsCodec.encodeWaveform(next.waveform)
             prefs[SettingsKeys.screensaver] = SettingsCodec.encodeScreensaver(next.screensaver)
             prefs[SettingsKeys.dotGridAlpha] = SettingsCodec.clampDotGridAlpha(next.dotGridAlpha)
+            prefs[SettingsKeys.sleepMinutes] = SleepPresets.sanitize(next.sleepMinutes)
         }
     }
 }

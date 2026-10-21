@@ -26,6 +26,9 @@ interface FieldSound {
     fun sleep()
     fun wake()
 
+    /** The sleep timer ran out: a short descending closing sound. Falls back to [sleep] until an engine gives it its own voice. */
+    fun windDown() = sleep()
+
     /** Two ticks, select, a launch motif. Used by Settings when the waveform changes. */
     fun preview()
 }
@@ -39,6 +42,7 @@ object NoOpFieldSound : FieldSound {
     override fun launch(app: LauncherApp) = Unit
     override fun sleep() = Unit
     override fun wake() = Unit
+    override fun windDown() = Unit
     override fun preview() = Unit
 }
 

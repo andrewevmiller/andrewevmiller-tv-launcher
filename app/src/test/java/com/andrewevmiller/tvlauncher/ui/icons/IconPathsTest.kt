@@ -16,12 +16,12 @@ import org.junit.Test
  */
 class IconPathsTest {
     private val expectedNames = setOf(
-        "play", "note", "pad", "tool", "wave", "port", "gear", "wifi", "search", "folder", "grid", "points",
+        "play", "note", "pad", "tool", "wave", "port", "gear", "wifi", "search", "folder", "grid", "moon", "points",
     )
 
     @Test
-    fun hasExactlyTheTwelveNamedIcons() {
-        assertEquals(12, IconPaths.all.size)
+    fun hasExactlyTheThirteenNamedIcons() {
+        assertEquals(13, IconPaths.all.size)
         assertEquals(expectedNames, IconPaths.all.keys)
     }
 

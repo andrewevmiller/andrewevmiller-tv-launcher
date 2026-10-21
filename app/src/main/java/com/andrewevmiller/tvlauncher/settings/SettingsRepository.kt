@@ -1,5 +1,6 @@
 package com.andrewevmiller.tvlauncher.settings
 
+import com.andrewevmiller.tvlauncher.sleep.SleepPresets
 import com.andrewevmiller.tvlauncher.sound.Waveform
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -21,6 +22,8 @@ data class LauncherSettings(
     val screensaver: Screensaver = Screensaver.OXYFIELD,
     /** Multiplier on the dot grid's alpha; panels crush near-black, so this is tuned on the TV. 0f..1f. */
     val dotGridAlpha: Float = 1f,
+    /** The sleep timer's default length in minutes; always one of [SleepPresets.minutes]. */
+    val sleepMinutes: Int = SleepPresets.DEFAULT_MINUTES,
 )
 
 /** Persisted user settings. Every change is observable, so the UI updates without a restart. */

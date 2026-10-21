@@ -81,6 +81,7 @@ sealed interface SoundEvent {
     data class Launch(val app: LauncherApp) : SoundEvent
     data object Sleep : SoundEvent
     data object Wake : SoundEvent
+    data object WindDown : SoundEvent
     data object Preview : SoundEvent
 }
 
@@ -98,6 +99,7 @@ class RecordingFieldSound : FieldSound {
     val backCount: Int get() = count<SoundEvent.Back>()
     val sleepCount: Int get() = count<SoundEvent.Sleep>()
     val wakeCount: Int get() = count<SoundEvent.Wake>()
+    val windDownCount: Int get() = count<SoundEvent.WindDown>()
     val previewCount: Int get() = count<SoundEvent.Preview>()
 
     private inline fun <reified T : SoundEvent> count(): Int = log.count { it is T }
@@ -112,6 +114,7 @@ class RecordingFieldSound : FieldSound {
     override fun launch(app: LauncherApp) { log += SoundEvent.Launch(app) }
     override fun sleep() { log += SoundEvent.Sleep }
     override fun wake() { log += SoundEvent.Wake }
+    override fun windDown() { log += SoundEvent.WindDown }
     override fun preview() { log += SoundEvent.Preview }
 }
 

@@ -29,6 +29,8 @@ object FieldIcons {
     /** Four rounded squares: the "All apps" tile. */
     val Grid: ImageVector by lazy { buildIcon("grid") }
     val Points: ImageVector by lazy { buildIcon("points") }
+    /** A crescent: the sleep timer. */
+    val Moon: ImageVector by lazy { buildIcon("moon") }
 
     /** Fallback glyph for an app with no banner and no usable icon. */
     fun forCategory(category: AppCategory): ImageVector = when (category) {
