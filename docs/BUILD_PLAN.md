@@ -32,8 +32,21 @@ design language. This document is the operating plan for building it with a team
 
 ## 2. Current state
 
+Updated 2026-10-21 after the first full build session. Everything in this plan except the owner's device gates is done.
+
 | Item | Status |
 |---|---|
+| Gradle project, Compose for TV, minSdk 31 / target 34 | Done |
+| Theme tokens, bundled fonts, focus style, dot grid | Done |
+| Interactive mockup with sound engine, motifs, waveforms, screensavers, app grid | Done (`docs/mockup/`, published as an artifact) |
+| Contracts (§5.2), purecheck harness, build helpers | Done |
+| Wave 1: probe/deploy/rescue scripts (fake-adb tested), crash-loop fallback | Done |
+| Wave 2: home core, components, icons, ambient, spikes, sound (synth, motifs, renderer, mixer, engine), settings | Done and merged |
+| Wave 3: wiring (`AppContainer`, `FieldRoot`, `HomeContent`), launch history, lint, UI behaviour tests, sound tool | Done (see §12) |
+| Cloud compile | **Unblocked**: `dl.google.com` allowed, Android SDK at `~/android-sdk`; `./gradlew assembleDebug testDebugUnitTest :app:lintDebug` all green |
+| Owner device gates G1 to G4 | **Not run**: need the TV (§10, §12) |
+
+---|---|
 | Gradle project, Compose for TV, minSdk 31 / target 34 | Done |
 | Theme tokens, bundled fonts (Plex Serif, Plex Mono, Geist), focus style, dot grid | Done |
 | Home frame (header, hairline rows, slots), `AppsRepository` interface | Done |
@@ -41,8 +54,6 @@ design language. This document is the operating plan for building it with a team
 | Commits pushed to GitHub | Done |
 | Device facts | Done: Google TV, Android 12 / API 31, 960×540dp, MediaTek TIF, see `CLAUDE.md` § Target device |
 | Compiling in the cloud | **Blocked**: `dl.google.com` not on the environment's allowed domains |
-
-Nothing in `app/` has been compiled yet. Treat the first owner-side `./gradlew installDebug` as a gate (G1 below).
 
 ---
 
@@ -606,3 +617,46 @@ Motifs:
 - F1 golden vectors pass; F7 renders all sounds; the owner signs off the sound by ear against the mockup.
 - README covers install, rescue, and the one-time permission grant.
 - `CLAUDE.md` and this plan reflect what was actually built.
+
+---
+
+## 12. Build status and deviations (as built)
+
+Verified in the cloud on the integration branch: `./gradlew assembleDebug testDebugUnitTest :app:lintDebug` and
+`tools/purecheck.sh` are green (see the README for counts at the time of writing). Nothing has run on the TV.
+
+**Found only because the real compiler and test runners were available** (all fixed): an invalid XML comment in
+`themes.xml` (`--bg`), a `size` shadowing bug in `DotGrid`, TV input type constants copied the wrong way round
+(`TYPE_TUNER` is 0, `TYPE_OTHER` is 1000: the real tuner input would have been dropped), a test using JVM-only
+management classes, and a `<queries>` attribute typo in the spike manifest.
+
+**Deviations from the plan as written**
+
+| Plan said | As built | Why |
+|---|---|---|
+| Favorites row (carousel) | 4-column app grid with an "All apps" drawer (§5.4) | Owner request |
+| Photos row of gallery tiles | Two screensaver tiles: Google Photos slideshow and Oxyfield | Photos aren't readable by the launcher; the tiles do something real |
+| Feature band shows a Watch Next item | Shows the app you opened last (welcome text before the first launch) | Watch Next access is unconfirmed until spike E1 runs on the TV |
+| Recent from Watch Next | Recent from the launcher's own launch history (`home/data/LaunchHistory.kt`) | Same; the fallback the plan named |
+| No entry to the launcher's Settings | SETTINGS chip in the header, and the remote's Menu key | The settings screen needed a way in |
+| HOME registered on `MainActivity` | Registered on `.HomeAlias` | Lets the crash fallback disable Home without making the app unlaunchable |
+| `AppsRepository` impl on top of a DataStore store | Same, plus `FieldLayout.seeded` | A fresh install pins sensible defaults once; unpinning everything doesn't bring them back |
+| D3 as a separate Haiku task | Done by the ambient builder | One small function; a cold agent would cost more than it saved |
+| Agents never compile (no SDK) | Agents run `tools/purecheck.sh`; the integrator compiles each merged batch with `tools/compile.sh` | SDK became available mid-session; compiles are serialised because the box has 4 CPUs |
+| All `:app` tests pure JVM | Plus Robolectric Compose UI tests (`app/src/test/.../ui/`) | They run the real focus and key-dispatch code on the JVM |
+
+**Owner gates still to run** (batch them: one deploy)
+
+1. G1: `./scripts/probe.sh`, `./scripts/deploy.sh`, see Home, `./scripts/rescue.sh` brings the gathin launcher back.
+2. G2: run the spike (`spike/README.md`), paste the results back; force the crash fallback twice.
+3. G3/G4: the checklist in §10. The per-agent device checks (listening to the waveforms and tuning
+   `OUTPUT_GAIN_DB`, system input tiles via `adb logcat -s FieldSystemTiles`, screensaver start methods via
+   `adb logcat -s FieldAmbient`, banner sharpness, dot-grid brightness) are the things most likely to need a tweak.
+
+**Known risks carried forward**
+
+- First-tick latency after the audio track idles, and overall loudness, are untested on the Hisense SoC.
+- If the TV registers its HDMI or tuner inputs unusually, tiles may be missing; `FieldSystemTiles` logs say why.
+- Long-press OK relies on the remote repeating the key; an IR remote that doesn't repeat can't enter edit mode.
+- Google TV may still prefer its own launcher in some flows (the plan's top risk); `deploy.sh` sets our alias as
+  the default home and the first device gate confirms it.
