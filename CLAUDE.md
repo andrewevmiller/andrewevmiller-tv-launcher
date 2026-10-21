@@ -19,7 +19,11 @@ A personal Android TV launcher for one Hisense TV, in the andrewevmiller.com
   wavefolder -> tanh saturation (optional amplitude bitcrush) -> resonant low-pass sweep, with a
   band-passed noise click on the attack. Master high-pass ~70Hz and a compressor. The reference
   recipe is the `sfx` block in `docs/mockup/field-launcher-mockup.html`; match it by ear.
-  Oscillator shape is under evaluation (sawtooth vs triangle); the mockup has a switch.
+- Waveform is a user setting (Settings → Sound → Waveform), default Saw. Options:
+  Sine, Triangle, Saw, Square, Supersaw (7 detuned saws, ±22 cents), White noise, Pink noise.
+  Noise voices are pitched by a narrow resonant band-pass (Q≈30) at each note's frequency with
+  make-up gain. Changing the setting re-renders the cached sound set and all launch motifs, then
+  plays a short preview (two ticks, select, a launch motif). The mockup's waveform picker is the reference.
 - Per-app launch motifs: FNV-1a of the package name seeds mulberry32; 3–4 always-rising notes in
   A minor pentatonic from A3, 35–70ms apart, optional held last note, timbre by `AppCategory`, plus a
   sub two octaves under the first note. Per-launch humanizing: ±5 cents, ±10% level. Port the
@@ -28,6 +32,8 @@ A personal Android TV launcher for one Hisense TV, in the andrewevmiller.com
 ## Product decisions
 - App tiles are 192x108dp (`FieldDimens.bannerWidth/Height`). Apps without a 16:9 banner show
   their icon large (~44dp), not a small glyph in the corner.
+- Settings → Sound: interface sounds on/off, waveform picker (see Design rules), per-app motif
+  re-roll / mute.
 - The Recent row is collapsed by default: a single "Show recent" chip with a hidden count.
   Expanding is per-session; it collapses again on Home.
 

@@ -184,6 +184,11 @@ h2 { font-family: var(--serif); font-weight: 700; letter-spacing: -0.01em; font-
 .toggle[aria-pressed="true"] { border-color: var(--accent); }
 .toggle[aria-pressed="true"] .state { color: var(--accent-ink); }
 
+.voices { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.voice { font-family: var(--mono); font-size: 0.76rem; letter-spacing: 0.03em; color: var(--ink); background: var(--bg-soft); border: 1px solid var(--line); border-radius: 6px; padding: 6px 9px; text-align: left; cursor: pointer; }
+.voice:hover { border-color: var(--muted); }
+.voice:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.voice[aria-checked="true"] { border-color: var(--accent); color: var(--accent-ink); }
 .motif { border-top: 1px solid var(--line); padding-top: 8px; display: grid; gap: 2px; font-family: var(--mono); font-size: 0.76rem; color: var(--muted); overflow-wrap: anywhere; min-height: 7.5em; }
 .motif b { color: var(--ink); font-weight: 500; }
 .motif-notes { color: var(--accent-ink); font-size: 0.9rem; letter-spacing: 0.04em; }
@@ -257,10 +262,14 @@ h2 { font-family: var(--serif); font-weight: 700; letter-spacing: -0.01em; font-
           <button class="toggle" id="t-amb" aria-pressed="false"><span>Oxyfield screensaver</span><span class="state">off</span></button>
           <button class="toggle" id="t-photos" aria-pressed="false"><span>Photos slideshow</span><span class="state">off</span></button>
           <button class="toggle" id="t-sound" aria-pressed="false"><span>Interface sounds</span><span class="state">off</span></button>
-          <button class="toggle" id="t-voice"><span>Synth voice</span><span class="state">sawtooth</span></button>
           <button class="toggle" id="t-motion" aria-pressed="false"><span>Reduced motion</span><span class="state">off</span></button>
           <button class="toggle" id="t-own" aria-pressed="false"><span>Build owners</span><span class="state">off</span></button>
         </div>
+      </div>
+      <div>
+        <div class="panel-label">Sound waveform · settings</div>
+        <div class="voices" id="voices" role="radiogroup" aria-label="Sound waveform"></div>
+        <div class="row-btns"><button id="r-allvoices">Hear all waveforms</button></div>
       </div>
       <div>
         <div class="panel-label">Launch motif</div>
@@ -344,7 +353,7 @@ h2 { font-family: var(--serif); font-weight: 700; letter-spacing: -0.01em; font-
      then a filter sweep, with a noise transient on the attack. Harsh but short and quiet.
      The app pre-renders the same recipe. */
   const sfx = (() => {
-    let ctx = null, bus = null, noiseBuf = null, last = 0;
+    let ctx = null, bus = null, noiseBuf = null, whiteBuf = null, pinkBuf = null, last = 0;
     const api = { on: false };
     const curves = {};
     // wavefold (sine folder, amount `fold`), soft-clip with drive k, then quantize to `levels` steps
@@ -372,6 +381,17 @@ h2 { font-family: var(--serif); font-weight: 700; letter-spacing: -0.01em; font-
         bus = hp;
         noiseBuf = ctx.createBuffer(1, ctx.sampleRate * 0.05, ctx.sampleRate);
         const d = noiseBuf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+        // 1s loops for the noise voices; pink via Paul Kellet's filter
+        whiteBuf = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
+        pinkBuf = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
+        const w = whiteBuf.getChannelData(0), p = pinkBuf.getChannelData(0);
+        let b0 = 0, b1 = 0, b2 = 0, b3 = 0, b4 = 0, b5 = 0, b6 = 0;
+        for (let i = 0; i < w.length; i++) {
+          const x = Math.random() * 2 - 1; w[i] = x;
+          b0 = 0.99886 * b0 + x * 0.0555179; b1 = 0.99332 * b1 + x * 0.0750759; b2 = 0.969 * b2 + x * 0.153852;
+          b3 = 0.8665 * b3 + x * 0.3104856; b4 = 0.55 * b4 + x * 0.5329522; b5 = -0.7616 * b5 - x * 0.016898;
+          p[i] = (b0 + b1 + b2 + b3 + b4 + b5 + b6 + x * 0.5362) * 0.11; b6 = x * 0.115926;
+        }
       }
       if (ctx.state === 'suspended') ctx.resume();
       return ctx;
@@ -381,16 +401,30 @@ h2 { font-family: var(--serif); font-weight: 700; letter-spacing: -0.01em; font-
                       lpFrom = 7000, lpTo = 2500, q = 1.5, drive = 6, fold = 2.2, crush = 0, click = 0 } = {}) {
       const c = audio(); if (!c) return;
       const t = c.currentTime + at;
-      const sum = c.createGain(); sum.gain.value = 1 / Math.sqrt(voices);
-      const spread = voices === 1 ? [0] : Array.from({ length: voices }, (_, i) => -1 + (2 * i) / (voices - 1));
-      spread.forEach(s => {
-        const o = c.createOscillator(); o.type = wave;
-        o.frequency.setValueAtTime(f, t); o.detune.value = s * detune;
-        if (glide) o.frequency.exponentialRampToValueAtTime(glide, t + dur);
-        o.connect(sum);
-        const jitter = Math.random() * 0.002;            // staggered starts = varied phases
-        o.start(t + jitter); o.stop(t + dur + 0.03);
-      });
+      const sum = c.createGain();
+      if (wave === 'white' || wave === 'pink') {
+        // noise voices: a narrow resonant band-pass at the note's pitch makes the noise "sing" the note
+        const n = c.createBufferSource(); n.buffer = wave === 'white' ? whiteBuf : pinkBuf; n.loop = true;
+        const bp = c.createBiquadFilter(); bp.type = 'bandpass'; bp.Q.value = 30;
+        bp.frequency.setValueAtTime(f, t);
+        if (glide) bp.frequency.exponentialRampToValueAtTime(glide, t + dur);
+        sum.gain.value = wave === 'white' ? 9 : 14;     // make-up gain for the narrow band
+        n.connect(bp); bp.connect(sum);
+        n.start(t, Math.random() * 0.5); n.stop(t + dur + 0.03);
+      } else {
+        const isSuper = wave === 'supersaw';
+        const v = isSuper ? 7 : voices, dt = isSuper ? Math.max(detune, 22) : detune;
+        sum.gain.value = 1 / Math.sqrt(v);
+        const spread = v === 1 ? [0] : Array.from({ length: v }, (_, i) => -1 + (2 * i) / (v - 1));
+        spread.forEach(s => {
+          const o = c.createOscillator(); o.type = isSuper ? 'sawtooth' : wave;
+          o.frequency.setValueAtTime(f, t); o.detune.value = s * dt;
+          if (glide) o.frequency.exponentialRampToValueAtTime(glide, t + dur);
+          o.connect(sum);
+          const jitter = Math.random() * 0.002;            // staggered starts = varied phases
+          o.start(t + jitter); o.stop(t + dur + 0.03);
+        });
+      }
       // fold first, then filter, so the sweep shapes the folded harmonics
       const shaper = c.createWaveShaper(); shaper.curve = curve(drive, crush, fold); shaper.oversample = '4x';
       const flt = c.createBiquadFilter(); flt.type = 'lowpass'; flt.Q.value = q;
@@ -689,11 +723,41 @@ h2 { font-family: var(--serif); font-weight: 700; letter-spacing: -0.01em; font-
   bind('t-amb', () => { if (state.ambient) exitAmbient(); else { if (state.slides) setSlides(false); setAmbient(true); } });
   bind('t-photos', () => { if (state.slides) exitAmbient(); else { if (state.ambient) setAmbient(false); setSlides(true, 0); } });
   bind('r-allmotifs', playAllMotifs);
-  bind('t-voice', () => {
-    sfx.wave = sfx.wave === 'sawtooth' ? 'triangle' : 'sawtooth';
-    document.querySelector('#t-voice .state').textContent = sfx.wave;
-    sfx.select();
+  const WAVES = [['sine', 'Sine'], ['triangle', 'Triangle'], ['sawtooth', 'Saw'], ['square', 'Square'],
+                 ['supersaw', 'Supersaw'], ['white', 'White noise'], ['pink', 'Pink noise']];
+  const voicesEl = document.getElementById('voices');
+  function renderVoices() {
+    voicesEl.innerHTML = WAVES.map(([id, label]) =>
+      `<button class="voice" role="radio" data-wave="${id}" aria-checked="${sfx.wave === id}">${label}</button>`).join('');
+  }
+  // a short phrase that exercises the voice: two ticks, a select, then Plex's launch motif
+  let demoTimers = [];
+  function demo() {
+    demoTimers.forEach(clearTimeout); demoTimers = [];
+    const plex = APPS.find(a => a.name === 'Plex');
+    sfx.tick(2);
+    demoTimers.push(setTimeout(() => sfx.tick(2), 110));
+    demoTimers.push(setTimeout(() => sfx.select(), 240));
+    demoTimers.push(setTimeout(() => showMotif(plex, sfx.motif(plex)), 480));
+  }
+  function setWave(id, play = true) {
+    sfx.wave = id; renderVoices();
+    if (!sfx.on) { sfx.on = true; setToggle('t-sound', true); }
+    if (play) demo();
+  }
+  voicesEl.addEventListener('click', e => { const b = e.target.closest('.voice'); if (b) setWave(b.dataset.wave); });
+  bind('r-allvoices', () => {
+    clearTimeout(allTimer);
+    let i = 0;
+    const step = () => {
+      if (i >= WAVES.length) return;
+      const [id, label] = WAVES[i++];
+      setWave(id); toast('Waveform · ' + label);
+      allTimer = setTimeout(step, 1400);
+    };
+    step();
   });
+  renderVoices();
   bind('t-sound', () => { sfx.on = !sfx.on; setToggle('t-sound', sfx.on); if (sfx.on) { sfx.select(); toast('Interface sounds on · try moving around'); } });
   bind('t-motion', () => { state.reduced = !state.reduced; screen.classList.toggle('reduced', state.reduced); setToggle('t-motion', state.reduced); drawBand(performance.now()); });
   bind('t-own', () => { state.owners = !state.owners; if (!state.owners) state.solo = null; setToggle('t-own', state.owners); applyOwners(); renderAgents(); });
