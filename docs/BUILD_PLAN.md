@@ -1,0 +1,535 @@
+# Field Launcher: Build Plan
+
+A personal Android TV launcher for one Hisense TV, in the andrewevmiller.com field-notebook
+design language. This document is the operating plan for building it with a team of
+**Sonnet 5.5** and **Haiku 5.5** agents working in parallel, coordinated by one integrator.
+
+- Visual and interaction reference: [`docs/mockup/field-launcher-mockup.html`](mockup/field-launcher-mockup.html)
+  (also published at https://claude.ai/artifact/6tfS68Vrs7oQKB1oPWmcXS)
+- Agent rules and file ownership: [`CLAUDE.md`](../CLAUDE.md). **If this plan and `CLAUDE.md` disagree, `CLAUDE.md` wins.**
+- Design source: andrewevmiller.com design language (tokens already in `theme/Tokens.kt`)
+
+---
+
+## 1. Goals and non-goals
+
+**Goals**
+- Replace the stock home screen on the owner's Hisense TV with a launcher that looks and behaves like the mockup.
+- Dark mode by default, light (parchment) as a setting.
+- D-pad first: every screen is fully usable with arrows, OK, Back and Home.
+- An interface sound system with selectable waveforms and per-app generative launch motifs.
+- Two screensaver options: our Oxyfield animation, and Google's own photo screensaver (ambient mode) with your Google Photos albums.
+- A safe install loop: one script deploys, one script restores the stock launcher.
+
+**Non-goals**
+- Play Store distribution, multiple user profiles, our own content recommendations.
+- Replacing system Settings, the input picker, or Google's photo album selection.
+- Reading Google Photos directly (the Library API only exposes app-created media since 2025).
+
+---
+
+## 2. Current state
+
+| Item | Status |
+|---|---|
+| Gradle project, Compose for TV, minSdk 28 / target 34 | Done (`616ebf3`) |
+| Theme tokens, bundled fonts (Plex Serif, Plex Mono, Geist), focus style, dot grid | Done |
+| Home frame (header, hairline rows, slots), `AppsRepository` interface | Done |
+| Interactive mockup with sound engine, motifs, waveforms, screensavers | Done (`docs/mockup/`) |
+| Commits pushed to GitHub | **Blocked**: session needs access to `andrewevmiller/andrewevmiller-tv-launcher` |
+| Device facts (Google TV vs Android TV, SDK level, resolution, input app) | **Blocked**: needs `adb` probe output |
+| Compiling in the cloud | **Blocked**: `dl.google.com` not on the environment's allowed domains |
+
+Nothing in `app/` has been compiled yet. Treat the first owner-side `./gradlew installDebug` as a gate (G1 below).
+
+---
+
+## 3. Team and model routing
+
+### 3.1 Roles
+
+| Role | Model | Responsibility |
+|---|---|---|
+| **Integrator** | Sonnet 5.5 | Owns shared contracts, writes task briefs, launches agents, merges branches, resolves conflicts, runs gates, talks to the owner |
+| **Builder agents** | Sonnet 5.5 | Work that needs judgment: Compose UI, focus behavior, DSP, data/persistence, Android system integration |
+| **Worker agents** | Haiku 5.5 | Well-specified, mechanical, verifiable work: scripts, icon conversion, ports with golden tests, resource files, docs |
+| **Checker agents** | Haiku 5.5 | Read-only review against checklists: design rules, file ownership, contract drift, missing tests |
+
+### 3.2 Routing rules
+
+Send a task to **Haiku 5.5** when all of these hold:
+1. The brief can state the exact output (files, signatures, values).
+2. Correctness is checkable mechanically (golden vectors, a script, a checklist, a compile).
+3. It touches at most two or three files in one owned directory.
+4. It needs no design judgment beyond `CLAUDE.md`'s rules.
+
+Otherwise send it to **Sonnet 5.5**. In particular, always use Sonnet for: anything involving Compose focus traversal, audio rendering/mixing, `PackageManager`/`Settings.Secure`/`DreamService` integration, persistence schemas, and merges.
+
+**Escalation.** A Haiku task that fails its acceptance check twice, or that reports an ambiguity it can't resolve from the brief, is re-briefed to Sonnet with the failure output attached. Don't loop a third time on Haiku.
+
+**Checkers never edit.** They return findings; the owning agent or the integrator fixes them.
+
+### 3.3 Claude Code agent definitions
+
+Put these in `.claude/agents/`. Frontmatter `model` uses the aliases `sonnet` and `haiku`.
+
+`.claude/agents/builder.md`
+```markdown
+---
+name: builder
+description: Builds one Field Launcher workstream that needs design or Android judgment. Use for Compose UI, focus, DSP, persistence, system integration.
+model: sonnet
+tools: Read, Write, Edit, Glob, Grep, Bash
+---
+You are a builder on the Field Launcher project. Read CLAUDE.md and docs/BUILD_PLAN.md first.
+Only edit files in the area your brief names. Stable Compose / tv-material APIs only.
+Finish with the handoff report from BUILD_PLAN.md §7.3. Never push; the integrator merges.
+```
+
+`.claude/agents/worker.md`
+```markdown
+---
+name: worker
+description: Does one tightly specified Field Launcher task with a mechanical acceptance check (scripts, ports with golden tests, icon conversion, resources, docs).
+model: haiku
+tools: Read, Write, Edit, Glob, Grep, Bash
+---
+You are a worker on the Field Launcher project. Do exactly what the brief says, in the files it names.
+If the brief is ambiguous or a check fails twice, stop and report; do not guess.
+Finish with the handoff report from BUILD_PLAN.md §7.3.
+```
+
+`.claude/agents/checker.md`
+```markdown
+---
+name: checker
+description: Read-only review of a Field Launcher branch against the design rules, ownership table and contracts. Reports findings; never edits.
+model: haiku
+tools: Read, Glob, Grep, Bash
+---
+Review the diff you are given against CLAUDE.md (design rules, ownership) and the contracts in
+BUILD_PLAN.md §5. Report each finding as: file:line, rule broken, suggested fix. Report "clean" if none.
+```
+
+---
+
+## 4. Prerequisites (owner actions)
+
+| # | Action | Unblocks |
+|---|---|---|
+| P1 | Give the Claude GitHub App access to `andrewevmiller-tv-launcher` (claude.ai/connect-github) | Push, branches per agent, history |
+| P2 | Run the probe below with the TV connected and paste the output | minSdk, Google TV handling, inputs approach, render resolution |
+| P3 | Optional: add `dl.google.com` to the cloud environment's allowed domains | Cloud compile + unit tests + screenshot tests (gate G0 runs without the owner) |
+| P4 | Have Android SDK 34 + JDK 17 on the owner's machine | Device gates G1–G4 |
+
+Probe (becomes `scripts/probe.sh` in task A1):
+```bash
+adb shell getprop ro.product.model
+adb shell getprop ro.build.version.release
+adb shell getprop ro.build.version.sdk
+adb shell pm list packages | grep -iE "launcher|tungsten|hisense|vidaa|livetv|tvinput|dreamx|backdrop"
+adb shell cmd package resolve-activity -c android.intent.category.HOME -a android.intent.action.MAIN
+adb shell settings get secure screensaver_components
+adb shell wm size; adb shell wm density
+```
+
+**Decisions keyed to the probe**
+- `com.google.android.apps.tv.launcherx` present → Google TV. `deploy.sh` disables it (and `com.google.android.tungsten.setupwraith`); `rescue.sh` re-enables both.
+- `com.google.android.tvlauncher` present → classic Android TV. Register for HOME only; no disabling.
+- SDK < 28 → lower `minSdk` and replace `java.time` in `ClockHeader` (integrator).
+- `screensaver_components` value → the component name of Google's photo screensaver to switch back to.
+- Hisense input packages present → system tiles launch Hisense's input app rather than TIF intents.
+
+---
+
+## 5. Architecture and contracts
+
+### 5.1 Module map
+
+```
+app/src/main/java/com/andrewevmiller/tvlauncher/
+  MainActivity.kt                 Integrator
+  theme/                          Integrator   tokens, type, dimens, focus, dot grid, FieldTheme
+  home/HomeScreen.kt              Integrator   frame + row slots
+  home/ClockHeader.kt             Integrator
+  home/data/AppsRepository.kt     Integrator   contract
+  home/data/*                     B            repository impl, persistence
+  home/apps/                      B            favorites row, drawer, system tiles, edit mode
+  ui/components/                  C            chips, feature band, timeline entry, gallery tile
+  ui/icons/                       C            line icon set (ImageVector)
+  ambient/                        D            Oxyfield DreamService, screensaver switcher
+  sound/                          F            FieldSound, synth, renderer, mixer, motifs
+  settings/                       G            settings screen + SettingsRepository impl
+  safety/                         A            crash-loop fallback
+scripts/                          A            probe, deploy, rescue
+tools/sound/                      F            desktop preview/render CLI (JVM)
+spike/                            E            standalone test app(s)
+```
+
+### 5.2 Contracts the integrator adds in wave 1
+
+These are interfaces only; implementations belong to the owning agent. Agents code against the interface and may use a fake for previews and tests.
+
+```kotlin
+// sound/FieldSound.kt (contract file owned by Integrator)
+enum class Waveform { SINE, TRIANGLE, SAW, SQUARE, SUPERSAW, WHITE_NOISE, PINK_NOISE }
+
+interface FieldSound {
+    fun tick(row: Int)                 // focus moved; implementation handles key-repeat thinning
+    fun edge()                         // focus could not move
+    fun select()
+    fun back()
+    fun launch(app: LauncherApp)       // per-app motif
+    fun sleep()                        // entering a screensaver
+    fun wake()
+    fun preview()                      // two ticks, select, a launch motif (used by settings)
+}
+val LocalFieldSound = staticCompositionLocalOf<FieldSound> { NoOpFieldSound }
+
+// settings/SettingsRepository.kt (contract file owned by Integrator)
+enum class Screensaver { OXYFIELD, GOOGLE_PHOTOS }
+
+data class LauncherSettings(
+    val darkMode: Boolean = true,
+    val reducedMotion: Boolean = false,
+    val soundsEnabled: Boolean = true,
+    val waveform: Waveform = Waveform.SAW,
+    val screensaver: Screensaver = Screensaver.OXYFIELD,
+    val dotGridAlpha: Float = 1f,
+)
+interface SettingsRepository {
+    val settings: Flow<LauncherSettings>
+    suspend fun update(transform: (LauncherSettings) -> LauncherSettings)
+}
+
+// ambient/ScreensaverController.kt (contract file owned by Integrator)
+interface ScreensaverController {
+    val canSwitch: Boolean             // WRITE_SECURE_SETTINGS granted?
+    fun apply(choice: Screensaver)     // writes Settings.Secure screensaver_components
+    fun startNow(): Boolean            // false if the device refuses on-demand start
+}
+```
+
+Per-app motif overrides (re-roll seed, mute) are stored by F alongside its own data, keyed by package name.
+
+### 5.3 Wiring (done by the integrator in wave 3)
+
+`MainActivity` builds the repositories, provides `LocalFieldSound`, reads `LauncherSettings` into `FieldTheme(dark, reducedMotion)`, and passes real rows to `HomeScreen`.
+
+---
+
+## 6. Work breakdown
+
+Each task lists model, owner area, inputs, deliverables and the acceptance check that ends it. IDs are referenced in briefs and handoff reports.
+
+### Wave 1: contracts and safety net (parallel)
+
+| ID | Task | Model | Area | Deliverables | Acceptance |
+|---|---|---|---|---|---|
+| I1 | Add contracts §5.2, `NoOpFieldSound`, fake repos for previews | Sonnet | Integrator | Interfaces + fakes | Compiles (G0/G1); checker C-X1 clean |
+| I2 | Apply probe decisions (§4): minSdk, manifest tweaks, notes in `CLAUDE.md` | Sonnet | Integrator | Updated build + docs | Owner confirms on device in G1 |
+| A1 | `probe.sh`: run the probe, print a summary that names TV type, SDK, launcher packages, screensaver component | Haiku | `scripts/` | Script | Shellcheck clean; owner runs it once |
+| A2 | `deploy.sh`: build, install, grant `WRITE_SECURE_SETTINGS`, set HOME default, disable stock launcher on Google TV, `--dry-run` flag | Haiku | `scripts/` | Script | Dry run prints the exact adb commands; owner runs for real in G1 |
+| A3 | `rescue.sh`: re-enable stock launcher(s), clear our HOME default, restore the screensaver component recorded by deploy | Haiku | `scripts/` | Script | Owner runs it after G1 and gets the stock home back |
+| A4 | Crash-loop fallback: two crashes within 60s of start → hand HOME to the stock launcher and show a notice on next start | Sonnet | `safety/` | Code + unit test of the counter | Unit test passes; forced-crash test on device in G2 |
+
+Gate **G1** (owner): `./scripts/deploy.sh` → TV shows the placeholder home with correct fonts, dot grid and focus; `./scripts/rescue.sh` restores stock.
+
+### Wave 2: features (parallel, after G1 or at least after I1 merges)
+
+**B: Home core**
+
+| ID | Task | Model | Deliverables | Acceptance |
+|---|---|---|---|---|
+| B1 | `AppsRepository` impl: query `LEANBACK_LAUNCHER` + `LAUNCHER`, load banner (fallback icon), map category, refresh on package add/remove | Sonnet | `home/data/` | Unit tests with a fake `PackageManager` wrapper; real app list on device |
+| B2 | Layout persistence (DataStore): pinned order, hidden set | Haiku | `home/data/` | Round-trip unit tests |
+| B3 | Favorites row + app drawer: 192×108 tiles, icon ~44dp when no banner, `fieldTile` focus, launch via `FieldSound.launch` then `startActivity` | Sonnet | `home/apps/` | Matches mockup; focus never lost when list changes |
+| B4 | Edit mode: long-press OK → move/pin/hide with D-pad | Sonnet | `home/apps/` | Device check G3 |
+| B5 | System tiles: inputs (per probe), Wi-Fi, Search, Settings | Sonnet | `home/apps/` | Each tile opens the right screen on the TV |
+
+**C: Components and icons**
+
+| ID | Task | Model | Deliverables | Acceptance |
+|---|---|---|---|---|
+| C1 | Chips row with filter callback | Sonnet | `ui/components/` | Preview + focus behaves like mockup |
+| C2 | Feature band (panel, mono kicker, serif title, CTA that fills accent on focus, small Oxyfield canvas slot) | Sonnet | `ui/components/` | Matches mockup |
+| C3 | Timeline entry + collapsible Recent row ("Show recent · N hidden" chip, collapsed by default, collapses on Home) | Sonnet | `ui/components/` | Matches mockup |
+| C4 | Gallery tile (±0.8° alternating tilt, straightens on focus, mono caption on focus) | Sonnet | `ui/components/` | Matches mockup |
+| C5 | Icon set as `ImageVector`s from the mockup's SVG paths: play, note, pad, tool, wave, port, gear, wifi, search, folder, points. Stroke 1.7 @24dp, round caps/joins | Haiku | `ui/icons/` | Every icon renders in a preview grid; checker confirms stroke/cap values |
+
+**D: Ambient**
+
+| ID | Task | Model | Deliverables | Acceptance |
+|---|---|---|---|---|
+| D1 | `OxyfieldDreamService`: dot field at 44px/1080p, ripples brightening line→muted→accent, clock bottom-left, frame cap 30fps, reduced-motion still frame | Sonnet | `ambient/` | Owner sets it via `deploy.sh` and sees it on idle |
+| D2 | `ScreensaverController` impl: read/write `screensaver_components`, `startNow()` using the method E2 proves works | Sonnet | `ambient/` | Switching in settings changes the actual screensaver |
+| D3 | Photos row hand-off: selecting a gallery tile calls `startNow()` with Google's screensaver selected; fallback toast if refused | Haiku | `ambient/` | Device check G3 |
+
+**E: Spikes** (standalone apps in `spike/`, owner runs each once)
+
+| ID | Question | Model | Output |
+|---|---|---|---|
+| E1 | Can we read Watch Next / preview channels on this TV? Try `TvContractCompat` queries with and without `READ_EPG_DATA`; log row counts | Sonnet | Yes/no + log. If no, Recent row = our own launch history (B adds a log) |
+| E2 | Can we start a screensaver on demand? Try `Somnambulator`, `DreamManager`-adjacent intents, and launching the dream package's activity directly | Sonnet | The method that works, or "no" (then D3 just switches the screensaver and shows a hint) |
+
+**F: Sound**
+
+| ID | Task | Model | Deliverables | Acceptance |
+|---|---|---|---|---|
+| F1 | Motif generator port: FNV-1a, mulberry32, draw order, scale, timing (§8.2) as pure Kotlin | Haiku | `sound/Motif.kt` + tests | All golden vectors in §8.3 pass |
+| F2 | Oscillators: PolyBLEP saw and square, triangle, sine, supersaw (7 voices), white and pink noise (Paul Kellet) | Sonnet | `sound/synth/` | Unit tests: frequency within 0.5 cents via zero-crossings; no NaN; pink spectrum slope ≈ −3 dB/oct |
+| F3 | Voice chain: wavefold → tanh → bitcrush (4× oversampled), RBJ biquad low-pass with exponential sweep, envelope, noise click, band-pass for noise voices | Sonnet | `sound/synth/` | Renders every sound in §8.1 at 48 kHz; peak ≤ −1 dBFS after master |
+| F4 | Renderer + cache: render all fixed sounds and every installed app's motif for the current waveform on a background thread; re-render on waveform change or app install | Sonnet | `sound/` | Cold render of 40 apps < 1.5s on device |
+| F5 | Mixer + playback: one low-latency streaming `AudioTrack` (`PERFORMANCE_MODE_LOW_LATENCY`), mixes overlapping one-shots, per-launch humanize as ±5-cent playback-rate change and ±10% gain | Sonnet | `sound/` | Tick latency feels immediate on device (G3); no clicks/pops when sounds overlap |
+| F6 | Policy: obey `Settings.System.SOUND_EFFECTS_ENABLED` and our toggle; key-repeat thinning (<90ms apart → thin tick) | Haiku | `sound/` | Unit tests for the throttle |
+| F7 | `tools/sound` JVM CLI that renders every sound to WAV for desktop listening, using the same code as the app | Haiku | `tools/sound/` | Produces 7 waveforms × all sounds; owner compares against the mockup |
+
+**G: Settings**
+
+| ID | Task | Model | Deliverables | Acceptance |
+|---|---|---|---|---|
+| G1s | `SettingsRepository` impl (DataStore) | Haiku | `settings/` | Round-trip tests |
+| G2s | Settings screen (D-pad list, design-language styling): Appearance (dark/light, reduced motion, dot brightness slider), Sound (on/off, waveform picker that plays `preview()` on change, per-app motif re-roll/mute list), Screensaver (Oxyfield / Google Photos, "Start now"), About (version, rescue instructions) | Sonnet | `settings/` | Every option takes effect without restarting the launcher |
+
+**Checkers (run on every branch before merge)**
+
+| ID | Check | Model |
+|---|---|---|
+| C-X1 | Design rules: no hex literals outside `theme/`, accent usage, type from `Field.type`, `fieldFocus` on focusables, safe-area padding | Haiku |
+| C-X2 | Ownership: every changed path is inside the agent's area; shared-file requests listed in the report | Haiku |
+| C-X3 | Contract drift: calls match §5.2 signatures; no new public API in shared packages | Haiku |
+
+### Wave 3: integration and polish (sequential, integrator)
+
+| ID | Task | Model |
+|---|---|---|
+| I3 | Merge wave-2 branches in order: F1→F2→F3→F4→F5→F6, B, C, D, G, then wire everything in `MainActivity`/`HomeScreen` | Sonnet |
+| I4 | Replace placeholder rows; Recent row source per E1; Photos row per E2 | Sonnet |
+| I5 | Performance pass on device: `adb shell dumpsys gfxinfo`, fix jank > 16ms on focus moves | Sonnet |
+| I6 | Docs: README install/rescue, settings reference, update this plan's status table | Haiku |
+
+Gate **G4** (owner): full device checklist §10.
+
+---
+
+## 7. Orchestration protocol
+
+### 7.1 Dependency graph
+
+```mermaid
+graph LR
+  P1[P1 GitHub access] --> I1
+  P2[P2 probe] --> I2
+  I1 --> B1 & C1 & D1 & F2 & G1s
+  I2 --> A2
+  A1 --> I2
+  A2 --> A3
+  F1 --> F4
+  F2 --> F3 --> F4 --> F5
+  E1 --> I4
+  E2 --> D2 --> D3
+  G1s --> G2s
+  B1 --> B3 --> B4
+  F5 & B3 & C3 & D2 & G2s --> I3 --> I4 --> I5 --> G4[G4 device sign-off]
+```
+
+### 7.2 Branches and worktrees
+- Each agent runs with `isolation: worktree` on branch `wave<N>/<task-id>-<slug>`, e.g. `wave2/F3-voice-chain`.
+- Agents never push. The integrator reviews the handoff, runs checkers, merges into `main`, and pushes.
+- Shared files change only through the integrator. Agents put requested changes in their report.
+- One agent per area at a time. Two tasks in the same area (e.g. F2 and F3) run sequentially, or the second starts from the first's branch.
+
+### 7.3 Task brief and handoff report
+
+**Brief (integrator → agent)**
+```
+Task: <ID> <title>
+Model: <sonnet|haiku>        Area: <paths you may edit>
+Read first: CLAUDE.md, docs/BUILD_PLAN.md §<sections>, <files>
+Inputs: <contracts, golden vectors, mockup section, probe facts>
+Deliver: <files, signatures>
+Acceptance: <exact check>
+Out of scope: <list>
+```
+
+**Handoff report (agent → integrator)**
+```
+Task: <ID>   Branch: <name>   Status: done | blocked | partial
+Changed files: <list>
+Acceptance: <command + result, or why it couldn't run here>
+Requested shared changes: <file: change> | none
+New dependencies: <coordinate + version + why> | none
+Open questions / risks: <list> | none
+Device checks for the owner: <steps> | none
+```
+
+### 7.4 Gates
+
+| Gate | Who | When | Pass criteria |
+|---|---|---|---|
+| G0 | Agent / integrator | Every task (needs P3) | `./gradlew :app:compileDebugKotlin testDebugUnitTest` green |
+| G1 | Owner | End of wave 1 | Deploy, see placeholder home, rescue works |
+| G2 | Owner | Mid wave 2 | Spikes E1/E2 results; forced-crash fallback works |
+| G3 | Owner | End of wave 2 (per feature APK) | Feature-specific device checks from handoff reports |
+| G4 | Owner | End of wave 3 | Full checklist §10 |
+
+Without P3, G0 becomes "integrator reads the diff and the checker reports", and compile errors surface at the owner's next gate. Batch owner gates so the owner does one deploy per wave, not one per task.
+
+### 7.5 Running a wave
+1. Integrator writes briefs for every task in the wave.
+2. Launch all independent tasks at once in the background (builders on Sonnet, workers on Haiku).
+3. As each finishes: run checkers C-X1..3 on its branch (Haiku, parallel), fix or bounce findings, merge.
+4. After the last merge: one integration build, one owner gate.
+
+---
+
+## 8. Sound specification
+
+The mockup's `sfx` block is the reference implementation. Numbers here are copied from it; if they diverge, the mockup wins and this table gets fixed.
+
+### 8.1 Engine
+
+**Signal chain per voice**
+`oscillator(s)` → `sum (1/√voices)` → `shaper` → `low-pass (RBJ biquad, exponential sweep lpFrom→lpTo over dur)` → `envelope` → master
+
+**Shaper** (curve on x ∈ [−1, 1], 4× oversampled):
+1. if `fold > 0`: `y = sin(fold · x · π/2)` else `y = x`
+2. `y = tanh(k · y) / tanh(k)` where `k = drive × 1.6` (global drive multiplier)
+3. if `crush > 0`: `y = round(y · crush) / crush`
+
+**Envelope**: exponential from 0.0001 to `gain` in 3 ms, exponential to 0.0001 at `dur`.
+
+**Voices**: detune spread linear from −1 to +1 across voices × `detune` cents; start jitter 0–2 ms per voice.
+
+**Noise click** (attack transient): white noise → band-pass 3200 Hz, Q 1.2 → gain `click` decaying exponentially to 0.0001 in 12 ms.
+
+**Master**: high-pass 70 Hz → compressor (threshold −20 dB, ratio 6, attack 2 ms, release 120 ms) → ×0.8.
+
+**Defaults**: voices 2, detune 9, lpFrom 7000, lpTo 2500, Q 1.5, drive 6, fold 2.2, crush 0, click 0.
+
+**Waveforms** (user setting, default SAW)
+
+| Setting | Implementation |
+|---|---|
+| SINE / TRIANGLE / SAW / SQUARE | Single oscillator type per voice; SAW and SQUARE PolyBLEP band-limited |
+| SUPERSAW | 7 saw voices, detune = max(detune, 22) cents |
+| WHITE_NOISE | Looped white noise → band-pass at note frequency (Q 30, follows glide) → make-up ×24; envelope peak ×1.8 |
+| PINK_NOISE | As white, Paul Kellet pink noise, make-up ×36; envelope peak ×1.8 |
+
+**Fixed sounds**
+
+| Sound | Notes / timing | Parameters (omitted = default) |
+|---|---|---|
+| tick(row) | f = 1320 − 60·row Hz | dur 0.03 (held 0.02), gain 0.02 (held 0.012), voices 1, fold 3, drive 8, lp 9000→3000, click 0.03 (held 0.01). Held = previous tick < 90 ms ago |
+| edge | 70→50 Hz glide | dur 0.13, gain 0.06, detune 20, fold 3.5, drive 10, crush 12, lp 1800→300, click 0.02 |
+| select | 440 Hz, then 660 Hz at +50 ms | 1st: dur 0.08, gain 0.028, fold 2.5, drive 7, click 0.025. 2nd: dur 0.10, gain 0.026, fold 2.5, drive 7 |
+| back | 660 Hz, then 440 Hz at +45 ms | 1st: dur 0.07, gain 0.026, fold 2.5, drive 7, click 0.025. 2nd: dur 0.10, gain 0.028, fold 2.5, drive 7 |
+| launch (fallback, unknown app) | 261.6, 329.6, 392, 523.3 Hz at i·45 ms; sub 65.4 Hz | note i: dur 0.28−0.03i, gain 0.024, fold 1.6+0.6i, drive 7, lp (2500+1200i)→6000, Q 3, click 0.035 on i=0. Sub: voices 1, dur 0.3, gain 0.035, fold 1.2, drive 4, lp 600→200 |
+| sleep | 110→165 Hz glide | dur 1.7, gain 0.024, detune 25, fold 1.5, drive 5, lp 600→4000, Q 4 |
+| wake | 220→330 Hz glide | dur 0.26, gain 0.028, fold 3, drive 8, lp 1500→7000, click 0.02 |
+| preview | tick(2) at 0, tick(2) at 110 ms, select at 240 ms, Plex motif at 480 ms | (settings only) |
+
+### 8.2 Per-app launch motifs
+
+**Generation** (deterministic; must match the mockup bit-for-bit):
+1. `seed = fnv1a32(packageName)` (offset basis `0x811c9dc5`, prime `0x01000193`, over UTF-16 code units, unsigned 32-bit).
+2. `r = mulberry32(seed)`, each call returns a double in [0, 1).
+3. Draw order: `count = r() < 0.3 ? 4 : 3`; `deg = floor(r()·5)`; then for each further note `deg += 1 + floor(r()·2)`; then `gap = round(35 + r()·35)` ms; then `hold = r() < 0.5`.
+4. Scale A minor pentatonic `[0, 3, 5, 7, 10]` from MIDI 57 (A3): `midi = 57 + SCALE[deg % 5] + 12·floor(deg / 5)`; `f = 440 · 2^((midi − 69)/12)`.
+5. If the user re-rolled the app, seed = `fnv1a32(packageName + "#" + rerollCount)`.
+
+**Playback**
+- Note i at `i·gap` ms (+0–3 ms jitter); duration 0.11 s, last note 0.24 s if `hold` else 0.10 s; gain 0.026·vel; click on note 0 only.
+- Sub: first note's frequency ÷ 4, voices 1, dur 0.26, gain 0.03·vel, fold 0, drive 3, lp 400→150.
+- Humanize per launch: cents uniform ±5 (applied as playback rate on the pre-rendered buffer), vel uniform 0.9–1.1.
+
+**Timbre by category**
+
+| Category | Label | voices | detune | drive | fold | crush | lp | Q | click |
+|---|---|---|---|---|---|---|---|---|---|
+| VIDEO | warm | 2 | 14 | 4 | 0 | 0 | 2400→900 | 2 | 0.015 |
+| MUSIC | resonant | 3 | 10 | 5 | 1.3 | 0 | 3200→1100 | 7 | 0.02 |
+| GAMES | crushed | 2 | 6 | 8 | 0 | 8 | 7000→3000 | 1.5 | 0.02 |
+| TOOLS | clipped | 1 | 0 | 10 | 2 | 0 | 5000→2000 | 1.5 | 0.045 |
+| OTHER | plain | 2 | 9 | 6 | 1.5 | 0 | 4000→1500 | 2 | 0.02 |
+
+(Drive values are before the ×1.6 global multiplier.)
+
+### 8.3 Golden vectors (F1 acceptance)
+
+Primitive checks:
+- `fnv1a32("") = 0x811c9dc5`, `fnv1a32("a") = 0xe40c292c`
+- `mulberry32(1)` first three values: `0.6270739406, 0.0027357212, 0.5274470400`
+
+Motifs:
+
+| Package | Seed | Notes (MIDI) | Gap ms | Hold |
+|---|---|---|---|---|
+| `com.google.android.youtube.tv` | `aeeb3003` | E4 (64) → A4 (69) → D5 (74) → G5 (79) | 59 | false |
+| `com.netflix.ninja` | `cf47f8ae` | A3 (57) → C4 (60) → D4 (62) → E4 (64) | 62 | false |
+| `com.plexapp.android` | `b14e01c1` | D4 (62) → E4 (64) → A4 (69) → D5 (74) | 56 | true |
+| `com.spotify.tv.android` | `87686563` | E4 (64) → A4 (69) → C5 (72) → D5 (74) | 59 | false |
+| `com.aspiro.tidal` | `e3c340c6` | C4 (60) → E4 (64) → A4 (69) | 45 | true |
+| `com.limelight` | `ede9906b` | E4 (64) → A4 (69) → C5 (72) → E5 (76) | 48 | false |
+| `com.retroarch` | `a899f578` | D4 (62) → E4 (64) → G4 (67) → C5 (72) | 44 | true |
+| `com.alphainventor.filemanager` | `1c4fa632` | E4 (64) → A4 (69) → C5 (72) | 60 | false |
+| `com.andrewevmiller.analyzer` | `d8b6682d` | C4 (60) → E4 (64) → G4 (67) | 55 | true |
+
+---
+
+## 9. Risk register
+
+| Risk | Likelihood | Impact | Mitigation |
+|---|---|---|---|
+| Google TV ignores our HOME registration | High if Google TV | Launcher never shows on Home | `deploy.sh` disables launcherx; accessibility-service Home interception as fallback (new task if needed) |
+| Disabling launcherx breaks system shortcuts or photo-album settings | Medium | Lost settings access | Pick albums before disabling; `rescue.sh` one command away; About screen documents it |
+| Launcher crash on boot leaves a blank screen | Low | Owner stuck | A4 crash-loop fallback + `rescue.sh` over adb |
+| Watch Next unreadable (signature permission) | High | Recent row has no "continue watching" | E1 decides early; fall back to our launch history |
+| Screensaver can't be started on demand | Medium | Photos tiles only switch the setting | E2 decides; D3 shows a hint instead |
+| Audio latency on Hisense SoC | Medium | Ticks feel late | Pre-render + single low-latency `AudioTrack` mixer; measure in G3 |
+| Pre-rendering many apps × waveforms is slow | Low | Lag after waveform change | Render only the current waveform; background thread; motifs rendered lazily on first focus if needed |
+| Haiku tasks drift from spec | Medium | Rework | Golden vectors and mechanical acceptance checks; escalate to Sonnet after two failures |
+| Parallel agents conflict in shared files | Medium | Merge pain | Ownership table, contracts first, integrator-only shared edits, checker C-X2 |
+| No cloud compile (P3 not done) | Current | Errors found late | Batch owner builds per wave; keep APIs conservative |
+| Near-black dot grid invisible on the panel | Medium | Texture lost | Dot brightness setting, tuned in G1 |
+
+---
+
+## 10. Device test checklist (G4)
+
+**Install and safety**
+- [ ] `deploy.sh` from a clean state makes Field Launcher the home screen; Home button returns to it
+- [ ] `rescue.sh` restores the stock launcher and screensaver
+- [ ] Two forced crashes hand Home back to stock and show a notice
+
+**Home**
+- [ ] Fonts are Plex Serif / Geist / Plex Mono; dot grid visible but quiet; everything inside the safe area
+- [ ] Focus: accent border, scale-up, tilted gallery tiles straighten; never lost after installs/uninstalls
+- [ ] Favorites: real banners; apps without banners show a large icon; pin, reorder, hide work and persist across reboot
+- [ ] Chips filter favorites
+- [ ] Recent row collapsed by default, expands, collapses again on Home
+- [ ] System tiles open inputs, Wi-Fi, search, settings
+
+**Sound**
+- [ ] Every sound plays; ticks thin out when holding the D-pad; edge thud at row ends
+- [ ] Each app plays its own motif; Plex sounds the same every launch apart from slight humanizing
+- [ ] Waveform setting switches all sounds; preview plays on change; all 7 waveforms audible at similar loudness
+- [ ] Sounds off when the system sound-effects setting is off, and when our toggle is off
+
+**Ambient**
+- [ ] Oxyfield screensaver runs smoothly; reduced motion shows a still frame
+- [ ] Google Photos screensaver can be chosen in settings and shows your albums
+- [ ] Selecting a photo tile starts the slideshow (or shows the hint if E2 said no)
+
+**Settings**
+- [ ] Every option applies immediately; dark/light switch works without restart
+
+---
+
+## 11. Definition of done
+
+- G4 checklist passes on the owner's TV.
+- `main` builds with `./gradlew assembleDebug` and all unit tests pass.
+- F1 golden vectors pass; F7 renders all sounds; the owner signs off the sound by ear against the mockup.
+- README covers install, rescue, and the one-time permission grant.
+- `CLAUDE.md` and this plan reflect what was actually built.
