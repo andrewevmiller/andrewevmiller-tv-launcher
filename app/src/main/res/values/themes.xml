@@ -1,5 +1,5 @@
 <resources>
-    <!-- Window background matches --bg (dark) so there is no flash before Compose draws. -->
+    <!-- Window background matches the bg color (dark) so there is no flash before Compose draws. -->
     <style name="Theme.FieldLauncher" parent="android:Theme.DeviceDefault.NoActionBar">
         <item name="android:windowBackground">@color/bg</item>
         <item name="android:windowNoTitle">true</item>
