@@ -397,6 +397,7 @@ h2 { font-family: var(--serif); font-weight: 700; letter-spacing: -0.01em; font-
       return ctx;
     };
     api.wave = 'sawtooth';
+    const DRIVE_MULT = 1.35;   // global push into the saturator, on top of each sound's own drive
     function tri(f, { at = 0, dur = 0.1, gain = 0.03, voices = 2, detune = 9, glide = null, wave = api.wave,
                       lpFrom = 7000, lpTo = 2500, q = 1.5, drive = 6, fold = 2.2, crush = 0, click = 0 } = {}) {
       const c = audio(); if (!c) return;
@@ -427,7 +428,7 @@ h2 { font-family: var(--serif); font-weight: 700; letter-spacing: -0.01em; font-
         });
       }
       // fold first, then filter, so the sweep shapes the folded harmonics
-      const shaper = c.createWaveShaper(); shaper.curve = curve(drive, crush, fold); shaper.oversample = '4x';
+      const shaper = c.createWaveShaper(); shaper.curve = curve(drive * DRIVE_MULT, crush, fold); shaper.oversample = '4x';
       const flt = c.createBiquadFilter(); flt.type = 'lowpass'; flt.Q.value = q;
       flt.frequency.setValueAtTime(lpFrom, t); flt.frequency.exponentialRampToValueAtTime(Math.max(60, lpTo), t + dur);
       const env = c.createGain();
