@@ -1,6 +1,5 @@
 package com.andrewevmiller.spike
 
-import android.app.Activity
 import android.content.ActivityNotFoundException
 import android.content.ComponentName
 import android.content.Context
@@ -22,22 +21,23 @@ data class DreamActivity(
  *
  * Public API only: explicit/implicit activity intents, PackageManager queries and Settings.Secure.
  * No reflection on hidden APIs. Every function reports through [emit] and returns plain strings so the
- * activity can keep the summary table.
+ * caller can keep the summary table. Takes any Context, not just an Activity: E3 reuses [intentSomnambulator] and
+ * [fire] from a BroadcastReceiver, which is why every intent here already carries FLAG_ACTIVITY_NEW_TASK.
  */
-class DreamProbe(private val activity: Activity, private val emit: (String) -> Unit) {
+class DreamProbe(private val context: Context, private val emit: (String) -> Unit) {
 
-    private val pm: PackageManager get() = activity.packageManager
+    private val pm: PackageManager get() = context.packageManager
 
-    private val prefs by lazy { activity.getSharedPreferences(Spike.PREFS, Context.MODE_PRIVATE) }
+    private val prefs by lazy { context.getSharedPreferences(Spike.PREFS, Context.MODE_PRIVATE) }
 
     // ---- state ----------------------------------------------------------------------------------
 
     fun hasWriteSecure(): Boolean =
-        activity.checkSelfPermission(Spike.PERM_WRITE_SECURE) == PackageManager.PERMISSION_GRANTED
+        context.checkSelfPermission(Spike.PERM_WRITE_SECURE) == PackageManager.PERMISSION_GRANTED
 
     private fun readSetting(name: String): String? {
         return try {
-            Settings.Secure.getString(activity.contentResolver, name)
+            Settings.Secure.getString(context.contentResolver, name)
         } catch (e: Throwable) {
             "(read failed: " + e.javaClass.simpleName + ": " + e.message + ")"
         }
@@ -226,7 +226,7 @@ class DreamProbe(private val activity: Activity, private val emit: (String) -> U
             emit("    resolves to: " + resolved.activityInfo.packageName + "/" + resolved.activityInfo.name)
         }
         return try {
-            activity.startActivity(intent)
+            context.startActivity(intent)
             "OK (no exception)"
         } catch (e: ActivityNotFoundException) {
             "ActivityNotFoundException: " + e.message
@@ -254,7 +254,7 @@ class DreamProbe(private val activity: Activity, private val emit: (String) -> U
     fun setToBackdrop(): String {
         if (!hasWriteSecure()) {
             return "WRITE_SECURE_SETTINGS not granted. Run: adb shell pm grant " +
-                activity.packageName + " " + Spike.PERM_WRITE_SECURE
+                context.packageName + " " + Spike.PERM_WRITE_SECURE
         }
         savePreviousOnce()
         return write(Spike.BACKDROP)
@@ -264,7 +264,7 @@ class DreamProbe(private val activity: Activity, private val emit: (String) -> U
     fun restore(): String {
         if (!hasWriteSecure()) {
             return "WRITE_SECURE_SETTINGS not granted. Run: adb shell pm grant " +
-                activity.packageName + " " + Spike.PERM_WRITE_SECURE
+                context.packageName + " " + Spike.PERM_WRITE_SECURE
         }
         if (!prefs.getBoolean(Spike.PREF_PREV_SAVED, false)) return "nothing saved, nothing to restore"
         val stored = prefs.getString(Spike.PREF_PREV_VALUE, Spike.NULL_SENTINEL) ?: Spike.NULL_SENTINEL
@@ -285,7 +285,7 @@ class DreamProbe(private val activity: Activity, private val emit: (String) -> U
 
     private fun write(value: String): String {
         return try {
-            val ok = Settings.Secure.putString(activity.contentResolver, Spike.SETTING_SCREENSAVER, value)
+            val ok = Settings.Secure.putString(context.contentResolver, Spike.SETTING_SCREENSAVER, value)
             val back = readSetting(Spike.SETTING_SCREENSAVER)
             if (ok && back == value) {
                 "OK (screensaver_components now '" + back + "')"

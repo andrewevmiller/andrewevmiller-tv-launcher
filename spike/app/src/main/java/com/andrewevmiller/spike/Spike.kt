@@ -26,4 +26,33 @@ object Spike {
 
     /** Stored in prefs in place of a null Settings value, so "was null" survives a restart. */
     const val NULL_SENTINEL = "<null>"
+
+    // ---- E3 (sleep timer) ----------------------------------------------------------------------
+
+    /** Intent extras on the alarm broadcast and on SleepDimActivity. */
+    const val EXTRA_METHOD = "e3_method"
+    const val EXTRA_RUN = "e3_run"
+
+    /** The alarm fires this long after the button press: time to start a video in another app. */
+    const val E3_DELAY_MS = 20_000L
+
+    /** How long after startActivity() the receiver waits for SleepDimActivity.onCreate (or the dream signal). */
+    const val E3_DIM_WINDOW_MS = 3_000L
+
+    /** Pause between the rungs of the pause ladder. */
+    const val E3_RUNG_WAIT_MS = 1_500L
+
+    /** How long P3 holds audio focus before it checks and lets go. */
+    const val E3_FOCUS_HOLD_MS = 3_000L
+
+    /** Counter for run ids, kept in the shared prefs file. */
+    const val PREF_E3_LAST_ID = "e3_last_id"
+
+    const val REQ_E3_ALARM = 31
+    const val REQ_E3_TEST = 32
+    const val REQ_E3_SHOW = 33
+
+    /** SleepDimActivity background and text, near-black like the real dim screen. */
+    const val DIM_BG = 0xFF0A0A09.toInt()
+    const val DIM_TEXT = 0xFF8A8982.toInt()
 }

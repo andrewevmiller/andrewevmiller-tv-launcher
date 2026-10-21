@@ -1,6 +1,6 @@
-# Field Spike: E1 (Watch Next) and E2 (screensaver on demand)
+# Field Spike: E1 (Watch Next), E2 (screensaver on demand) and E3 (sleep timer)
 
-One small standalone app that answers two questions on the owner's Hisense Google TV
+One small standalone app that answers three questions on the owner's Hisense Google TV
 (Android 12, API 31, MediaTek). It is a separate Gradle build. It is **not** included from the
 root `settings.gradle.kts` and does not touch `:app`.
 
@@ -8,6 +8,7 @@ root `settings.gradle.kts` and does not touch `:app`.
 |---|---|---|
 | E1 | Can a third-party app read the Watch Next / preview-channel rows other apps publish? | Decides the source of the launcher's Recent row ("continue watching" vs. our own launch history) |
 | E2 | Can we start the active screensaver on demand? | Decides how the Photos tile behaves (start the slideshow vs. only switch the screensaver and show a hint) |
+| E3 | When an alarm fires while YouTube/Netflix is in front, what pauses their video, and what can put a dim full-screen surface on the TV from the background? | Decides how the sleep timer fires (`docs/SLEEP_TIMER_PLAN.md`, S3) and whether `deploy.sh` must grant the overlay appop |
 
 The app has no dependencies beyond the Android framework (plain `Activity` + Views, Kotlin stdlib).
 Application id `com.andrewevmiller.spike`, minSdk 31, shows up in the TV app list as **Field Spike**.
@@ -38,7 +39,8 @@ Notes:
 
 - Left column: buttons. **Up/Down** moves, **OK** presses. The focused button has the purple outline.
 - The purple line at the top of the left column shows the current E1 permission state and whether
-  `WRITE_SECURE_SETTINGS` is granted. It refreshes when you come back to the app.
+  `WRITE_SECURE_SETTINGS` is granted, whether the app may draw over other apps, and the state of the newest E3 run.
+  It refreshes when you come back to the app (E3 also prints the result it saved while you were away).
 - Right column: results. Press **Right** to focus it (outline turns purple), then **Up/Down** scrolls,
   **Left** returns to the buttons. If Right does not work on your TV, use the "Results page up/down" buttons
   at the bottom of the left column. New lines auto-scroll to the bottom.
@@ -170,7 +172,109 @@ adb logcat -d | grep -iE "DreamController|DreamManagerService|Somnambulator|Sand
 If everything fails, also check `adb shell settings get secure screensaver_enabled`; if it is `0`, set it to `1`
 (`adb shell settings put secure screensaver_enabled 1`) and repeat E2.a once. Note that in the results.
 
-## 5. Decision table
+## 5. E3: sleep timer
+
+The launcher's sleep timer will fire from an `AlarmManager` alarm while the TV is on YouTube or Netflix. Two things
+have to work from there, and Android is allowed to refuse both:
+
+1. **Pause**: which method stops the video another app is playing?
+2. **Dim**: which method puts a near-black full-screen surface on the TV when our app is in the background?
+   Since Android 10 a background `startActivity` is silently dropped (no exception), so the spike detects the outcome
+   instead of trusting "no exception".
+
+The spike reproduces the real context: a button sets an alarm 20 s ahead, **you leave the app** and start a video,
+and the alarm lands in a manifest-declared `BroadcastReceiver` (`SleepAlarmReceiver`), not in an activity. Everything
+after that runs from the background. Framework API only, no new permission except `SYSTEM_ALERT_WINDOW` (so adb can
+flip its appop).
+
+Buttons (all under the **E3** header in the left column):
+
+| Button | What it does |
+|---|---|
+| E3.0 Status | API level, `Settings.canDrawOverlays`, the `SYSTEM_ALERT_WINDOW` appop, `AudioManager.isMusicActive()` / `isVolumeFixed`, active playbacks, whether an alarm-clock alarm can be scheduled (it sets one an hour ahead, reads it back and cancels it), standby bucket, and whether the receiver and dim activity are declared. |
+| E3.A | Pause ladder, then start the system screensaver the way the launcher does today (E2.a: explicit `ACTION_MAIN` to `com.android.systemui/.Somnambulator`, `NEW_TASK`). Also listens for `ACTION_DREAMING_STARTED` as an objective signal. |
+| E3.B | Pause ladder, then `startActivity` of our own `SleepDimActivity` (`NEW_TASK`) from the receiver. |
+| E3.C | Identical code to B. The only difference is that you first ran `appops set ... SYSTEM_ALERT_WINDOW allow`. The summary records `canDrawOverlays` at fire time so B and C stay distinguishable, and flags a run whose name does not match what was granted. |
+| E3.D | Pause ladder only (control). No dim step. |
+| E3 mark: picture STOPPED / KEPT PLAYING | Your eyes on the video, for the newest run. `isMusicActive()` only reflects audio, so this is the real answer for pause. |
+| E3 mark: dim SHOWED / NOTHING | Your eyes on the dim surface or screensaver, for the newest run. |
+| E3 summary | A table of every run (it survives the app being killed) and the full detail of each. |
+
+Each run button schedules the alarm with `AlarmManager.setAlarmClock` (falls back to `setExactAndAllowWhileIdle` if that
+throws, and logs which was used). Pressing another run button replaces a pending alarm.
+
+What fires (all logged to `adb logcat -s FieldSpike` with `+seconds` timestamps, and saved per run):
+
+- **Step 1, pause ladder.** Logs `isMusicActive()` before and 1.5 s after each rung and records the first rung that read false
+  (or `never`; or `IDLE_AT_FIRE` if nothing was playing audio when the alarm fired, in which case run it again with the
+  video really playing).
+  - **P1** `AudioManager.dispatchMediaKeyEvent` with `KEYCODE_MEDIA_PAUSE` (DOWN then UP), wait 1.5 s.
+  - **P2** the same once more if still active, wait 1.5 s.
+  - **P3** `requestAudioFocus(AUDIOFOCUS_GAIN, USAGE_MEDIA, CONTENT_TYPE_MUSIC)`, hold 3 s, check, abandon.
+- **Step 2, dim surface**, by the method chosen at scheduling time (A, B, C, D above).
+  - A, outcome `REQUESTED_AND_SHOWN` only if the system broadcast `ACTION_DREAMING_STARTED` within 3 s, otherwise
+    `REQUESTED_UNVERIFIED`; **your SHOWED/NOTHING mark decides**.
+  - B and C, 3 s after `startActivity` the receiver checks whether `SleepDimActivity.onCreate` ran:
+    `REQUESTED_AND_SHOWN`, `REQUESTED_BUT_BLOCKED` (no create within 3 s) or `THREW: <exception>`.
+  - `SleepDimActivity` is a full-screen `#0A0A09` surface with "FIELD SPIKE · SLEEP SURFACE" and the time. Any key closes it
+    (a key within 0.7 s of it appearing is ignored); it also closes itself after 90 s so a test never strands the TV.
+    It has its own task (so it does not drag Field Spike to the front), and is not in Recents.
+
+### Steps
+
+Use a video that has sound and is **actually playing** when the 20 s are up. After you start the video, leave the remote
+alone until you have seen what happened.
+
+1. Install and note the baseline (the first one prints `No operations.` or `default`, whatever it prints):
+   ```bash
+   ./gradlew -p spike installDebug
+   adb shell appops get com.andrewevmiller.spike SYSTEM_ALERT_WINDOW
+   ```
+2. In the app press **E3.0 Status**. Paste the lines. Check `alarm-clock alarm: YES` and that both components are declared.
+3. **Run A with YouTube.** Press **E3.A**; the pane says "Now go to YouTube/Netflix and start a video. Firing at HH:mm:ss".
+   Press Home, open YouTube, play something with sound. At the fire time watch the TV for about 10 s:
+   - Did the picture stop? (The pause ladder takes up to about 7 s: P1, P2 and P3 are 1.5 s, 1.5 s and 3 s apart.)
+   - Did a screensaver appear over the video?
+
+   Press any key (this wakes the screensaver), reopen Field Spike (it prints the result that was saved while you were away),
+   and press **E3 mark: picture STOPPED** or **KEPT PLAYING**, and **E3 mark: dim SHOWED** or **NOTHING**.
+4. **Run B with YouTube.** Press **E3.B**, do the same. `SleepDimActivity`, if it appears, is black with grey text; press a key to close it
+   (it then returns to the video). Mark both.
+5. **Allow the overlay appop, then run C with YouTube.**
+   ```bash
+   adb shell appops set com.andrewevmiller.spike SYSTEM_ALERT_WINDOW allow
+   adb shell appops get com.andrewevmiller.spike SYSTEM_ALERT_WINDOW      # expect: allow
+   ```
+   Press **E3.0 Status**: `Settings.canDrawOverlays` must now read `true` (the purple line at the top of the button
+   column also shows it). If it still reads false, paste the `appops get` output and stop here: C cannot be tested with this
+   appop. Otherwise press **E3.C**, do the same, mark both. Leave the appop on for the next step.
+6. **Run D with YouTube** (control, pause only). Press **E3.D**. Mark the picture. It shows whether the pause works by
+   itself and what the TV does afterwards (nothing, or its own screensaver).
+7. **Repeat the pause test with the other apps**, as many as are installed: Netflix, Plex, Prime Video. For each, run **E3.D**
+   (pause), then **E3.B** (does our dim surface also cover that app). Some apps keep the screen awake themselves or hold audio
+   focus differently, so a result for YouTube alone does not carry over.
+8. Press **E3 summary** and paste the whole block, plus the app each run used and the paste-back lines in section 7.
+
+Optional objective evidence right after a run (the first two show *why* a pause or a start did not happen):
+
+```bash
+adb shell dumpsys media_session | grep -E "package=|state=PlaybackState|active=" | head -20
+adb logcat -d | grep -iE "Background activity start|Abort background|SleepDimActivity|FieldSpike"
+adb shell dumpsys activity activities | grep -iE "SleepDim|mResumedActivity"
+```
+
+### Cleanup
+
+```bash
+adb shell appops set com.andrewevmiller.spike SYSTEM_ALERT_WINDOW default
+adb shell appops get com.andrewevmiller.spike SYSTEM_ALERT_WINDOW
+adb uninstall com.andrewevmiller.spike
+```
+
+(Uninstalling also drops the appop. The spike's only system changes are that appop, which you set yourself, and a test alarm
+that **E3.0** sets an hour ahead and cancels in the same call.)
+
+## 6. Decision table
 
 ### E1: Recent row source
 
@@ -210,9 +314,49 @@ An attempt **works** when its row reads `call=OK`, `focusLost=yes` and `visible=
 `ScreensaverController.startNow(): Boolean` should return `true` only for a strategy that showed
 `SHOWED` here.
 
-## 6. Paste-back template
+### E3: how the sleep timer pauses and dims
 
-Copy this, fill it in, and paste it to the integrator. (The two blocks in `[...]` are the on-screen summary text.)
+Read the **E3 summary** per app (YouTube, Netflix, ...). A pause rung **works** when the `PAUSE:` line names it *and* you
+marked `picture=STOPPED` (the audio signal alone is not enough). A dim method **works** when `DIM:` reads
+`REQUESTED_AND_SHOWN` *and* you marked `dim=SHOWED`.
+
+Pause (what `SleepTimerController` sends first when the timer ends):
+
+| Result | Meaning | Launcher implements |
+|---|---|---|
+| P1 works in every app tried | A media key from the background reaches the active media session | Send `KEYCODE_MEDIA_PAUSE` once (DOWN, UP). No audio-focus step. |
+| P1 fails, P2 works | The first key only wakes or selects the session | Send the key **twice**, 1.5 s apart. |
+| P1 and P2 fail, P3 works | Media keys are ignored but audio focus makes the player pause | Key, key, then take audio focus for about 3 s and abandon (the S3 ladder as in this spike). |
+| Rung works in some apps only | Per-app behaviour | Keep the full ladder; list in the README which apps pause, and which only go dark. |
+| `NEVER`, or the audio signal says inactive but you marked `PLAYING` | Nothing here pauses the picture | Do not promise a pause. Timer = closing sound + dim surface. Optional follow-up spike S0b: `KEYCODE_MEDIA_STOP` / `MEDIA_PLAY_PAUSE`, or sending the HOME key before the dim. |
+| `IDLE_AT_FIRE` | No audio was playing when the alarm fired: not a result | Repeat the run with the video really playing, sound on. |
+| `AUDIOFOCUS_REQUEST_FAILED` or `DELAYED` | The platform refuses focus to a background app | P3 is useless here; drop it from the ladder. |
+
+Dim (what is shown after the pause, with another app still in front):
+
+| Result | Meaning | Launcher implements |
+|---|---|---|
+| **A works** (`dim=SHOWED`; usually `dreamSignal: yes`) | The system screensaver can be started from the background | Reuse `ScreensaverController.startNow()` (Somnambulator). Make Oxyfield the active screensaver for the timer (`apply(OXYFIELD)`, then `startNow()`), so no new activity is needed. If B also works, still prefer A (the system owns the wake behaviour). |
+| A `NOTHING`/`UNVERIFIED`, **B `REQUESTED_AND_SHOWN`** (with `canDrawOverlays=no`) | Our own full-screen activity can be started from the alarm receiver without any extra permission | Own `SleepDimActivity` (Oxyfield dim mode), started from the alarm receiver. No deploy change. Use `launchMode=singleTask` and its own task affinity, as here. |
+| A and B fail, **C `REQUESTED_AND_SHOWN`** (with `canDrawOverlays=yes`) | Only the "draw over other apps" appop lifts the background-start block | Own `SleepDimActivity` **and** `deploy.sh` must also run `adb shell appops set com.andrewevmiller.tvlauncher SYSTEM_ALERT_WINDOW allow` (manifest declares `SYSTEM_ALERT_WINDOW`). Ask the integrator; the timer must tell the user when the appop is missing. |
+| A, B, C all `BLOCKED`/`NOTHING`, but C had `canDrawOverlays=yes` | Activity starts from the background are refused even with the appop | Pause plus closing sound only; the TV's own idle screensaver does the rest. Optional follow-up S0b: an overlay *window* (`WindowManager.addView` with `TYPE_APPLICATION_OVERLAY` from a service), which is not an activity start and is not tested here. |
+| A, B, C all `BLOCKED`/`NOTHING`, and C ran with `canDrawOverlays=no` | The C test was not valid | Fix the appop (`appops get` must read `allow`), rerun C before deciding. |
+| `THREW: SecurityException` / `ActivityNotFoundException` on A | Somnambulator is not reachable from a receiver | Same as the E2 table; fall through to B and C. |
+| B `SHOWED` but `onCreate` came later than 3 s, or never got window focus | The system delayed or half-showed the activity | Treat as not shown. Do not rely on it. |
+| D: picture stops, the TV later shows its own screensaver or sleeps | Pause alone is enough | The dim surface is optional polish; ship the pause first. |
+
+Alarm itself:
+
+| Result | Launcher implements |
+|---|---|
+| `setAlarmClock` used and the receiver ran at the planned time (within about a second) | `AlarmManager.setAlarmClock` for the deadline; needs no permission. |
+| `setAlarmClock` threw and the fallback was used | Declare `SCHEDULE_EXACT_ALARM` in the launcher manifest (and have `deploy.sh` check it with `appops get`). Paste the exception. |
+| `NOT FIRED` after the planned time | The TV was asleep or the alarm is dropped for this app. The timer needs a different trigger; report it. |
+| `receiver held the broadcast` over about 9 s | The pause ladder is too slow for a foreground broadcast (10 s limit). Do the ladder from a started job, not inside `onReceive`. |
+
+## 7. Paste-back template
+
+Copy this, fill it in, and paste it to the integrator. (The three blocks in `[...]` are the on-screen summary text.)
 
 ```text
 ## Field Spike results
@@ -245,13 +389,28 @@ E2.d1 / d2 results (paste the `result:` lines):
 Strategy order that works (first = best): 
 Verdict: startNow works via ______ / does not work -> hint only
 
+### E3
+appops get (before anything):         
+appops set ... allow, then appops get: 
+E3.0 status (paste):
+  [ ... ]
+E3 summary (paste the whole block):
+  [ ... ]
+Per app (YouTube / Netflix / Plex / Prime / other): which runs I did, what the picture did, what the dim did:
+  
+logcat grep for "Background activity start" (optional): 
+Verdict (from the E3 decision table): pause = ______ ; dim = A / B / C / none ; alarm = setAlarmClock / fallback
+
 ### Anything odd (crashes, dialogs, TV rebooted, wrong screen): 
 ```
 
-## 7. Safety and cleanup
+## 8. Safety and cleanup
 
 - The spike only reads TV provider data and starts activities/screensaver. The one write is E2.d1/d2
   (`Settings.Secure screensaver_components`); press **E2.d2** (or use the `adb shell settings put` line) afterwards.
 - The saved "previous value" lives in the spike's own preferences, so it survives the app being closed.
 - Uninstalling the spike does not revert the setting. If you uninstall while d1 is active, restore it by hand.
 - `deploy.sh` / `rescue.sh` record and restore the screensaver on their own; this app is independent of them.
+- E3 sends a real media-pause key and takes audio focus for 3 s, so whatever is playing on the TV will pause. Nothing is
+  written to `Settings`. The `SYSTEM_ALERT_WINDOW` appop you set for run C stays until you reset it (see the E3 cleanup
+  commands) or uninstall. The dim surface closes itself after 90 s, so a test cannot strand the TV on a black screen.
