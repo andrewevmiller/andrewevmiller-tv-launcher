@@ -16,6 +16,13 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.runtime.Composable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.gestures.BringIntoViewSpec
+import androidx.compose.foundation.gestures.LocalBringIntoViewSpec
+import androidx.compose.foundation.gestures.animateScrollBy
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
@@ -81,6 +88,7 @@ private sealed interface Cell {
  * Home and the all-apps drawer, laid out to the mockup (960x540dp): header, chips, a four-column
  * app grid ending in an All apps tile, then system tiles. The drawer is the same frame with every app A-Z.
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun HomeScreen(
     allApps: List<LauncherApp>,
@@ -111,17 +119,34 @@ fun HomeScreen(
     // Focus only scrolls the minimum needed, which leaves the header cut off when coming back up.
     // The band and chips sit at the top, so landing on them shows the whole top of the page.
     val toTop = Modifier.onFocusChanged {
-        if (it.hasFocus) scope.launch {
-            // Wait out the focus bring-into-view scroll, which would otherwise win.
-            awaitFrame()
-            awaitFrame()
-            listState.animateScrollToItem(0)
+        if (it.hasFocus) scope.launch { listState.animateScrollToItem(0) }
+    }
+    // The built-in focus scroll is switched off below: it and the scrolls above fought each other,
+    // which read as jumpiness. This is the only scroll now: one eased move that keeps the focused
+    // thing 40dp inside the screen. A new move starts from wherever the last one had got to.
+    val density = LocalDensity.current
+    fun reveal(itemKey: String, top: Float = 0f, height: Float = -1f) {
+        scope.launch {
+            val info = listState.layoutInfo
+            val item = info.visibleItemsInfo.firstOrNull { it.key == itemKey }
+            if (item == null) return@launch
+            val margin = with(density) { 40.dp.toPx() }
+            val viewport = (info.viewportEndOffset - info.viewportStartOffset).toFloat()
+            val t = item.offset + top
+            val b = t + (if (height < 0) item.size.toFloat() else height)
+            val dy = when {
+                t < margin -> t - margin
+                b > viewport - margin -> b - (viewport - margin)
+                else -> 0f
+            }
+            if (dy != 0f) listState.animateScrollBy(dy, tween(220, easing = FastOutSlowInEasing))
         }
     }
     val reorderable = !drawer && chip == Chip.ALL
     val cells: List<Cell> = apps.map { Cell.App(it) } + if (drawer) emptyList() else listOf(Cell.All(allApps.size))
     val gridRows = cells.chunked(COLUMNS)
     Box(modifier.fillMaxSize().background(colors.bg).dotGrid(colors.line)) {
+        CompositionLocalProvider(LocalBringIntoViewSpec provides NoAutoScroll) {
         LazyColumn(
             state = listState,
             contentPadding = PaddingValues(
@@ -168,7 +193,13 @@ fun HomeScreen(
                             val spec = if (Field.reducedMotion) snap<Dp>() else tween(durationMillis = 180)
                             val x by animateDpAsState(stepX * (index % COLUMNS), spec, label = "tileX")
                             val y by animateDpAsState(stepY * (index / COLUMNS), spec, label = "tileY")
-                            Box(Modifier.offset(x, y)) {
+                            val rowTop = with(density) { (stepY * (index / COLUMNS)).toPx() }
+                            val rowHeight = with(density) { FieldDimens.bannerHeight.toPx() }
+                            Box(
+                                Modifier
+                                    .offset(x, y)
+                                    .onFocusChanged { if (it.hasFocus) reveal("apps-grid", rowTop, rowHeight) },
+                            ) {
                                 when (cell) {
                                     is Cell.App -> AppTile(
                                         app = cell.app,
@@ -191,21 +222,32 @@ fun HomeScreen(
             }
             if (!drawer && recent.isNotEmpty()) {
                 item("recent") {
-                    SectionHead(if (recentOpen) "Recent" else "Recent · ${recent.size} hidden")
-                    RecentRow(recent, recentOpen, onToggleRecent, onLaunch)
-                    Spacer(Modifier.height(10.dp))
+                    Column(Modifier.onFocusChanged { if (it.hasFocus) reveal("recent") }) {
+                        SectionHead(if (recentOpen) "Recent" else "Recent · ${recent.size} hidden")
+                        RecentRow(recent, recentOpen, onToggleRecent, onLaunch)
+                        Spacer(Modifier.height(10.dp))
+                    }
                 }
             }
             if (!drawer && systemTiles.isNotEmpty()) {
                 item("system") {
-                    SectionHead("Inputs & system")
-                    Row(Modifier.padding(horizontal = 4.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                        systemTiles.forEach { SystemTileView(it) }
+                    Column(Modifier.onFocusChanged { if (it.hasFocus) reveal("system") }) {
+                        SectionHead("Inputs & system")
+                        Row(Modifier.padding(horizontal = 4.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                            systemTiles.forEach { SystemTileView(it) }
+                        }
                     }
                 }
             }
         }
+        }
     }
+}
+
+/** Turns off the automatic scroll-on-focus; HomeScreen scrolls itself so there is only one motion. */
+@OptIn(ExperimentalFoundationApi::class)
+private val NoAutoScroll = object : BringIntoViewSpec {
+    override fun calculateScrollDistance(offset: Float, size: Float, containerSize: Float) = 0f
 }
 
 @Composable
