@@ -125,8 +125,12 @@ fun HomeScreen(
     val scope = rememberCoroutineScope()
     // Focus only scrolls the minimum needed, which leaves the header cut off when coming back up.
     // The band and chips sit at the top, so landing on them shows the whole top of the page.
+    // While the long-press menu is up, and just after it closes, focus passes through the top of the
+    // page on its way back to the tile; that must not drag the page up with it.
+    val scrollGuard = remember { ScrollGuard() }
+    if (menuApp != null) scrollGuard.holding = true
     val toTop = Modifier.onFocusChanged {
-        if (it.hasFocus) scope.launch { listState.animateScrollToItem(0) }
+        if (it.hasFocus && !scrollGuard.holding) scope.launch { listState.animateScrollToItem(0) }
     }
     // The built-in focus scroll is switched off below: it and the scrolls above fought each other,
     // which read as jumpiness. This is the only scroll now: one eased move that keeps the focused
@@ -157,6 +161,9 @@ fun HomeScreen(
         else lastMenuPkg?.let {
             awaitFrame()
             runCatching { requesters[it]?.requestFocus() }
+            awaitFrame()
+            awaitFrame()
+            scrollGuard.holding = false
         }
     }
     val cells: List<Cell> = apps.map { Cell.App(it) } + if (drawer) emptyList() else listOf(Cell.All(allApps.size))
@@ -222,7 +229,11 @@ fun HomeScreen(
                             Box(
                                 Modifier
                                     .offset(x, y)
-                                    .onFocusChanged { if (it.hasFocus) reveal("apps-grid", rowTop, rowHeight) },
+                                    .onFocusChanged {
+                                        // Stray focus while the menu closes is ignored; only the tile the menu was for may scroll.
+                                        val mine = (cell as? Cell.App)?.app?.component?.packageName == lastMenuPkg
+                                        if (it.hasFocus && (!scrollGuard.holding || mine)) reveal("apps-grid", rowTop, rowHeight)
+                                    },
                             ) {
                                 when (cell) {
                                     is Cell.App -> AppTile(
@@ -453,3 +464,6 @@ private fun BoxScope.PinBadge() {
         colorFilter = ColorFilter.tint(colors.ink),
     )
 }
+
+/** True while a focus detour (the long-press menu) must not scroll the page to the top. */
+class ScrollGuard { var holding = false }
