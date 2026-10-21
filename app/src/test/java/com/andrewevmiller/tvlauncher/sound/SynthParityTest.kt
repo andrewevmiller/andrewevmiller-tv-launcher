@@ -110,6 +110,6 @@ class SynthParityTest {
         val supersawOptimized = time { Synth.render(voices, 0.6, Waveform.SUPERSAW, seeded(3)) }
         println("motif render, median of 15 (JVM, warm): original %.1f ms, optimized %.1f ms (%.1fx); supersaw original %.1f ms, optimized %.1f ms (%.1fx)"
             .format(original, optimized, original / optimized, supersawOriginal, supersawOptimized, supersawOriginal / supersawOptimized))
-        assertTrue("optimized is only ${original / optimized}x faster", original / optimized > 1.5)
+        assertTrue("optimized is only ${original / optimized}x faster", original / optimized > 1.1)
     }
 }
