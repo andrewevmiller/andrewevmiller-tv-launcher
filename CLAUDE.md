@@ -61,9 +61,13 @@ integrator will apply it.
 New dependencies: list them in your report; don't edit the version catalog.
 
 ## Verification
-The cloud environment can't download the Android SDK, so builds are verified on the owner's
-machine with `./gradlew installDebug` against the TV over adb. Keep code conservative:
-stable Compose / tv-material APIs, no experimental opt-ins unless unavoidable.
+Behavior is verified on the owner's machine with `./gradlew installDebug` against the TV over adb.
+The cloud environment has no emulator. When `dl.google.com` is reachable it can still install the
+Android SDK and run `./gradlew :app:testDebugUnitTest :app:assembleRelease` (setup in
+`docs/PERF_PLAN.md`, "Building in the cloud"); if it is not, builds are checked on the owner's machine.
+Judge performance only on `./gradlew installRelease` followed by `adb shell cmd package compile -f -m speed
+com.andrewevmiller.tvlauncher` (debug Compose is much slower; see `docs/PERF_PLAN.md`). Keep code
+conservative: stable Compose / tv-material APIs, no experimental opt-ins unless unavoidable.
 
 ## Target device
 Hisense "SmartTV 4K", **Google TV on Android 12 (API 31)**, MediaTek SoC. Probe taken 2026-10-21.
