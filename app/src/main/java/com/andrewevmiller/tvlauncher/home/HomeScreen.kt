@@ -140,8 +140,12 @@ fun HomeScreen(
     val scope = rememberCoroutineScope()
     // Focus only scrolls the minimum needed, which leaves the header cut off when coming back up.
     // The band and chips sit at the top, so landing on them shows the whole top of the page.
+    // While the long-press menu is up, and just after it closes, focus passes through the top of the
+    // page on its way back to the tile; that must not drag the page up with it.
+    val scrollGuard = remember { ScrollGuard() }
+    if (menuApp != null) scrollGuard.holding = true
     val toTop = Modifier.onFocusChanged {
-        if (it.hasFocus) scope.launch { listState.animateScrollToItem(0) }
+        if (it.hasFocus && !scrollGuard.holding) scope.launch { listState.animateScrollToItem(0) }
     }
     // The built-in focus scroll is switched off below: it and the scrolls above fought each other,
     // which read as jumpiness. This is the only scroll now: one eased move that keeps the focused
@@ -164,7 +168,7 @@ fun HomeScreen(
             if (dy != 0f) listState.animateScrollBy(dy, tween(220, easing = FastOutSlowInEasing))
         }
     }
-    val isPinned = { a: LauncherApp -> pinnedSet?.contains(a.component.packageName) ?: a.pinned }
+    val isPinned = { a: LauncherApp -> pinnedSet?.contains(a.component.packageName) ?: false }
     // After the menu closes the tile gets focus back (Move needs it for the arrow keys).
     var lastMenuPkg by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(menuApp) {
@@ -172,6 +176,9 @@ fun HomeScreen(
         else lastMenuPkg?.let {
             awaitFrame()
             runCatching { requesters[it]?.requestFocus() }
+            awaitFrame()
+            awaitFrame()
+            scrollGuard.holding = false
         }
     }
     val cells: List<Cell> = apps.map { Cell.App(it) } + if (drawer) emptyList() else listOf(Cell.All(allApps.size))
@@ -221,6 +228,14 @@ fun HomeScreen(
             }
             item("apps-head") {
                 SectionHead(if (drawer) "Every app · A–Z · ${apps.size}" else "Apps · ${apps.size} pinned")
+                if (!drawer && apps.isEmpty() && chip == Chip.ALL) {
+                    Text(
+                        "Nothing is pinned yet. Open All apps, hold OK on an app and choose Pin to Home.",
+                        style = Field.type.body.copy(fontSize = 14.sp, lineHeight = 21.sp),
+                        color = colors.muted,
+                        modifier = Modifier.padding(bottom = 14.dp),
+                    )
+                }
             }
             // One block with every tile placed by index. A tile keeps its identity (and focus) when it
             // changes place, and slides to its new spot instead of being rebuilt in another row.
@@ -248,7 +263,11 @@ fun HomeScreen(
                             Box(
                                 Modifier
                                     .offset(x, y)
-                                    .onFocusChanged { if (it.hasFocus) reveal("apps-grid", rowTop, rowHeight) },
+                                    .onFocusChanged {
+                                        // Stray focus while the menu closes is ignored; only the tile the menu was for may scroll.
+                                        val mine = (cell as? Cell.App)?.app?.component?.packageName == lastMenuPkg
+                                        if (it.hasFocus && (!scrollGuard.holding || mine)) reveal("apps-grid", rowTop, rowHeight)
+                                    },
                             ) {
                                 when (cell) {
                                     is Cell.App -> AppTile(
@@ -489,7 +508,7 @@ class OkGesture { var longFired = false }
 
 /** Home order: saved order first, anything new after it in A-Z order. */
 fun orderPinned(apps: List<LauncherApp>, order: List<String>, pinnedSet: Set<String>?): List<LauncherApp> =
-    apps.filter { pinnedSet?.contains(it.component.packageName) ?: it.pinned }.sortedBy { a -> order.indexOf(a.component.packageName).let { if (it < 0) Int.MAX_VALUE else it } }
+    apps.filter { pinnedSet?.contains(it.component.packageName) ?: false }.sortedBy { a -> order.indexOf(a.component.packageName).let { if (it < 0) Int.MAX_VALUE else it } }
 
 /** A small pin on drawer tiles for apps that are on Home. */
 @Composable
@@ -501,3 +520,6 @@ private fun BoxScope.PinBadge() {
         colorFilter = ColorFilter.tint(colors.ink),
     )
 }
+
+/** True while a focus detour (the long-press menu) must not scroll the page to the top. */
+class ScrollGuard { var holding = false }

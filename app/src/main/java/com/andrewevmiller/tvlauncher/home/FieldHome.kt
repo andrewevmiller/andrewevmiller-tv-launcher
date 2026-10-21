@@ -64,7 +64,7 @@ fun FieldHome(
     var order by remember {
         mutableStateOf((layoutPrefs.getString("order", "") ?: "").split(';').filter { it.isNotEmpty() })
     }
-    // No saved choice yet means Home shows every app with a TV launcher entry.
+    // No saved choice yet means nothing is pinned; Home starts empty and the user picks (#5).
     var pinnedSet by remember {
         mutableStateOf(
             if (layoutPrefs.contains("pinned")) {
@@ -115,21 +115,21 @@ fun FieldHome(
         }
     }
 
-    fun isPinned(app: LauncherApp) = pinnedSet?.contains(app.component.packageName) ?: app.pinned
+    fun isPinned(app: LauncherApp) = pinnedSet?.contains(app.component.packageName) ?: false
 
     fun recentFor(): List<RecentEntry> {
         val byPkg = apps.associateBy { it.component.packageName }
         return records.mapNotNull { r -> byPkg[r.packageName]?.let { RecentEntry(it, r.at) } }.take(5)
     }
 
-    /** The app opened most recently; before anything has been opened, the first pinned app. */
+    /** The app opened most recently; the band stays hidden until something has been opened (#5). */
     fun featureFor(): Feature? {
         val recent = recentFor().firstOrNull()
         if (recent != null) {
             val at = Instant.ofEpochMilli(recent.at).atZone(ZoneId.systemDefault())
             return Feature(recent.app, DateTimeFormatter.ofPattern("yyyy-MM-dd 'at' HH:mm").format(at))
         }
-        return apps.firstOrNull { it.pinned }?.let { Feature(it, null) }
+        return null
     }
 
     /** Moves [app] by [delta] places in the Home order and saves it; the edges answer with the thud. */
