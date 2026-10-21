@@ -139,8 +139,20 @@ fun HomeScreen(
     // which read as jumpiness. This is the only scroll now: one eased move that keeps the focused
     // thing 40dp inside the screen. A new move starts from wherever the last one had got to.
     val density = LocalDensity.current
+    // Rows in list order, so a row that is off screen can be scrolled to by position.
+    val itemKeys = listOfNotNull(
+        "header", "band".takeIf { feature != null && !drawer }, "chips", "apps-head", "apps-grid",
+        "recent".takeIf { !drawer && recent.isNotEmpty() }, "system".takeIf { !drawer && systemTiles.isNotEmpty() },
+    )
     fun reveal(itemKey: String, top: Float = 0f, height: Float = -1f) {
         scope.launch {
+            // Focus can land on a row that is composed but not on screen (the Recent / Inputs rows
+            // just below a full grid). It is not in the visible list then, so bring it into view first;
+            // otherwise focus moves unseen and the page seems stuck.
+            if (listState.layoutInfo.visibleItemsInfo.none { it.key == itemKey }) {
+                val index = itemKeys.indexOf(itemKey)
+                if (index >= 0) listState.animateScrollToItem(index)
+            }
             val info = listState.layoutInfo
             val item = info.visibleItemsInfo.firstOrNull { it.key == itemKey }
             if (item == null) return@launch
