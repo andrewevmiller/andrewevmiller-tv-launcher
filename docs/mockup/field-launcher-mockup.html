@@ -397,7 +397,7 @@ h2 { font-family: var(--serif); font-weight: 700; letter-spacing: -0.01em; font-
       return ctx;
     };
     api.wave = 'sawtooth';
-    const DRIVE_MULT = 1.35;   // global push into the saturator, on top of each sound's own drive
+    const DRIVE_MULT = 1.6;   // global push into the saturator, on top of each sound's own drive
     function tri(f, { at = 0, dur = 0.1, gain = 0.03, voices = 2, detune = 9, glide = null, wave = api.wave,
                       lpFrom = 7000, lpTo = 2500, q = 1.5, drive = 6, fold = 2.2, crush = 0, click = 0 } = {}) {
       const c = audio(); if (!c) return;

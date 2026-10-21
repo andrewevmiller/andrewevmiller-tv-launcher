@@ -16,7 +16,7 @@ A personal Android TV launcher for one Hisense TV, in the andrewevmiller.com
 - Sound follows the accent rule: navigation is near-silent; only launch/select get a voiced sound.
   Use `FieldSound` (agent F), never play audio directly. Respect the system sound-effects setting.
 - Sound character: harsh wavefolded triangle. 1–2 slightly detuned triangle oscillators -> sine
-  wavefolder -> tanh saturation (each sound's drive x1.35 global multiplier; optional amplitude bitcrush) -> resonant low-pass sweep, with a
+  wavefolder -> tanh saturation (each sound's drive x1.6 global multiplier; optional amplitude bitcrush) -> resonant low-pass sweep, with a
   band-passed noise click on the attack. Master high-pass ~70Hz and a compressor. The reference
   recipe is the `sfx` block in `docs/mockup/field-launcher-mockup.html`; match it by ear.
 - Waveform is a user setting (Settings → Sound → Waveform), default Saw. Options:
