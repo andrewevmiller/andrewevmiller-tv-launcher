@@ -11,6 +11,11 @@
          `adb shell pm grant com.andrewevmiller.tvlauncher android.permission.WRITE_SECURE_SETTINGS` once. -->
     <uses-permission android:name="android.permission.WRITE_SECURE_SETTINGS" />
 
+    <!-- Sleep timer. Declared only so `adb shell appops set com.andrewevmiller.tvlauncher SYSTEM_ALERT_WINDOW allow`
+         is possible if the TV spike shows that starting SleepDimActivity from the alarm receiver needs it.
+         Nothing requests it at run time. The timer itself needs no permission: setAlarmClock is exact-alarm exempt. -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+
     <application
         android:name=".FieldApplication"
         android:allowBackup="false"
@@ -68,5 +73,24 @@
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
         </service>
+
+        <!-- Sleep timer: the AlarmManager alarm lands here, whatever state the launcher process is in. Only our own
+             PendingIntent reaches it. -->
+        <receiver
+            android:name=".sleep.SleepAlarmReceiver"
+            android:exported="false" />
+
+        <!-- Sleep timer: the dimmed Oxyfield screen shown over the app that was playing. Its own task (own affinity,
+             singleTask, not in Recents) so it never drags Home to the front; any key closes it. -->
+        <activity
+            android:name=".sleep.SleepDimActivity"
+            android:configChanges="keyboard|keyboardHidden|navigation|orientation|screenLayout|screenSize|uiMode"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:launchMode="singleTask"
+            android:screenOrientation="landscape"
+            android:stateNotNeeded="true"
+            android:taskAffinity="com.andrewevmiller.tvlauncher.sleep"
+            android:theme="@style/Theme.FieldLauncher" />
     </application>
 </manifest>
