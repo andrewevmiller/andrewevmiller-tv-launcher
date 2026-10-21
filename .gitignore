@@ -6,3 +6,9 @@ local.properties
 .DS_Store
 captures/
 .kotlin/
+
+# Host-local state written by scripts/deploy.sh, read by scripts/rescue.sh
+scripts/.deploy-state
+
+# Agent worktrees (see docs/BUILD_PLAN.md §7.2)
+.claude/worktrees/

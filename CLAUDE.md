@@ -62,13 +62,51 @@ integrator will apply it.
 | `app/.../ambient/` | Agent D: ambient (Oxyfield screensaver + hand-off to Google's photo screensaver) |
 | `spike/` (separate Gradle module, not included in `:app`) | Agent E: spikes (Watch Next access; starting Google's photo screensaver on demand) |
 | `app/.../sound/`, `app/src/main/res/raw/`, `tools/sound/` | Agent F: interface sounds |
+| `app/.../settings/` (except `SettingsRepository.kt`) | Agent G: settings |
+| `tools/purecheck/`, `docs/` (except `docs/mockup/` when a brief names it), `CLAUDE.md`, `README.md`, `.claude/` | Integrator |
+
+**Contract files** (the interfaces in `docs/BUILD_PLAN.md` §5.2: `sound/FieldSound.kt`, `sound/Waveform.kt`,
+`sound/MotifOverrides.kt`, `settings/SettingsRepository.kt`, `ambient/ScreensaverController.kt`,
+`home/data/AppsRepository.kt`, `home/data/AppCategory.kt`, `home/data/LayoutStore.kt`,
+`home/data/FakeAppsRepository.kt`) are integrator-owned even though they sit in another agent's directory.
+Implement them; don't change their signatures. If one must change, say so under "Requested shared changes".
 
 New dependencies: list them in your report; don't edit the version catalog.
 
 ## Verification
-The cloud environment can't download the Android SDK, so builds are verified on the owner's
-machine with `./gradlew installDebug` against the TV over adb. Keep code conservative:
-stable Compose / tv-material APIs, no experimental opt-ins unless unavoidable.
+The cloud environment can't reach Google Maven (no Android SDK, AGP, AndroidX or Compose), so `:app` is
+compiled on the owner's machine with `./gradlew installDebug` against the TV over adb. Keep code
+conservative: stable Compose / tv-material APIs, no experimental opt-ins unless unavoidable.
+
+**purecheck (works in the cloud).** Maven Central and the Gradle plugin portal are reachable, so any Kotlin
+file with no `import android.*`, `androidx.*`, `com.google.android.*` or `...tvlauncher.R` is compiled and its
+JUnit 4 tests are run by a plain-JVM build:
+
+```bash
+gradle -p tools/purecheck test        # or ./gradlew -p tools/purecheck test
+gradle -p tools/purecheck pureReport  # which files are compiled vs skipped
+```
+
+Tests live in `app/src/test/java/...` (JUnit 4 + `runBlocking`; no coroutines-test, no Robolectric, no mockito)
+so the same file runs under both purecheck and the owner's `./gradlew testDebugUnitTest`. A pure file that
+references an Android-dependent type fails to compile in purecheck on purpose: split the logic from the glue.
+Write DSP, motif generation, throttles, counters, codecs, grid navigation and reorder as pure Kotlin behind
+small interfaces, and keep the Android/Compose layer thin. Add `// purecheck:skip` to a file that must be
+skipped despite having no Android imports. Maven Central rate-limits bursts (HTTP 429); if a first run fails
+that way, rerun with `GRADLE_OPTS="-Dorg.gradle.internal.repository.max.tentatives=10
+-Dorg.gradle.internal.repository.initial.backoff=3000"` and `--max-workers=1`. Dependencies are cached after one
+success. **Run purecheck before you report done**, and put its output in your handoff.
+
+## Home activity, previous home, and the crash fallback (shared by scripts/ and safety/)
+- The manifest registers HOME on `.HomeAlias` (an `activity-alias` of `MainActivity`), not on `MainActivity`.
+  The default home is set with `cmd package set-home-activity com.andrewevmiller.tvlauncher/.HomeAlias`.
+  `MainActivity` keeps LAUNCHER + LEANBACK_LAUNCHER, so the app stays startable by hand.
+- `deploy.sh` records the previous home on the host in `scripts/.deploy-state` and also writes it on the TV with
+  `adb shell settings put secure field_launcher_previous_home <package/.Activity>`, so the app can read it
+  (reading any `Settings.Secure` key needs no permission).
+- The on-device fallback disables `.HomeAlias` with `PackageManager.setComponentEnabledSetting(..., DONT_KILL_APP)`
+  and starts the previous home. It must never do that unless at least one other enabled HOME activity exists:
+  never leave the TV with no HOME. Re-enabling is `deploy.sh` (or `pm enable com.andrewevmiller.tvlauncher/.HomeAlias`).
 
 ## Target device
 Hisense "SmartTV 4K", **Google TV on Android 12 (API 31)**, MediaTek SoC. Probe taken 2026-10-21.

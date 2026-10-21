@@ -178,6 +178,7 @@ app/src/main/java/com/andrewevmiller/tvlauncher/
   safety/                         A            crash-loop fallback
 scripts/                          A            probe, deploy, rescue
 tools/sound/                      F            desktop preview/render CLI (JVM)
+tools/purecheck/                  Integrator   plain-JVM build that compiles + tests all Android-free sources
 spike/                            E            standalone test app(s)
 ```
 
@@ -226,6 +227,20 @@ interface ScreensaverController {
 ```
 
 Per-app motif overrides (re-roll seed, mute) are stored by F alongside its own data, keyed by package name.
+
+**As built (I1).** The contracts above are in the repo with these refinements, all in the same packages:
+- `Waveform` is in its own Android-free file (`sound/Waveform.kt`), and `AppCategory` in `home/data/AppCategory.kt`,
+  so the pure sound core and `tools/purecheck` can use them. `FieldSound.kt` keeps the interface, `NoOpFieldSound`
+  and `LocalFieldSound`.
+- `sound/MotifOverrides.kt` adds the interface Settings needs for the per-app motif list:
+  `MotifOverrides { overrides: Flow<Map<String, MotifOverride>>; reroll(pkg); setMuted(pkg, Boolean); reset(pkg) }`
+  with `MotifOverride(rerollCount, muted)`. F implements it; G consumes it.
+- `home/data/LayoutStore.kt` adds `FieldLayout(pinned: List<String>, hidden: Set<String>)` keyed by
+  `ComponentName.flattenToString()`, and `LayoutStore { layout: Flow<FieldLayout>; update(transform) }`.
+  B2 implements it with DataStore; B1 builds `AppsRepository` on top of it.
+- Fakes for previews and tests: `FakeAppsRepository`, `FakeSettingsRepository`, `FakeMotifOverrides`,
+  `InMemoryLayoutStore`, `NoOpFieldSound`, `NoOpScreensaverController`.
+- The manifest registers HOME on `.HomeAlias`; see `CLAUDE.md` "Home activity, previous home, and the crash fallback".
 
 ### 5.3 Wiring (done by the integrator in wave 3)
 
@@ -420,13 +435,13 @@ Device checks for the owner: <steps> | none
 
 | Gate | Who | When | Pass criteria |
 |---|---|---|---|
-| G0 | Agent / integrator | Every task (needs P3) | `./gradlew :app:compileDebugKotlin testDebugUnitTest` green |
+| G0 | Agent / integrator | Every task | `gradle -p tools/purecheck test` green (works in the cloud; compiles and tests every Android-free source), plus checker clean. With P3, also `./gradlew :app:compileDebugKotlin testDebugUnitTest` |
 | G1 | Owner | End of wave 1 | Deploy, see placeholder home, rescue works |
 | G2 | Owner | Mid wave 2 | Spikes E1/E2 results; forced-crash fallback works |
 | G3 | Owner | End of wave 2 (per feature APK) | Feature-specific device checks from handoff reports |
 | G4 | Owner | End of wave 3 | Full checklist §10 |
 
-Without P3, G0 becomes "integrator reads the diff and the checker reports", and compile errors surface at the owner's next gate. Batch owner gates so the owner does one deploy per wave, not one per task.
+Without P3, the Android/Compose layer is not compiled in the cloud: G0 covers the pure logic through purecheck, the checker reviews the glue, and compile errors in the glue surface at the owner's next gate. Batch owner gates so the owner does one deploy per wave, not one per task.
 
 ### 7.5 Running a wave
 1. Integrator writes briefs for every task in the wave.
@@ -543,7 +558,7 @@ Motifs:
 | Pre-rendering many apps × waveforms is slow | Low | Lag after waveform change | Render only the current waveform; background thread; motifs rendered lazily on first focus if needed |
 | Haiku tasks drift from spec | Medium | Rework | Golden vectors and mechanical acceptance checks; escalate to Sonnet after two failures |
 | Parallel agents conflict in shared files | Medium | Merge pain | Ownership table, contracts first, integrator-only shared edits, checker C-X2 |
-| No cloud compile (P3 not done) | Current | Errors found late | Batch owner builds per wave; keep APIs conservative |
+| No cloud compile of `:app` (P3 not done) | Current | Errors found late | `tools/purecheck` compiles and tests all pure logic in the cloud; glue stays thin; checkers review it; batch owner builds per wave; keep APIs conservative |
 | Near-black dot grid invisible on the panel | Medium | Texture lost | Dot brightness setting, tuned in G1 |
 | Grid focus is lost when tiles scroll out of a lazy grid, or when pin/hide changes the list | Medium | D-pad dead until a key press | Keep grid navigation as a pure function (unit-tested); explicit `FocusRequester` per tile index; re-request focus at the clamped index after list changes; Home grid is non-lazy |
 | Home grid grows tall and pushes Recent/Photos/System far down | Medium | Long scroll to reach lower rows | Last cell is "All apps"; pinned apps beyond the Home grid's rows live in the drawer; tune row cap in I5 |
