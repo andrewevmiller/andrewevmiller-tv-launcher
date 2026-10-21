@@ -7,6 +7,9 @@
     <!-- Needed on API 30+ to enumerate other apps' launch activities. -->
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
 
+    <!-- Lets the quick settings show whether the TV is online. -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
     <application
         android:allowBackup="false"
         android:banner="@drawable/banner"
