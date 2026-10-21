@@ -1,5 +1,7 @@
 package com.andrewevmiller.tvlauncher.home.data
 
+// purecheck:skip -- decorates AppsRepository, whose LauncherApp carries an android ComponentName.
+
 /** Wraps an [AppsRepository] so every launch is also written to the [LaunchHistory] (the Recent row and the feature band). */
 class RecordingAppsRepository(
     private val delegate: AppsRepository,

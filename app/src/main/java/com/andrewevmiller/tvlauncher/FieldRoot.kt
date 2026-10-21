@@ -55,7 +55,7 @@ fun FieldRoot(container: AppContainer, homeResets: Int, settingsRequests: Int) {
             when (route) {
                 Route.Home -> Box(Modifier.fillMaxSize()) {
                     HomeContent(
-                        container = container,
+                        deps = container,
                         ui = ui,
                         settings = settings,
                         onOpenDrawer = { route = Route.Drawer },

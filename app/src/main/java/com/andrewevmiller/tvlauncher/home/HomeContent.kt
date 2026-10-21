@@ -13,7 +13,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.andrewevmiller.tvlauncher.AppContainer
+import com.andrewevmiller.tvlauncher.HomeDeps
 import com.andrewevmiller.tvlauncher.ambient.startPhotosSlideshow
 import com.andrewevmiller.tvlauncher.home.apps.AppGridState
 import com.andrewevmiller.tvlauncher.home.apps.AppsSection
@@ -74,21 +74,21 @@ private const val NO_ON_DEMAND = "This TV won't start it on demand. It will run 
  */
 @Composable
 fun HomeContent(
-    container: AppContainer,
+    deps: HomeDeps,
     ui: HomeUiState,
     settings: LauncherSettings,
     onOpenDrawer: () -> Unit,
     onOpenSettings: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val apps = container.apps
+    val apps = deps.apps
     val sound = LocalFieldSound.current
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
     val favorites by apps.favorites.collectAsStateWithLifecycle<List<LauncherApp>?>(initialValue = null)
     val installed by apps.apps.collectAsStateWithLifecycle<List<LauncherApp>?>(initialValue = null)
-    val history by container.launchHistory.entries.collectAsStateWithLifecycle(initialValue = emptyList())
+    val history by deps.launchHistory.entries.collectAsStateWithLifecycle(initialValue = emptyList())
 
     val byKey = remember(installed) { installed.orEmpty().associateBy { it.component.flattenToString() } }
     val recentEntries = remember(history, byKey) { history.filter { it.key in byKey }.take(8) }
@@ -174,15 +174,15 @@ fun HomeContent(
                     onSelect = { item ->
                         sound.sleep()
                         when (item.key) {
-                            PHOTOS_KEY -> startPhotosSlideshow(context, container.screensaver, settings.screensaver) {
+                            PHOTOS_KEY -> startPhotosSlideshow(context, deps.screensaver, settings.screensaver) {
                                 ui.message = it
                             }
                             OXYFIELD_KEY -> {
-                                if (container.screensaver.canSwitch) {
-                                    container.screensaver.apply(Screensaver.OXYFIELD)
-                                    scope.launch { container.settings.update { it.copy(screensaver = Screensaver.OXYFIELD) } }
+                                if (deps.screensaver.canSwitch) {
+                                    deps.screensaver.apply(Screensaver.OXYFIELD)
+                                    scope.launch { deps.settings.update { it.copy(screensaver = Screensaver.OXYFIELD) } }
                                 }
-                                if (!container.screensaver.startNow()) ui.message = NO_ON_DEMAND
+                                if (!deps.screensaver.startNow()) ui.message = NO_ON_DEMAND
                             }
                         }
                     },

@@ -227,15 +227,33 @@ class MixerTest {
         }
     }
 
+    /**
+     * Per-thread allocated bytes via the HotSpot ThreadMXBean, reached by reflection so this file compiles on
+     * both the plain-JVM purecheck classpath and AGP's Android-flavoured one (which has no java.lang.management).
+     * Null when the JVM can't report it; the test then skips.
+     */
+    private fun allocatedBytesReader(): (() -> Long)? = try {
+        val factory = Class.forName("java.lang.management.ManagementFactory")
+        val bean = factory.getMethod("getThreadMXBean").invoke(null)
+        val sunBean = Class.forName("com.sun.management.ThreadMXBean")
+        if (!sunBean.isInstance(bean)) {
+            null
+        } else if (sunBean.getMethod("isThreadAllocatedMemorySupported").invoke(bean) != true) {
+            null
+        } else {
+            sunBean.getMethod("setThreadAllocatedMemoryEnabled", Boolean::class.javaPrimitiveType).invoke(bean, true)
+            val read = sunBean.getMethod("getThreadAllocatedBytes", Long::class.javaPrimitiveType)
+            val id = Thread.currentThread().id
+            ({ read.invoke(bean, id) as Long })
+        }
+    } catch (t: Throwable) {
+        null
+    }
+
     @Test
     fun mixAndAddDoNotAllocate() {
-        val bean = try {
-            java.lang.management.ManagementFactory.getThreadMXBean() as? com.sun.management.ThreadMXBean
-        } catch (t: Throwable) {
-            null
-        }
-        org.junit.Assume.assumeTrue(bean != null && bean.isThreadAllocatedMemorySupported)
-        bean!!.isThreadAllocatedMemoryEnabled = true
+        val allocated = allocatedBytesReader()
+        org.junit.Assume.assumeTrue(allocated != null)
         val mixer = Mixer()
         val clip = sine(440.0, 0.5)
         val block = FloatArray(256)
@@ -243,13 +261,12 @@ class MixerTest {
             mixer.add(clip, 1.002, 0.9f, 10)
             mixer.mix(block)
         }
-        val id = Thread.currentThread().id
-        val before = bean.getThreadAllocatedBytes(id)
+        val before = allocated!!()
         repeat(20000) {
             mixer.add(clip, 1.002, 0.9f, 10)
             mixer.mix(block)
         }
-        val used = bean.getThreadAllocatedBytes(id) - before
+        val used = allocated() - before
         println("allocation over 20000 add+mix calls: $used bytes")
         assertTrue("allocated $used bytes", used < 65536) // a single 16-byte object per call would be 320 kB
     }
