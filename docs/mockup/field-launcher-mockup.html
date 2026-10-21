@@ -984,11 +984,13 @@ h2 { font-family: var(--serif); font-weight: 700; letter-spacing: -0.01em; font-
     const d = new Date();
     const ds = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
     const ts = `${pad(d.getHours())}:${pad(d.getMinutes())}`;
-    const c = document.getElementById('clock'); if (c) c.textContent = `${ds} · ${ts}`;
+    // Home header: seconds and the short time-zone name, like the app: 2026-10-21 · 19:42:07 PDT
+    const zone = (new Intl.DateTimeFormat('en-US', { timeZoneName: 'short' }).formatToParts(d).find(p => p.type === 'timeZoneName') || {}).value || '';
+    const c = document.getElementById('clock'); if (c) c.textContent = `${ds} · ${ts}:${pad(d.getSeconds())} ${zone}`.trim();
     document.getElementById('ambTime').textContent = ts;
     document.getElementById('ambDate').textContent = d.toLocaleDateString('en-US', { weekday: 'long' }) + ' · ' + ds;
   }
-  setInterval(tickClock, 10000);
+  setInterval(tickClock, 1000);
 
   /* screen scaling */
   const ro = new ResizeObserver(() => { screen.style.transform = `scale(${stage.clientWidth / 960})`; });

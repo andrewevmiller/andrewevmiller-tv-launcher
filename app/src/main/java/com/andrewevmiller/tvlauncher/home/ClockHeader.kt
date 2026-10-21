@@ -24,26 +24,26 @@ import com.andrewevmiller.tvlauncher.theme.fieldTile
 import com.andrewevmiller.tvlauncher.ui.icons.FieldIcon
 import com.andrewevmiller.tvlauncher.ui.icons.FieldIcons
 import kotlinx.coroutines.delay
-import java.time.LocalDateTime
-import java.time.format.DateTimeFormatter
+import java.time.ZonedDateTime
 
 /**
- * Title on the left, a lab-notebook timestamp on the right: `2026-10-21 · 19:42`.
+ * Title on the left, a lab-notebook timestamp on the right: `2026-10-21 · 19:42:07 PDT` (see [ClockFormat]).
  * With [onOpenSettings] a small SETTINGS chip sits left of the timestamp (the Menu key opens it too).
  */
 @Composable
 fun ClockHeader(title: String = "Home", onOpenSettings: (() -> Unit)? = null) {
     val context = LocalContext.current
-    val pattern = if (DateFormat.is24HourFormat(context)) "yyyy-MM-dd · HH:mm" else "yyyy-MM-dd · h:mm a"
-    val formatter = remember(pattern) { DateTimeFormatter.ofPattern(pattern) }
-    var now by remember { mutableStateOf(LocalDateTime.now()) }
+    val is24Hour = DateFormat.is24HourFormat(context)
+    var now by remember { mutableStateOf(ZonedDateTime.now()) }
     LaunchedEffect(Unit) {
         while (true) {
-            now = LocalDateTime.now()
-            // Wake at the top of the next minute.
-            delay((60 - now.second) * 1000L - now.nano / 1_000_000L)
+            // Read the zone fresh each tick so a time-zone change on the TV shows up at once.
+            val tick = ZonedDateTime.now()
+            now = tick
+            delay(ClockFormat.millisUntilNextSecond(tick.nano))
         }
     }
+    val text = remember(now, is24Hour) { ClockFormat.format(now, is24Hour) }
     Row(
         Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
@@ -55,7 +55,7 @@ fun ClockHeader(title: String = "Home", onOpenSettings: (() -> Unit)? = null) {
             horizontalArrangement = Arrangement.spacedBy(20.dp),
         ) {
             if (onOpenSettings != null) SettingsChip(onOpenSettings)
-            Text(now.format(formatter), style = Field.type.label, color = Field.colors.muted)
+            Text(text, style = Field.type.label, color = Field.colors.muted)
         }
     }
 }

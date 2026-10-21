@@ -80,6 +80,8 @@ fun HomeContent(
     onOpenDrawer: () -> Unit,
     onOpenSettings: () -> Unit,
     modifier: Modifier = Modifier,
+    /** True while something else (the crash-fallback notice) should keep focus; Home takes it when this clears. */
+    holdFocus: Boolean = false,
 ) {
     val apps = deps.apps
     val sound = LocalFieldSound.current
@@ -101,8 +103,8 @@ fun HomeContent(
 
     // Focus the apps once they exist: the first tile, or "All apps" when coming back from the drawer.
     val loaded = favorites != null
-    LaunchedEffect(ui, loaded) {
-        if (!loaded) return@LaunchedEffect
+    LaunchedEffect(ui, loaded, holdFocus) {
+        if (!loaded || holdFocus) return@LaunchedEffect
         repeat(30) {
             val ok = if (ui.focusAllApps) ui.grid.requestAllAppsFocus() else ui.grid.requestFocus(0)
             if (ok) {

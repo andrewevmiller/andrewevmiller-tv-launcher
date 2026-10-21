@@ -60,6 +60,7 @@ fun FieldRoot(container: AppContainer, homeResets: Int, settingsRequests: Int) {
                         settings = settings,
                         onOpenDrawer = { route = Route.Drawer },
                         onOpenSettings = { route = Route.Settings },
+                        holdFocus = notice != null,
                     )
                     notice?.let { n ->
                         FallbackNoticeBanner(
