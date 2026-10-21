@@ -1,0 +1,108 @@
+#!/usr/bin/env bash
+# Stand-in for adb used by scripts/tests/run.sh (ADB=scripts/tests/fake-adb).
+# Every call is appended to $FAKE_ADB_LOG (one line per call, args as given, including
+# "-s SERIAL"). Answers come from scripts/tests/fixtures/ (override the directory with
+# FAKE_ADB_FIXTURES). Output uses CRLF like real adb, so the scripts' \r stripping is exercised.
+#
+# Env overrides:
+#   FAKE_ADB_STATE_DIR    when set, set-home-activity is remembered in <dir>/home and resolve-activity reads it back
+#   FAKE_HOME_ACTIVITY    component resolve-activity reports instead of the home_default fixture
+#   FAKE_PM_PATH_MISSING  comma-separated packages that `pm path` reports as not installed
+#   FAKE_DEVICE_STATE     output of `get-state` instead of the device_state fixture
+# Unknown commands fail loudly (exit 2) so a test never passes by accident.
+set -euo pipefail
+
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+fixtures="${FAKE_ADB_FIXTURES:-$here/fixtures}"
+
+# Log the call exactly as received, before any -s handling.
+if [[ -n ${FAKE_ADB_LOG:-} ]]; then
+  printf '%s\n' "$*" >>"$FAKE_ADB_LOG"
+fi
+
+if [[ ${1:-} == "-s" ]]; then
+  shift 2
+fi
+
+fx() {
+  cat "$fixtures/$1"
+}
+
+print_resolve() {
+  printf 'priority=0 preferredOrder=0 match=0x108000 specificIndex=-1 isDefault=true\r\n%s\r\n' "$1"
+}
+
+resolve() {
+  if [[ -n ${FAKE_ADB_STATE_DIR:-} && -f $FAKE_ADB_STATE_DIR/home ]]; then
+    print_resolve "$(cat "$FAKE_ADB_STATE_DIR/home")"
+  elif [[ -n ${FAKE_HOME_ACTIVITY:-} ]]; then
+    print_resolve "$FAKE_HOME_ACTIVITY"
+  else
+    print_resolve "$(fx home_default | tr -d '\r')"
+  fi
+}
+
+set_home() {
+  if [[ -n ${FAKE_ADB_STATE_DIR:-} ]]; then
+    mkdir -p "$FAKE_ADB_STATE_DIR"
+    printf '%s\n' "$1" >"$FAKE_ADB_STATE_DIR/home"
+  fi
+}
+
+pm_path() {
+  local pkg="$1" list missing=",${FAKE_PM_PATH_MISSING:-},"
+  if [[ $missing == *",$pkg,"* ]]; then
+    return 1
+  fi
+  list="$(fx packages | tr -d '\r')"
+  if grep -Fxq "package:$pkg" <<<"$list"; then
+    printf 'package:/data/app/%s/base.apk\r\n' "$pkg"
+  else
+    return 1
+  fi
+}
+
+shell_cmd() {
+  case "$*" in
+    "getprop ro.product.model") fx model ;;
+    "getprop ro.build.version.release") fx release ;;
+    "getprop ro.build.version.sdk") fx sdk ;;
+    "pm list packages -d") fx packages_disabled ;;
+    "pm list packages") fx packages ;;
+    "pm path "*) pm_path "${@: -1}" ;;
+    "pm enable "* | "pm disable-user "* | "pm grant "*) ;;
+    "cmd package resolve-activity "*) resolve ;;
+    "cmd package query-activities "*) fx query_home ;;
+    "cmd package set-home-activity "*)
+      set_home "${@: -1}"
+      ;;
+    "settings get secure screensaver_components") fx screensaver ;;
+    "settings put secure "* | "settings delete secure "*) ;;
+    "input keyevent "*) ;;
+    "wm size") fx wm_size ;;
+    "wm density") fx wm_density ;;
+    *)
+      printf 'fake-adb: unhandled shell command: %s\n' "$*" >&2
+      exit 2
+      ;;
+  esac
+}
+
+command_name="${1:-}"
+shift || true
+case "$command_name" in
+  get-state)
+    if [[ -n ${FAKE_DEVICE_STATE:-} ]]; then
+      printf '%s\n' "$FAKE_DEVICE_STATE"
+    else
+      fx device_state
+    fi
+    ;;
+  get-serialno) fx serialno ;;
+  install) printf 'Success\r\n' ;;
+  shell) shell_cmd "$@" ;;
+  *)
+    printf 'fake-adb: unhandled adb command: %s\n' "$command_name" >&2
+    exit 2
+    ;;
+esac

@@ -1,0 +1,9 @@
+shell pm path com.google.android.apps.tv.launcherx
+shell pm enable com.google.android.apps.tv.launcherx
+shell pm path com.google.android.tungsten.setupwraith
+shell pm enable com.google.android.tungsten.setupwraith
+shell cmd package query-activities --brief -a android.intent.action.MAIN -c android.intent.category.HOME
+shell cmd package set-home-activity com.google.android.apps.tv.launcherx/.LauncherActivity
+shell settings put secure screensaver_components com.google.android.apps.tv.dreamx/.service.Backdrop
+shell settings delete secure field_launcher_previous_home
+shell input keyevent KEYCODE_HOME
