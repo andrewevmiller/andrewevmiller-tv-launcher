@@ -1,0 +1,29 @@
+dry run: nothing is changed; each adb command is printed with a placeholder for its result
+== 1. device ==
++ adb get-state
++ adb get-serialno
+== 2. current HOME ==
++ adb shell cmd package resolve-activity --brief -c android.intent.category.HOME -a android.intent.action.MAIN
+current HOME: <previous-home>
+== 3. record state ==
++ adb shell pm list packages
++ adb shell pm list packages -d
++ adb shell pm list packages
++ adb shell pm list packages -d
++ adb shell settings get secure screensaver_components
++ write scripts/.deploy-state (PREV_HOME=<previous-home> LAUNCHERX_STATE=<launcherx-state> SETUPWRAITH_STATE=<setupwraith-state> PREV_SCREENSAVER=<previous-screensaver> RECORDED_AT=<utc-now> DEVICE_SERIAL=<serial>)
+== 4. build and install ==
++ ./gradlew installDebug (in the repo root)
+== 5. permission ==
++ adb shell pm grant com.andrewevmiller.tvlauncher android.permission.WRITE_SECURE_SETTINGS
+== 6. previous home on the TV ==
++ adb shell settings put secure field_launcher_previous_home <previous-home>
+== 7. set HOME ==
++ adb shell pm enable com.andrewevmiller.tvlauncher/.HomeAlias
++ adb shell cmd package set-home-activity com.andrewevmiller.tvlauncher/.HomeAlias
+== 8. verify ==
++ adb shell input keyevent KEYCODE_HOME
++ adb shell cmd package resolve-activity --brief -c android.intent.category.HOME -a android.intent.action.MAIN
+dry run: HOME is not verified
+To roll back: scripts/rescue.sh (HOME back to <previous-home>, screensaver restored)
+              scripts/rescue.sh --stock (re-enables Google's launcher and makes it HOME)
