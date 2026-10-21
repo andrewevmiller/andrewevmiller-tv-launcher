@@ -13,6 +13,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.sp
 import androidx.tv.material3.Text
 import com.andrewevmiller.tvlauncher.theme.Field
 import kotlinx.coroutines.delay
@@ -38,7 +39,7 @@ fun ClockHeader(title: String = "Home") {
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.Bottom,
     ) {
-        Text(title, style = Field.type.title, color = Field.colors.ink)
-        Text(now.format(formatter), style = Field.type.label, color = Field.colors.muted)
+        Text(title, style = Field.type.title.copy(fontSize = 30.sp, lineHeight = 32.sp), color = Field.colors.ink)
+        Text(now.format(formatter), style = Field.type.label.copy(fontSize = 13.sp), color = Field.colors.muted)
     }
 }

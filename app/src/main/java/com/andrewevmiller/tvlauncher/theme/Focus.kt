@@ -34,6 +34,7 @@ fun Modifier.fieldFocus(
 ): Modifier = composed {
     val colors = LocalFieldColors.current
     val reduced = LocalReducedMotion.current
+    val sound = com.andrewevmiller.tvlauncher.sound.LocalFieldSound.current
     var focused by remember { mutableStateOf(false) }
     val t by animateFloatAsState(
         targetValue = if (focused) 1f else 0f,
@@ -41,7 +42,11 @@ fun Modifier.fieldFocus(
         label = "fieldFocus",
     )
     this
-        .onFocusChanged { focused = it.isFocused || it.hasFocus }
+        .onFocusChanged {
+            val now = it.isFocused || it.hasFocus
+            if (now && !focused) sound?.tick()
+            focused = now
+        }
         .graphicsLayer {
             val s = 1f + (focusedScale - 1f) * t
             scaleX = s
