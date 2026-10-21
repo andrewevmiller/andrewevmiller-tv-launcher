@@ -17,6 +17,8 @@ import com.andrewevmiller.tvlauncher.home.Chip
 import com.andrewevmiller.tvlauncher.home.Feature
 import com.andrewevmiller.tvlauncher.home.RecentEntry
 import com.andrewevmiller.tvlauncher.home.data.LaunchHistory
+import com.andrewevmiller.tvlauncher.home.data.NowPlaying
+import com.andrewevmiller.tvlauncher.home.data.NowPlayingMonitor
 import com.andrewevmiller.tvlauncher.home.data.LaunchRecord
 import java.time.Instant
 import java.time.ZoneId
@@ -44,6 +46,8 @@ class MainActivity : ComponentActivity() {
     private var editing by mutableStateOf<String?>(null)
     private var pinnedSet by mutableStateOf<Set<String>?>(null)
     private var menuApp by mutableStateOf<LauncherApp?>(null)
+    private var nowPlaying by mutableStateOf<NowPlaying?>(null)
+    private lateinit var nowPlayingMonitor: NowPlayingMonitor
     private var apps by mutableStateOf<List<LauncherApp>>(emptyList())
     private var chip by mutableStateOf(Chip.ALL)
     private var drawer by mutableStateOf(false)
@@ -65,6 +69,7 @@ class MainActivity : ComponentActivity() {
             }
         }
         sound = FieldSound(this)
+        nowPlayingMonitor = NowPlayingMonitor(this) { nowPlaying = it }
         history = LaunchHistory(this)
         layoutPrefs = getSharedPreferences("layout", MODE_PRIVATE)
         order = (layoutPrefs.getString("order", "") ?: "").split(';').filter { it.isNotEmpty() }
@@ -91,7 +96,9 @@ class MainActivity : ComponentActivity() {
                         drawer = true
                         chip = Chip.ALL
                     },
-                    feature = featureFor(),
+                    features = featuresFor(),
+                    nowPlaying = nowPlaying,
+                    onOpenPlaying = { openPlaying(it) },
                     recent = recentFor(),
                     recentOpen = recentOpen,
                     order = order,
@@ -137,6 +144,16 @@ class MainActivity : ComponentActivity() {
         super.onResume()
         // Reload on every return so installs and uninstalls show up.
         thread { apps = InstalledApps.load(this) }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        nowPlayingMonitor.start()
+    }
+
+    override fun onStop() {
+        nowPlayingMonitor.stop()
+        super.onStop()
     }
 
     override fun onDestroy() {
@@ -191,14 +208,17 @@ class MainActivity : ComponentActivity() {
         return records.mapNotNull { r -> byPkg[r.packageName]?.let { RecentEntry(it, r.at) } }.take(5)
     }
 
-    /** The app opened most recently; before anything has been opened, the first pinned app. */
-    private fun featureFor(): Feature? {
-        val recent = recentFor().firstOrNull()
-        if (recent != null) {
-            val at = Instant.ofEpochMilli(recent.at).atZone(ZoneId.systemDefault())
-            return Feature(recent.app, DateTimeFormatter.ofPattern("yyyy-MM-dd 'at' HH:mm").format(at))
-        }
-        return null
+    /** The recent apps the band turns through, newest first, each with when it was last opened. */
+    private fun featuresFor(): List<Feature> = recentFor().take(4).map { r ->
+        val at = Instant.ofEpochMilli(r.at).atZone(ZoneId.systemDefault())
+        Feature(r.app, DateTimeFormatter.ofPattern("yyyy-MM-dd 'at' HH:mm").format(at))
+    }
+
+    /** Opens the app that is playing; opening it is how you get at its own controls. */
+    private fun openPlaying(p: NowPlaying) {
+        val intent = packageManager.getLeanbackLaunchIntentForPackage(p.packageName)
+            ?: packageManager.getLaunchIntentForPackage(p.packageName) ?: return
+        open(intent)
     }
 
     private fun open(intent: Intent) {
