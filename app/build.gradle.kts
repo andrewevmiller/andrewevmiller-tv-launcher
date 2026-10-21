@@ -19,7 +19,10 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            // R8 shrinks and optimizes the app and Compose; measure performance on this variant, not debug.
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             // Personal sideload: sign release with the debug key so `assembleRelease` installs directly.
             signingConfig = signingConfigs.getByName("debug")
         }

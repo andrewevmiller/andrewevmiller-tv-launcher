@@ -134,6 +134,10 @@ on, move focus across tiles. Note how many times `AppTile` recomposes per focus 
 mostly interpreted or JIT-compiled until it warms up, and a launcher process is often cold. Release
 builds also merge the Compose libraries' own baseline profiles.
 
+**Status:** implemented (R8 config, `proguard-rules.pro`, README install and compile steps) but not yet
+built or run. Waiting on the owner-side build and the checks under Acceptance. `deploy.sh` still does not
+exist on `main`, so its half of step 3 is open.
+
 **Files:** `app/build.gradle.kts` (integrator), new `app/proguard-rules.pro` (integrator),
 `scripts/deploy.sh` (agent A; `scripts/` is not in this checkout yet, so until it lands put the
 commands in the README install section).
