@@ -272,35 +272,58 @@ Tests: `AppStampsTest`, `SnapshotCodecTest` (29 cases).
 
 ## PF3: Focus animation off the composition phase
 
-**Why.** In `fieldFocus` the animated value `t` is read in the composition body, in the
-`border(width = lerp(…t), color = lerp(…t))` arguments (`Focus.kt:56-60`). Every frame of the 160 ms
-tween then recomposes the host tile (`AppTile`, `ChipPill`, …), for both the tile losing focus and
-the one gaining it. Only the `graphicsLayer {}` block reads `t` in the right phase. Both
-`fieldFocus` and `fieldTile` also use `composed`, which allocates per use and defeats modifier skipping.
+**Why.** `fieldFocus` read the animated value `t` in the composition body, in the
+`border(width = lerp(…t), color = lerp(…t))` arguments. Every frame of the 160 ms tween then
+recomposed the host tile (`AppTile`, `ChipPill`, …), for the tile losing focus and the one gaining it.
+Only the `graphicsLayer {}` block read `t` in the right phase.
 
-**Files:** `theme/Focus.kt` (integrator). Public signatures of `fieldFocus` and `fieldTile` do not change.
+**Status:** implemented, building, and verified in a Robolectric harness (below). Not yet run on the TV.
 
-**Steps**
-1. **Minimal change.** Keep the animation as `val t = animateFloatAsState(...)` (a `State<Float>`, no
-   `by` delegate). Read `t.value` only inside `graphicsLayer { }` and a `drawWithContent { }` that calls
-   `drawContent()` and then draws the border with `drawOutline` using an inset `Stroke` of
-   `lerp(1.dp, 3.dp, t)` and `lerp(line, accent, t)`. Compose's own `border` draws inside the bounds, so
-   inset by half the stroke to match exactly. Colors still come from `LocalFieldColors`.
-2. Keep behaviour identical: tick on focus gain, `snap()` when reduced motion is on, rest tilt
-   straightening, scale 1.06, border drawn above the content and outside the tile's `clip`.
-3. **If Layout Inspector still shows recomposition from `composed`**, convert to a `Modifier.Node`
-   (focus event, draw, and layer scale/rotation in one node; progress held in an `Animatable`). Do this
-   only if step 1 does not reach the §3 targets.
+**Files:** `theme/Focus.kt` (integrator), new `FocusMathTest`. Public signatures of `fieldFocus` and
+`fieldTile` are unchanged, including `bleed`.
+
+**Design (as built)**
+- Progress is an `Animatable`, started from `onFocusChanged` in a `rememberCoroutineScope` (reduced
+  motion uses `snap()`, else a 160 ms `tween`, as before). The focused flag is a plain holder, not state,
+  so a focus change reads nothing in composition and recomposes nothing.
+- Progress is read only inside `graphicsLayer {}` (scale, tilt) and a `drawWithCache` block that draws
+  the border after the content. The outline is cached per size.
+- `drawFieldBorder` reproduces `Modifier.border` as foundation 1.7.3 implements it: stroke rounded up to
+  whole pixels and capped at half the smaller side, inset by half the stroke, corner radius shrunk by
+  half the stroke, a fill when the stroke is thicker than the tile, and a clip-and-stroke fallback for
+  shapes `border` would build a path for. The width, color and endpoint rules (`bleed` starts at 0.5dp
+  and transparent) live in small `internal` functions with unit tests.
+- Unchanged: tick sound on focus gain, scale 1.06, tilt straightening, border above the content and
+  outside the tile's `clip`, `fieldTile` still adds the click handler.
+
+**Verified (scratch Robolectric harness, native graphics; the old modifier kept beside the new one)**
+- **Recomposition.** Over four focus moves with the app's tile structure, the old modifier recomposed
+  its host tile **44 times** (11 per animation, in and out). The new one: **0**.
+- **Pixels.** Normal and full-bleed tiles at rest and after settling are identical (0 px; 1 px off by one
+  level when focused). Through the animation the new tile shows what the old one showed one frame
+  later: the old version only starts after a recomposition, so the new one begins a frame (about 16 ms)
+  sooner. With that frame aligned, **14 to 19 pixels differ out of about 1.6 million compared, by at
+  most 2 levels of 255**, in both directions.
+- The harness is not in the repo because it needs Robolectric and Compose UI-test dependencies
+  (`org.robolectric:robolectric`, `androidx.compose.ui:ui-test-junit4`, `ui-test-manifest`) plus
+  `robolectric.pixelCopyRenderMode=hardware`. It can be added as a test if wanted.
+
+**Still open**
+- Both modifiers still use `composed`, which costs a little when a tile first enters composition (the
+  drawer, while scrolling). Converting to `Modifier.Node` is worth doing only if the post-PF2 traces
+  show tile composition on the main thread during scrolling.
+- `fieldTile` could drop its own `composed` by passing no interaction source to `clickable`; skipped here
+  to keep this change to the animation.
 
 **Acceptance**
-- Layout Inspector (debug build): a focus move recomposes each affected tile at most 2 times, down from
-  about 10 (PF0 step 6).
-- gfxinfo comparison on Home and the drawer (PF0 step 1) is no worse and ideally better.
-- Visual parity: `adb exec-out screencap -p` of a focused and an unfocused tile before and after.
-  Same border width and color at rest and at focus, same scale, same shape.
+- JVM unit tests: endpoints and midpoints of scale, tilt, width and color (normal and `bleed`), and the
+  stroke rule. **Done: 8 new, all pass.**
+- Recomposition and pixel parity: **done in the harness above.**
+- Device: gfxinfo on Home and the drawer (PF0 step 1) is no worse and ideally better, and focus moves
+  look the same. Layout Inspector (debug build) recomposition counts on a focus move should now be 0.
 - Design checker C-X1: no hex literals, accent only on the focused element, only `fieldFocus`/`fieldTile`.
 
-**Rollback:** `git revert` of the single commit.
+**Rollback:** `git revert` of the PF3 commit.
 
 ---
 
