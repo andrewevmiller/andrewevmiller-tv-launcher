@@ -21,22 +21,26 @@ object LayoutCodec {
     fun decodeHidden(raw: String?): Set<String> = decodeLines(raw).toSet()
 
     /**
-     * Enforces the layout invariants. Entries are trimmed and blank ones dropped. There are no
+     * Enforces the layout invariants. Entries are trimmed; blank ones and ones containing a line break are dropped. There are no
      * duplicates (first occurrence wins) and pinned order is kept. An app in both lists stays hidden
      * (hidden wins). `seeded` passes through unchanged.
      */
     fun normalize(layout: FieldLayout): FieldLayout {
         val hidden: Set<String> = layout.hidden.asSequence()
             .map { it.trim() }
-            .filter { it.isNotEmpty() }
+            .filter { it.isNotEmpty() && !it.hasLineBreak() }
             .toSet()
         val pinned: List<String> = layout.pinned.asSequence()
             .map { it.trim() }
-            .filter { it.isNotEmpty() && it !in hidden }
+            .filter { it.isNotEmpty() && !it.hasLineBreak() && it !in hidden }
             .distinct()
             .toList()
         return FieldLayout(pinned = pinned, hidden = hidden, seeded = layout.seeded)
     }
+
+    // Drop (rather than throw on) anything that could not round-trip, so a bad entry can never make
+    // dataStore.edit throw inside encodeLines.
+    private fun String.hasLineBreak(): Boolean = contains('\n') || contains('\r')
 
     private fun encodeLines(items: List<String>): String {
         require(items.none { it.contains('\n') || it.contains('\r') }) {

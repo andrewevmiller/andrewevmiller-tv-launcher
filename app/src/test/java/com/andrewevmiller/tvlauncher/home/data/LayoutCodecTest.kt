@@ -194,4 +194,16 @@ class LayoutCodecTest {
         assertEquals(layout, LayoutCodec.normalize(rebuilt))
         assertEquals(true, LayoutCodec.normalize(rebuilt).seeded)
     }
+
+    @Test
+    fun normalizeDropsEntriesThatCannotRoundTrip() {
+        val layout = LayoutCodec.normalize(
+            FieldLayout(pinned = listOf("a/.A", "bad\nentry", "c/.C"), hidden = setOf("h/.H", "bad\rhidden")),
+        )
+        assertEquals(listOf("a/.A", "c/.C"), layout.pinned)
+        assertEquals(setOf("h/.H"), layout.hidden)
+        // and the result always encodes without throwing
+        LayoutCodec.encodePinned(layout.pinned)
+        LayoutCodec.encodeHidden(layout.hidden)
+    }
 }
