@@ -105,8 +105,8 @@ h2 { font-family: var(--serif); font-weight: 700; letter-spacing: -0.01em; font-
 .chip.on { border-radius: 999px; color: var(--t-ink); }
 
 /* app banners */
-.app { width: 160px; height: 90px; background: var(--t-soft); padding: 10px 12px; display: flex; flex-direction: column; justify-content: space-between; }
-.app svg { width: 22px; height: 22px; color: var(--t-muted); }
+.app { width: 192px; height: 108px; background: var(--t-soft); padding: 12px 14px; display: flex; flex-direction: column; justify-content: space-between; }
+.app svg { width: 44px; height: 44px; stroke-width: 1.3; color: var(--t-muted); }
 .app.on svg { color: var(--t-accent); }
 .app-name { font-weight: 500; font-size: 14px; line-height: 1.2; }
 .app-cat { font-family: var(--mono); font-size: 10px; letter-spacing: 0.06em; color: var(--t-muted); text-transform: uppercase; }
@@ -114,6 +114,7 @@ h2 { font-family: var(--serif); font-weight: 700; letter-spacing: -0.01em; font-
 /* timeline */
 .entry { width: 236px; display: grid; grid-template-columns: 56px 22px 1fr; gap: 10px; align-items: start; padding: 8px 10px; border-color: transparent; border-left: 1px solid var(--t-line); border-radius: 0; }
 .entry.on { border-radius: 4px; background: var(--t-soft); }
+.recent-toggle { align-self: center; }
 .entry-date { font-family: var(--mono); font-size: 11px; color: var(--t-muted); line-height: 1.35; font-variant-numeric: tabular-nums; }
 .entry svg { width: 20px; height: 20px; color: var(--t-muted); }
 .entry.on svg { color: var(--t-accent); }
@@ -323,7 +324,7 @@ h2 { font-family: var(--serif); font-weight: 700; letter-spacing: -0.01em; font-
     { id: 'F', name: 'Sound', wave: 'Wave 2', desc: 'Interface sound set rendered from a script, SoundPool playback, repeat throttling, on/off setting. No UI region.' }
   ];
 
-  const state = { chip: 'all', r: 2, c: 0, scrollX: {}, ambient: false, slides: false, light: false, reduced: matchMedia('(prefers-reduced-motion: reduce)').matches, owners: false, solo: null };
+  const state = { chip: 'all', r: 2, c: 0, scrollX: {}, ambient: false, slides: false, recentOpen: false, light: false, reduced: matchMedia('(prefers-reduced-motion: reduce)').matches, owners: false, solo: null };
 
   /* Interface sounds: quiet, short, woody. Synthesized here; the app ships the same set as rendered OGGs. */
   const sfx = (() => {
@@ -404,9 +405,10 @@ h2 { font-family: var(--serif); font-weight: 700; letter-spacing: -0.01em; font-
         </div></div>
       </div>
       <div class="sec" data-owner="E">${tag('C+E', 'Recent · content via spike')}
-        <div class="sec-rule"></div><div class="sec-label">Recent</div>
+        <div class="sec-rule"></div><div class="sec-label">Recent${state.recentOpen ? '' : ' · ' + RECENT.length + ' hidden'}</div>
         <div class="viewport"><div class="track" data-row="3">
-          ${RECENT.map((e, i) => `<div class="f entry" data-r="3" data-c="${i}"><div class="entry-date">${e.d}<br>${e.t}</div>${svg(e.icon)}<div><div class="entry-title">${e.title}</div><div class="entry-sub">${e.sub}</div></div></div>`).join('')}
+          <span class="f chip recent-toggle" data-r="3" data-c="0">${state.recentOpen ? 'Hide' : 'Show recent'}</span>
+          ${(state.recentOpen ? RECENT : []).map((e, i) => `<div class="f entry" data-r="3" data-c="${i + 1}"><div class="entry-date">${e.d}<br>${e.t}</div>${svg(e.icon)}<div><div class="entry-title">${e.title}</div><div class="entry-sub">${e.sub}</div></div></div>`).join('')}
         </div></div>
       </div>
       <div class="sec" data-owner="C">${tag('C+D', 'Gallery tiles → slideshow')}
@@ -494,6 +496,7 @@ h2 { font-family: var(--serif); font-weight: 700; letter-spacing: -0.01em; font-
     if (state.r === 0) { sfx.launch(); return toast('Opening Plex · resume 31:08'); }
     if (state.r === 1) { sfx.select(); state.chip = CHIPS[state.c]; const c = state.c; render(); focus(1, c); return; }
     if (state.r === 2) { sfx.launch(); return toast('Launching ' + el.querySelector('.app-name').textContent + '…'); }
+    if (state.r === 3 && state.c === 0) { sfx.select(); state.recentOpen = !state.recentOpen; render(); return; }
     if (state.r === 3) { sfx.launch(); return toast('Reopening ' + el.querySelector('.entry-title').textContent + '…'); }
     if (state.r === 4) return setSlides(true, state.c);
     if (state.r === 5) { sfx.select(); return toast(el.textContent.trim().startsWith('HDMI') ? 'Switching to ' + el.textContent.trim() : 'Opening ' + el.textContent.trim()); }

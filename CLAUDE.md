@@ -16,6 +16,12 @@ A personal Android TV launcher for one Hisense TV, in the andrewevmiller.com
 - Sound follows the accent rule: navigation is near-silent; only launch/select get a voiced sound.
   Use `FieldSound` (agent F), never play audio directly. Respect the system sound-effects setting.
 
+## Product decisions
+- App tiles are 192x108dp (`FieldDimens.bannerWidth/Height`). Apps without a 16:9 banner show
+  their icon large (~44dp), not a small glyph in the corner.
+- The Recent row is collapsed by default: a single "Show recent" chip with a hidden count.
+  Expanding is per-session; it collapses again on Home.
+
 ## Photos slideshow
 Google Photos content isn't reachable through a public API for this use (Library API is limited to
 app-created media since 2025). We reuse the system's own ambient mode instead: the launcher can make
