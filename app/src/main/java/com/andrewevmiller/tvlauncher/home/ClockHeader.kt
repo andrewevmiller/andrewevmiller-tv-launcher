@@ -16,7 +16,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.tv.material3.Text
 import com.andrewevmiller.tvlauncher.sound.LocalFieldSound
 import com.andrewevmiller.tvlauncher.theme.Field
@@ -50,13 +49,13 @@ fun ClockHeader(title: String = "Home", onOpenSettings: (() -> Unit)? = null) {
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.Bottom,
     ) {
-        Text(title, style = Field.type.title.copy(fontSize = 30.sp, lineHeight = 32.sp), color = Field.colors.ink)
+        Text(title, style = Field.type.pageTitle, color = Field.colors.ink)
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(20.dp),
         ) {
             if (onOpenSettings != null) SettingsChip(onOpenSettings)
-            Text(text, style = Field.type.label.copy(fontSize = 13.sp), color = Field.colors.muted)
+            Text(text, style = Field.type.clock, color = Field.colors.muted)
         }
     }
 }

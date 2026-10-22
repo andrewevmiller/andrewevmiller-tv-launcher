@@ -55,7 +55,7 @@ fun RecentRow(
     ) {
         Text(
             if (open) "Hide" else "Show recent",
-            style = Field.type.caption.copy(fontSize = 12.sp, lineHeight = 16.sp, letterSpacing = 0.04.em),
+            style = Field.type.chip,
             color = colors.muted,
             modifier = Modifier
                 .fieldTile(onToggle, FieldShapes.chip)
@@ -82,7 +82,7 @@ private fun RecentTile(entry: RecentEntry, onClick: () -> Unit) {
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Column(Modifier.width(50.dp)) {
-            val style = Field.type.caption.copy(fontSize = 11.sp, lineHeight = 15.sp)
+            val style = Field.type.recentTime
             Text(dateFormat.format(time), style = style, color = colors.muted)
             Text(timeFormat.format(time), style = style, color = colors.muted)
         }
@@ -91,12 +91,12 @@ private fun RecentTile(entry: RecentEntry, onClick: () -> Unit) {
         Column(Modifier.weight(1f)) {
             Text(
                 entry.app.label,
-                style = Field.type.bodyStrong.copy(fontSize = 13.5.sp, lineHeight = 17.sp),
+                style = Field.type.recentName,
                 color = colors.ink, maxLines = 1, overflow = TextOverflow.Ellipsis,
             )
             Text(
                 entry.app.category.name.lowercase().replaceFirstChar { it.uppercase() },
-                style = Field.type.body.copy(fontSize = 12.sp, lineHeight = 15.sp),
+                style = Field.type.recentMeta,
                 color = colors.muted,
             )
         }
