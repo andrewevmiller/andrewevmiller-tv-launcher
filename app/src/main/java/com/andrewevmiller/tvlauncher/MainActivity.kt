@@ -222,6 +222,7 @@ class MainActivity : ComponentActivity() {
     override fun onDestroy() {
         super.onDestroy()
         loader.close()
+        nowPlayingMonitor.close()
         sound.release()
     }
 
