@@ -34,6 +34,8 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.runtime.withFrameNanos
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
@@ -125,6 +127,8 @@ fun HomeScreen(
     onOpenSettings: (() -> Unit)? = null,
     /** The screensaver tiles (Settings → Screensaver has the choice; these start one now). Null hides the row. */
     screensaver: (@Composable () -> Unit)? = null,
+    /** The Tools row (Sleep timer tile and its picker), under "Inputs & system". Null hides it. */
+    tools: (@Composable () -> Unit)? = null,
     /** Scales the dot grid (Settings → Appearance), because panels crush near-black. */
     dotAlpha: Float = 1f,
 ) {
@@ -320,6 +324,27 @@ fun HomeScreen(
                                 systemTiles.forEach { SystemTileView(it) }
                             }
                         }
+                    }
+                }
+            }
+            if (!drawer && tools != null) {
+                item("tools") {
+                    // The picker grows this item while focus stays inside it, so a size change scrolls it into view too.
+                    val focusInside = remember { ScrollGuard() }
+                    Column(
+                        Modifier
+                            .onFocusChanged {
+                                focusInside.holding = it.hasFocus
+                                if (it.hasFocus) reveal("tools")
+                            }
+                            .onSizeChanged {
+                                // After the frame that laid out the new size, so the list knows the item's height.
+                                if (focusInside.holding) scope.launch { withFrameNanos { }; reveal("tools") }
+                            },
+                    ) {
+                        SectionHead("Tools")
+                        CompositionLocalProvider(LocalSoundRow provides 6) { tools() }
+                        Spacer(Modifier.height(10.dp))
                     }
                 }
             }
