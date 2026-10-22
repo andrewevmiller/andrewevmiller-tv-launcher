@@ -27,7 +27,8 @@ object SleepConfig {
     /**
      * A stored deadline up to this far in the PAST is not stale, it is the alarm that is firing right now into a
      * process that had to be started for it (cold start plus scheduling delay). Older than this the TV was off or the
-     * launcher was away at the deadline, and the timer is dropped, never fired late.
+     * launcher was away at the deadline, and the timer is dropped, never fired late. Within it a deadline IS still fired
+     * on the next start, after a reboot too (see [restoreTimer]).
      */
     const val DUE_GRACE_MILLIS = 120_000L
 
@@ -53,6 +54,28 @@ object SleepConfig {
     /** The dim screen ignores keys this long after it appears (a key still being released must not wake it). */
     const val DIM_KEY_GRACE_MILLIS = 700L
 
-    /** The dim screen closes itself after this long, so it can never strand the TV on a dark screen. */
+    /**
+     * SleepDimActivity closes itself after this long, if no key was pressed, so that route cannot leave the TV on a
+     * dark screen indefinitely (the app that was playing comes back to the front, still paused). The SCREENSAVER route
+     * has no such timer: Oxyfield is then an ordinary dream and ends on the first key press, like any dream.
+     */
     const val DIM_AUTO_FINISH_MILLIS = 30L * 60_000L
+
+    /**
+     * Whether SleepDimActivity sets FLAG_KEEP_SCREEN_ON. A trade-off the owner settles after the TV test:
+     *  - false (the default): the TV's own screen-off timeout keeps running, so real power-off stays with the TV, as the
+     *    plan says and as Google's own dream behaves. The cost: the timeout may cut the 45 s fade short. When the screen
+     *    goes off the dim activity closes itself (it is stopped), and the paused app is what shows on the next wake.
+     *  - true: the dim screen is held until a key is pressed or [DIM_AUTO_FINISH_MILLIS] passes, and the TV's own
+     *    timeout does not run meanwhile.
+     */
+    const val DIM_KEEPS_SCREEN_ON = false
+
+    /**
+     * Before the closing sound, wait up to this long for the sound engine to say it is ready. The engine renders its
+     * sound set in the background and drops every sound until that is done, which on a process started for the alarm is
+     * the first thing that happens. The sound is played after the wait either way, ready or not.
+     */
+    const val SOUND_READY_WAIT_MILLIS = 3_000L
+    const val SOUND_READY_POLL_MILLIS = 50L
 }

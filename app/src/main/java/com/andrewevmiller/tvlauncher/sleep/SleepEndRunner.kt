@@ -7,7 +7,8 @@ package com.andrewevmiller.tvlauncher.sleep
  *
  * The step order and the "a failing step never stops the next one" rule live in runSleepEnd (PauseLadder.kt); the
  * ladder order in runPauseLadder; the dim order in runDimStrategies. This class adds the bookkeeping around them:
- * claim a due timer exactly once, warm up, pick the orders from SleepConfig, and always put the timer back to Idle.
+ * claim a due timer exactly once, skip everything if the TV is already off, warm up, pick the orders from SleepConfig,
+ * and always put the timer back to Idle.
  */
 
 /** The timer's side of the firing: a claim that can succeed only once, and the hand-back. */
@@ -37,6 +38,12 @@ interface PauseActions {
 
 /** Everything the end sequence does to the outside world. */
 interface SleepEndActions : PauseActions, DimHost {
+    /**
+     * True while the TV is on (the screen is interactive, which includes a screensaver running). False when the user
+     * switched the TV off before the deadline: then the alarm must not play a sound or light the screen again.
+     */
+    fun isScreenOn(): Boolean
+
     /** Started first, right after the claim: build whatever is slow to build (the sound engine is, on a cold process). */
     fun warmUp()
 
@@ -69,8 +76,12 @@ class SleepEndRunner(
      * no timer is due. [onDimRequested] is called when a dim screen has been asked for (the receiver finishes its
      * broadcast there); it may be called more than once, or never.
      *
+     * If the TV is already off when the timer is claimed, the whole sequence is skipped (no pause, no sound, no dim
+     * screen) and the outcome has [SleepEndOutcome.skipped] set.
+     *
      * The timer is handed back (Firing -> Idle) in a finally block, so an exception or cancellation cannot leave it
-     * stuck in Firing.
+     * stuck in Firing. That only happens for a timer this call claimed: a call that finds nothing to claim returns
+     * before the try and never touches the state.
      */
     suspend fun run(onDimRequested: () -> Unit = {}): SleepEndOutcome? {
         if (!timer.beginFiring()) {
@@ -80,6 +91,10 @@ class SleepEndRunner(
         log("sleep end: timer reached its deadline")
         try {
             val actions = actionsFactory()
+            if (!screenIsOn(actions)) {
+                log("sleep end: TV already off, skipped")
+                return SleepEndOutcome(pause = null, dimShown = false, errors = emptyList(), skipped = "TV already off")
+            }
             try {
                 actions.warmUp()
             } catch (e: Exception) {
@@ -96,6 +111,15 @@ class SleepEndRunner(
             timer.endFiring()
         }
     }
+
+    /** A screen check that fails counts as "on": better one sequence too many than a timer that silently does nothing. */
+    private fun screenIsOn(actions: SleepEndActions): Boolean =
+        try {
+            actions.isScreenOn()
+        } catch (e: Exception) {
+            log("sleep end: screen check FAILED: ${e.javaClass.simpleName}: ${e.message}")
+            true
+        }
 
     private suspend fun pauseStep(actions: SleepEndActions): PauseReport? {
         val order = PauseRungs.ordered(provenPause)

@@ -51,6 +51,21 @@ class SleepRestoreTest {
     }
 
     @Test
+    fun theGraceBoundaryInLiteralMilliseconds() {
+        assertEquals("the documented two minutes", 120_000L, SleepConfig.DUE_GRACE_MILLIS)
+        val total = 45 * minute
+        // 119 s past: still the alarm firing into a cold process.
+        assertEquals(SleepTimerState.Running(now - 119_000L, total), restoreTimer(now - 119_000L, total, now).state)
+        // exactly 120 s past: still kept.
+        assertEquals(SleepTimerState.Running(now - 120_000L, total), restoreTimer(now - 120_000L, total, now).state)
+        // 121 s past: dropped and cleared.
+        val dropped = restoreTimer(now - 121_000L, total, now)
+        assertEquals(SleepTimerState.Idle, dropped.state)
+        assertTrue(dropped.clearStore)
+        assertNull(dropped.alarmAtMillis)
+    }
+
+    @Test
     fun corruptOrHalfStoredValuesAreDroppedAndCleared() {
         val cases = listOf(
             "no total" to Pair<Long?, Long?>(now + minute, null),

@@ -153,10 +153,17 @@ class DimStrategiesTest {
 
         override fun dimActivityShown(): Boolean {
             calls.add("dimActivityShown")
-            return polls++ >= shownAfterPolls
+            return shown || polls++ >= shownAfterPolls
         }
 
-        override fun abandonDimActivity() { calls.add("abandonDimActivity") }
+        /** The activity is created in the gap between the last poll and the abandon. */
+        var shownInTheGap = false
+        var shown = false
+
+        override fun abandonDimActivity() {
+            calls.add("abandonDimActivity")
+            if (shownInTheGap) shown = true
+        }
         override fun oxyfieldIsActiveScreensaver(): Boolean { calls.add("oxyfieldIsActive"); return oxyfield }
         override fun requestDreamDim() { calls.add("requestDreamDim") }
 
@@ -205,9 +212,33 @@ class DimStrategiesTest {
         val result = attempt(ownActivity, host, requested, slept)
         assertEquals(DimOutcome.NOT_SHOWN, result.outcome)
         assertEquals(3_000L, slept.sum())
-        assertEquals("abandonDimActivity", host.calls.last())
+        // Abandoned, then looked at once more (see the test for an activity that shows up in that gap).
+        assertEquals(listOf("abandonDimActivity", "dimActivityShown"), host.calls.takeLast(2))
         // The broadcast may be released as soon as the start was requested, before the 3 s wait.
         assertEquals(listOf("requested"), requested)
+    }
+
+    @Test
+    fun ownActivityCreatedInTheGapBeforeTheAbandonIsShownNotAbandoned() {
+        val host = FakeDimHost().apply { shownInTheGap = true }
+        val slept = ArrayList<Long>()
+        val result = attempt(ownActivity, host, slept = slept)
+        assertEquals(3_000L, slept.sum())
+        assertEquals(DimOutcome.SHOWN, result.outcome)
+        assertEquals(listOf("abandonDimActivity", "dimActivityShown"), host.calls.takeLast(2))
+    }
+
+    @Test
+    fun anActivityCreatedInTheGapStopsTheScreensaverFallbackFromStarting() {
+        val host = FakeDimHost().apply { shownInTheGap = true }
+        val shown = runDimStrategies(
+            DimStrategies.DEFAULT_ORDER,
+            { s -> attemptDim(s, host, { }, { }) },
+            { },
+        )
+        assertTrue(shown)
+        assertFalse("the second strategy must not start on top of the one that showed", host.calls.contains("requestDreamDim"))
+        assertFalse(host.calls.contains("startScreensaver"))
     }
 
     @Test

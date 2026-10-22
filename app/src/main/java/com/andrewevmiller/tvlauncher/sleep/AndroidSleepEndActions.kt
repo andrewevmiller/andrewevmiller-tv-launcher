@@ -5,6 +5,7 @@ import android.content.Intent
 import android.media.AudioAttributes
 import android.media.AudioFocusRequest
 import android.media.AudioManager
+import android.os.PowerManager
 import android.os.SystemClock
 import android.util.Log
 import android.view.KeyEvent
@@ -23,19 +24,24 @@ import com.andrewevmiller.tvlauncher.sound.FieldSound
  * what spike E3 is for, which is why each one logs what it did.
  *
  * [sound] and [screensaver] are providers, because the sound engine is expensive to build and is only wanted when the
- * timer really fires.
+ * timer really fires. [sleeper] waits on the worker thread (tests pass an instant one).
  */
 class AndroidSleepEndActions(
     private val context: Context,
     private val sound: () -> FieldSound,
     private val screensaver: () -> ScreensaverController,
+    private val sleeper: (Long) -> Unit = { Thread.sleep(it) },
 ) : SleepEndActions {
     private val audio: AudioManager by lazy { context.getSystemService(AudioManager::class.java) }
+    private val power: PowerManager by lazy { context.getSystemService(PowerManager::class.java) }
 
     /** The focus request [perform] is holding, until [release]. */
     private var heldFocus: AudioFocusRequest? = null
 
     // ---- sequence ------------------------------------------------------------------------------------------
+
+    /** PowerManager.isInteractive: true while the screen is on, a dream (screensaver) running included. */
+    override fun isScreenOn(): Boolean = power.isInteractive
 
     override fun warmUp() {
         // Building the engine starts rendering the sound set in the background. In a process that was started for the
@@ -43,12 +49,21 @@ class AndroidSleepEndActions(
         sound()
     }
 
+    /**
+     * Waits for the sound engine to say its sound set is rendered, up to [SleepConfig.SOUND_READY_WAIT_MILLIS], then plays
+     * the closing sound whether it said so or not (a late sound beats none, and a silent engine is not our failure).
+     */
     override fun playClosingSound() {
-        sound().windDown()
+        val engine = sound()
+        val ready = pollUntil(SleepConfig.SOUND_READY_WAIT_MILLIS, SleepConfig.SOUND_READY_POLL_MILLIS, sleeper) {
+            engine.isReady()
+        }
+        if (!ready) Log.i(SleepConfig.TAG, "sound engine not ready after ${SleepConfig.SOUND_READY_WAIT_MILLIS} ms, playing anyway")
+        engine.windDown()
     }
 
     override fun sleep(millis: Long) {
-        Thread.sleep(millis)
+        sleeper(millis)
     }
 
     // ---- pause ---------------------------------------------------------------------------------------------
@@ -97,7 +112,7 @@ class AndroidSleepEndActions(
         Log.i(SleepConfig.TAG, "requestAudioFocus -> ${focusResultName(result)}")
         if (result != AudioManager.AUDIOFOCUS_REQUEST_GRANTED) return
         heldFocus = request
-        Thread.sleep(SleepConfig.FOCUS_EXTRA_HOLD_MILLIS)
+        sleeper(SleepConfig.FOCUS_EXTRA_HOLD_MILLIS)
     }
 
     private fun focusResultName(code: Int): String = when (code) {

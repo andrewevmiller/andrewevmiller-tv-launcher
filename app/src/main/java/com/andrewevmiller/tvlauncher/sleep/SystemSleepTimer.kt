@@ -17,8 +17,12 @@ import kotlinx.coroutines.runBlocking
 
 /**
  * The real sleep timer. The running timer lives in SharedPreferences ([SleepConfig.PREFS_NAME]) and in an
- * `AlarmManager.setAlarmClock` alarm, so it survives the launcher process being killed while another app is in front.
- * `setAlarmClock` needs no exact-alarm permission and is not deferred by Doze.
+ * `AlarmManager.setAlarmClock` alarm. The alarm survives the SYSTEM killing the launcher process (the usual case, with
+ * another app in front), but not everything: a force-stop or a reinstall cancels AlarmManager alarms, and a reboot
+ * drops them. The stored deadline is what outlives those, so the launcher re-arms a stored future deadline the next time
+ * it starts (the controller does that when it is created, and FieldApplication creates it at start-up). A deadline that
+ * has passed by then is dropped, see [restoreTimer]. `setAlarmClock` needs no exact-alarm permission and is not deferred
+ * by Doze.
  *
  * The alarm lands in [SleepAlarmReceiver], which calls [onAlarm] on a worker thread. The receiver may be running in a
  * process that was started just for it, so a freshly created controller keeps a deadline that is only seconds past
@@ -30,6 +34,7 @@ import kotlinx.coroutines.runBlocking
  * @param prefs where the timer is kept; tests pass their own.
  * @param endActions builds the platform side of the end sequence, on first use (it is not built unless the timer
  *   fires). The default has no sound and no screensaver; AppContainer passes the real ones.
+ * @param settle waits between the steps of the end sequence; `delay` on the device, instant in tests.
  */
 class SystemSleepTimer(
     context: Context,
@@ -39,6 +44,7 @@ class SystemSleepTimer(
     private val endActions: () -> SleepEndActions = {
         AndroidSleepEndActions(context.applicationContext, { NoOpFieldSound }, { NoOpScreensaverController })
     },
+    private val settle: suspend (Long) -> Unit = { delay(it) },
 ) : SleepTimerController, SleepEndTimer {
 
     private val appContext: Context = context.applicationContext
@@ -117,13 +123,26 @@ class SystemSleepTimer(
             Log.i(SleepConfig.TAG, line)
             synchronized(lines) { lines.add(line) }
         }
+        // Remember whether THIS call claimed the timer. Only then is the Firing state ours to hand back: a second
+        // alarm that arrives while another call is mid-sequence finds the timer already claimed, and must leave its
+        // Firing state alone (resetting it to Idle would let a third alarm or a restart through).
+        var claimed = false
+        var handedBack = false
+        val claim = object : SleepEndTimer {
+            override fun beginFiring(): Boolean = this@SystemSleepTimer.beginFiring().also { if (it) claimed = true }
+
+            override fun endFiring() {
+                handedBack = true
+                this@SystemSleepTimer.endFiring()
+            }
+        }
         var outcome: SleepEndOutcome? = null
         var failed = false
         try {
             val runner = SleepEndRunner(
-                timer = this,
+                timer = claim,
                 actionsFactory = endActions,
-                settle = { delay(it) },
+                settle = settle,
                 log = log,
             )
             outcome = runBlocking { runner.run(onDimRequested) }
@@ -131,8 +150,8 @@ class SystemSleepTimer(
             failed = true
             log("sleep end: FAILED: ${e.javaClass.simpleName}: ${e.message}")
         } finally {
-            // Whatever happened above, a timer that was claimed must not stay in Firing.
-            endFiring()
+            // The runner hands the timer back itself; this is the net under it (an Error thrown through it, say).
+            if (claimed && !handedBack) endFiring()
         }
         // A stray alarm (nothing due) leaves the previous report alone; a real run, or a crash in one, replaces it.
         if (outcome != null || failed) saveReport(started, synchronized(lines) { lines.toList() })

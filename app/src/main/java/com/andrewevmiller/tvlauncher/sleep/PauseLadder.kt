@@ -99,8 +99,16 @@ suspend fun runPauseLadder(
     return PauseReport(PauseResult.STILL_PLAYING, attempts)
 }
 
-/** What the firing sequence did. [pause] is null when no pause report came back. [errors] lists every failed step. */
-data class SleepEndOutcome(val pause: PauseReport?, val dimShown: Boolean, val errors: List<String>)
+/**
+ * What the firing sequence did. [pause] is null when no pause report came back. [errors] lists every failed step.
+ * [skipped] is the reason when the whole sequence was left out (the TV was already off); then nothing else happened.
+ */
+data class SleepEndOutcome(
+    val pause: PauseReport?,
+    val dimShown: Boolean,
+    val errors: List<String>,
+    val skipped: String? = null,
+)
 
 /** Gap between the pause and the closing sound, so the pause lands first. */
 private const val SOUND_AFTER_PAUSE_MILLIS = 600L

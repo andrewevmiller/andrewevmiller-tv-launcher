@@ -18,6 +18,12 @@ data class RestoredTimer(val state: SleepTimerState, val alarmAtMillis: Long?, v
  *   The receiver claiming it cancels that alarm, so it never fires twice.
  * - Anything else (older than the grace, corrupt, half stored) is Idle and the store is cleared. Nothing stored is
  *   Idle with nothing to clear.
+ *
+ * Known edge: this cannot tell a cold process started for the alarm from any other start. A deadline up to
+ * [SleepConfig.DUE_GRACE_MILLIS] (two minutes) in the past is still fired the next time the launcher starts, a start
+ * after a reboot included. So a TV that is switched off within two minutes AFTER the deadline fires its sequence on the
+ * next start, unless the screen-off guard in [SleepEndRunner] catches it (it skips the whole sequence while the screen
+ * is off, but a TV that is already switched on again by then is not caught).
  */
 fun restoreTimer(storedDeadlineAtMillis: Long?, storedTotalMillis: Long?, now: Long): RestoredTimer {
     val restored = SleepLogic.restore(storedDeadlineAtMillis, storedTotalMillis, now)

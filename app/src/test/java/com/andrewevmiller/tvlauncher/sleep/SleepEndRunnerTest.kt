@@ -45,10 +45,17 @@ class SleepEndRunnerTest {
         var shownByStrategy: String? = DimStrategies.OWN_ACTIVITY
         var oxyfield = true
         var soundThrows = false
-        var factoryThrows = false
+        var screenOn = true
+        var screenCheckThrows = false
 
         val performed = ArrayList<String>()
         val dimTried = ArrayList<String>()
+
+        override fun isScreenOn(): Boolean {
+            events.add("screenOn?")
+            if (screenCheckThrows) throw IllegalStateException("no power service")
+            return screenOn
+        }
 
         override fun warmUp() { events.add("warmUp") }
 
@@ -141,7 +148,7 @@ class SleepEndRunnerTest {
         assertEquals(listOf(SleepTimerState.Firing, SleepTimerState.Idle), states)
         assertEquals(
             listOf(
-                "begin", "warmUp",
+                "begin", "screenOn?", "warmUp",
                 "pause:media-key", "settle 1500", "pause-release",
                 "settle 600", "sound", "settle 1200",
                 "dim:own-activity",
@@ -172,6 +179,43 @@ class SleepEndRunnerTest {
         assertTrue(actions.performed.isEmpty())
         assertTrue(events.contains("sound"))
         assertTrue(events.contains("dim:own-activity"))
+    }
+
+    // ---- the TV is already off --------------------------------------------------------------------------
+
+    @Test
+    fun aTvThatIsAlreadyOffSkipsTheWholeSequence() {
+        val actions = FakeActions().apply { screenOn = false }
+        val requested = AtomicInteger()
+        val outcome = run(runner(FakeTimer(), actions), requested)
+
+        assertNotNull("a skipped run is reported, not mistaken for 'nothing due'", outcome)
+        assertEquals("TV already off", outcome!!.skipped)
+        assertNull(outcome.pause)
+        assertFalse(outcome.dimShown)
+        // Claimed, checked, handed back. No warm-up, no pause, no sound, no dim screen.
+        assertEquals(listOf("begin", "screenOn?", "end"), events)
+        assertTrue(actions.performed.isEmpty())
+        assertTrue(actions.dimTried.isEmpty())
+        assertEquals(0, requested.get())
+        assertTrue(logs.any { it == "sleep end: TV already off, skipped" })
+        assertEquals(listOf(SleepTimerState.Firing, SleepTimerState.Idle), states)
+    }
+
+    @Test
+    fun aTvThatIsOnIsNotSkipped() {
+        val outcome = run(runner(FakeTimer(), FakeActions()))
+        assertNull(outcome!!.skipped)
+    }
+
+    @Test
+    fun aFailingScreenCheckCountsAsOnSoTheTimerStillDoesItsJob() {
+        val actions = FakeActions().apply { screenCheckThrows = true }
+        val outcome = run(runner(FakeTimer(), actions))
+        assertNull(outcome!!.skipped)
+        assertTrue(outcome.dimShown)
+        assertTrue(events.contains("sound"))
+        assertTrue(logs.any { it.contains("screen check FAILED: IllegalStateException: no power service") })
     }
 
     // ---- pause ladder order ---------------------------------------------------------------------------

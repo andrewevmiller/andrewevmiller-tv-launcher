@@ -39,6 +39,15 @@ class SleepDimHandshakeTest {
     }
 
     @Test
+    fun abandoningAfterTheActivityAlreadyShowedLeavesItShown() {
+        SleepDimHandshake.request(1_000)
+        assertTrue(SleepDimHandshake.shown(1_900))
+        SleepDimHandshake.abandon() // too late: nothing to give up on
+        assertTrue(SleepDimHandshake.isShown())
+        assertTrue("a second start of the live activity still works", SleepDimHandshake.shown(5_000))
+    }
+
+    @Test
     fun aNewRequestAfterAnAbandonedOneWorksAgain() {
         SleepDimHandshake.request(1_000)
         SleepDimHandshake.abandon()

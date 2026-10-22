@@ -27,9 +27,16 @@ object SleepDimHandshake {
         }
     }
 
-    /** The start was given up on. A late [shown] now returns false. */
+    /**
+     * The start was given up on. A late [shown] now returns false. If the activity has already called [shown] there is
+     * nothing to give up on: it stays, [isShown] stays true, and a later [shown] (a second start) still works. Doing
+     * this under the same lock as [shown] makes "shown in the gap before the abandon" and "abandoned first" the only two
+     * cases, and [isShown] read right afterwards tells which.
+     */
     fun abandon() {
-        synchronized(lock) { abandoned = true }
+        synchronized(lock) {
+            if (!isShownLocked()) abandoned = true
+        }
     }
 
     /**
@@ -44,8 +51,9 @@ object SleepDimHandshake {
         }
 
     /** True once the activity of the latest [request] has called [shown]. */
-    fun isShown(): Boolean =
-        synchronized(lock) { shownAt != NONE && (requestedAt == NONE || shownAt >= requestedAt) }
+    fun isShown(): Boolean = synchronized(lock) { isShownLocked() }
+
+    private fun isShownLocked(): Boolean = shownAt != NONE && (requestedAt == NONE || shownAt >= requestedAt)
 
     /** Back to nothing requested. For tests. */
     fun reset() {

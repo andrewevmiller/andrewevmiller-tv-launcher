@@ -100,7 +100,10 @@ interface DimHost {
     /** OWN_ACTIVITY: true once the activity started by the last [startDimActivity] has actually been created. */
     fun dimActivityShown(): Boolean
 
-    /** OWN_ACTIVITY: the start did not show in time; if it appears late it must close again at once. */
+    /**
+     * OWN_ACTIVITY: the start did not show in time; if it appears late it must close again at once. An activity that
+     * had already been created before this call is left alone, so [dimActivityShown] read right after it is the truth.
+     */
     fun abandonDimActivity()
 
     /** SCREENSAVER: true only when our own Oxyfield dream is the selected screensaver. */
@@ -150,6 +153,11 @@ private fun attemptOwnActivity(
         return DimAttempt(DimOutcome.SHOWN, "the activity was created")
     }
     host.abandonDimActivity()
+    // The activity may have been created in the gap between the last poll and the abandon. Abandon never closes an
+    // activity that already showed, so if it did, it is on screen: report it, and do not start a second strategy.
+    if (host.dimActivityShown()) {
+        return DimAttempt(DimOutcome.SHOWN, "the activity was created just as the wait ended")
+    }
     return DimAttempt(DimOutcome.NOT_SHOWN, "the activity was not created within $waitMillis ms (background start blocked?)")
 }
 

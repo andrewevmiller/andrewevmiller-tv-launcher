@@ -41,7 +41,8 @@ class SleepDimActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        // Off by default so the TV's own screen-off timeout still runs; see SleepConfig.DIM_KEEPS_SCREEN_ON.
+        if (SleepConfig.DIM_KEEPS_SCREEN_ON) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         if (!markShown("onCreate")) return
 
         val provider = OxyfieldDreamService.reducedMotionProvider ?: SystemReducedMotionProvider(this)

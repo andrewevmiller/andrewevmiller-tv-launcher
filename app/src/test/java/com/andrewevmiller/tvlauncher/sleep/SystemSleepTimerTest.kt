@@ -397,6 +397,8 @@ class SystemSleepTimerTest {
 
     private class QuietActions : SleepEndActions {
         val calls = ArrayList<String>()
+        var screenOn = true
+        override fun isScreenOn(): Boolean = screenOn
         override fun warmUp() { calls.add("warmUp") }
         override fun playClosingSound() { calls.add("sound") }
         override fun sleep(millis: Long) { calls.add("sleep") }
@@ -417,7 +419,7 @@ class SystemSleepTimerTest {
     fun onAlarmWhenNothingIsDueDoesAndPlaysNothing() {
         val actions = QuietActions()
         val built = AtomicInteger()
-        val timer = SystemSleepTimer(context, now = { now }, endActions = { built.incrementAndGet(); actions })
+        val timer = SystemSleepTimer(context, now = { now }, endActions = { built.incrementAndGet(); actions }, settle = {})
         timer.start(30)
         now += 10 * minute // the alarm arrives early, e.g. a stale one
 
@@ -433,7 +435,7 @@ class SystemSleepTimerTest {
     @Test
     fun onAlarmWhenDueRunsTheSequenceAndLeavesNothingBehind() {
         val actions = QuietActions()
-        val timer = SystemSleepTimer(context, now = { now }, endActions = { actions })
+        val timer = SystemSleepTimer(context, now = { now }, endActions = { actions }, settle = {})
         timer.start(15)
         now = running(timer).deadlineAtMillis
 
@@ -456,12 +458,106 @@ class SystemSleepTimerTest {
     }
 
     @Test
-    fun anExceptionBuildingThePlatformSideDoesNotLeaveTheTimerFiring() {
-        val timer = SystemSleepTimer(context, now = { now }, endActions = { throw IllegalStateException("boom") })
+    fun anExceptionBuildingThePlatformSideDoesNotLeaveTheTimerFiringAndIsRecorded() {
+        val timer = SystemSleepTimer(
+            context,
+            now = { now },
+            endActions = { throw IllegalStateException("boom") },
+            settle = {},
+        )
         timer.start(15)
         now = running(timer).deadlineAtMillis
 
         assertNull(timer.onAlarm())
         assertEquals(SleepTimerState.Idle, timer.state.value)
+        val report = timer.lastReport()
+        assertNotNull("a failed run is not silent", report)
+        assertTrue(report!!, report.contains("sleep end: FAILED: IllegalStateException: boom"))
+    }
+
+    @Test
+    fun aSecondAlarmWhileAnotherCallIsFiringLeavesTheFiringStateAlone() {
+        val actions = QuietActions()
+        val built = AtomicInteger()
+        val timer = SystemSleepTimer(context, now = { now }, endActions = { built.incrementAndGet(); actions }, settle = {})
+        timer.start(15)
+        now = running(timer).deadlineAtMillis
+        // Another delivery of the alarm is already mid-sequence: it holds the claim.
+        assertTrue(timer.beginFiring())
+        assertEquals(SleepTimerState.Firing, timer.state.value)
+
+        val requested = AtomicInteger()
+        assertNull(timer.onAlarm { requested.incrementAndGet() })
+
+        assertEquals("the in-flight sequence is not cut short", SleepTimerState.Firing, timer.state.value)
+        assertEquals(0, built.get())
+        assertTrue(actions.calls.isEmpty())
+        assertEquals(0, requested.get())
+        assertNull("a call that claimed nothing writes no report", timer.lastReport())
+
+        // The owner of the claim still hands it back.
+        timer.endFiring()
+        assertEquals(SleepTimerState.Idle, timer.state.value)
+    }
+
+    @Test
+    fun aTvThatIsAlreadyOffGetsNoSoundNoPauseNoDimAndASkippedReport() {
+        val actions = QuietActions().apply { screenOn = false }
+        val timer = SystemSleepTimer(context, now = { now }, endActions = { actions }, settle = {})
+        timer.start(15)
+        now = running(timer).deadlineAtMillis
+
+        val requested = AtomicInteger()
+        val outcome = timer.onAlarm { requested.incrementAndGet() }
+
+        assertEquals("TV already off", outcome!!.skipped)
+        assertTrue("nothing was done: ${actions.calls}", actions.calls.isEmpty())
+        assertEquals(0, requested.get())
+        assertEquals(SleepTimerState.Idle, timer.state.value)
+        assertTrue(shadowAlarms.scheduledAlarms.isEmpty())
+        assertFalse(prefs.contains("deadline_at_millis"))
+        assertTrue(timer.lastReport()!!.contains("TV already off, skipped"))
+    }
+
+    // ---- the early-alarm tolerance, through the claim ---------------------------------------------------
+
+    @Test
+    fun anAlarmFourSecondsBeforeTheDeadlineIsClaimed() {
+        val timer = timer()
+        timer.start(15)
+        now = running(timer).deadlineAtMillis - 4_000L
+        assertTrue(timer.beginFiring())
+        assertEquals(SleepTimerState.Firing, timer.state.value)
+    }
+
+    @Test
+    fun anAlarmSixSecondsBeforeTheDeadlineIsNotClaimed() {
+        val timer = timer()
+        timer.start(15)
+        now = running(timer).deadlineAtMillis - 6_000L
+        assertFalse(timer.beginFiring())
+        assertEquals("still running, still scheduled", 1, shadowAlarms.scheduledAlarms.size)
+        assertEquals(15 * minute, running(timer).totalMillis)
+    }
+
+    // ---- the grace for a cold process, in literal milliseconds ------------------------------------------
+
+    @Test
+    fun aNewInstance119SecondsAfterTheDeadlineStillHasTheTimerDue() {
+        val deadline = timer().run { start(15); running(this).deadlineAtMillis }
+        now = deadline + 119_000L
+        val cold = timer()
+        assertEquals(SleepTimerState.Running(deadline, 15 * minute), cold.state.value)
+        assertTrue(cold.beginFiring())
+    }
+
+    @Test
+    fun aNewInstance121SecondsAfterTheDeadlineDropsTheTimer() {
+        val deadline = timer().run { start(15); running(this).deadlineAtMillis }
+        now = deadline + 121_000L
+        val cold = timer()
+        assertEquals(SleepTimerState.Idle, cold.state.value)
+        assertFalse(cold.beginFiring())
+        assertFalse(prefs.contains("deadline_at_millis"))
     }
 }

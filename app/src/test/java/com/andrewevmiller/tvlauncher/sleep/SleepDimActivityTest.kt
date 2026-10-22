@@ -95,9 +95,10 @@ class SleepDimActivityTest {
     }
 
     @Test
-    fun keepsTheScreenOn() {
+    fun keepsTheScreenOnOnlyWhenTheConfigSaysSo() {
         val flags = start().get().window.attributes.flags
-        assertTrue(flags and WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON != 0)
+        val keepsOn = flags and WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON != 0
+        assertEquals(SleepConfig.DIM_KEEPS_SCREEN_ON, keepsOn)
     }
 
     @Test
