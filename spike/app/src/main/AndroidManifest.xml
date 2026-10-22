@@ -25,6 +25,15 @@
         android:name="android.permission.QUERY_ALL_PACKAGES"
         tools:ignore="QueryAllPackagesPermission" />
 
+    <!--
+        E3 (sleep timer), method C. Declared so the appop can be flipped from adb:
+        adb shell appops set com.andrewevmiller.spike SYSTEM_ALERT_WINDOW allow
+        Nothing else is needed: setAlarmClock, dispatchMediaKeyEvent, requestAudioFocus and starting our own
+        activity need no manifest permission. (The setExactAndAllowWhileIdle fallback would need
+        SCHEDULE_EXACT_ALARM; it is deliberately not declared. If setAlarmClock works it is never used.)
+    -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+
     <queries>
         <!-- The TV provider that serves channels / preview programs / watch-next programs. -->
         <provider android:authorities="android.media.tv" />
@@ -52,5 +61,25 @@
                 <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!--
+            E3: the near-black dim surface, started from the alarm receiver (methods B and C).
+            Its own task affinity so it does not drag the Field Spike task (MainActivity) to the front, which
+            would hide whether a background start of a NEW task works. Not in Recents.
+        -->
+        <activity
+            android:name=".SleepDimActivity"
+            android:configChanges="keyboard|keyboardHidden|navigation|orientation|screenLayout|screenSize|uiMode"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:launchMode="singleTask"
+            android:screenOrientation="landscape"
+            android:taskAffinity="com.andrewevmiller.spike.sleep"
+            android:theme="@android:style/Theme.Material.NoActionBar.Fullscreen" />
+
+        <!-- E3: the alarm lands here (not in an activity), as the launcher's real sleep timer will. -->
+        <receiver
+            android:name=".SleepAlarmReceiver"
+            android:exported="false" />
     </application>
 </manifest>

@@ -14,6 +14,9 @@ import com.andrewevmiller.tvlauncher.home.data.RecordingAppsRepository
 import com.andrewevmiller.tvlauncher.home.data.SharedPrefsLaunchHistory
 import com.andrewevmiller.tvlauncher.settings.DataStoreSettingsRepository
 import com.andrewevmiller.tvlauncher.settings.SettingsRepository
+import com.andrewevmiller.tvlauncher.sleep.AndroidSleepEndActions
+import com.andrewevmiller.tvlauncher.sleep.SleepTimerController
+import com.andrewevmiller.tvlauncher.sleep.SystemSleepTimer
 import com.andrewevmiller.tvlauncher.sound.DataStoreMotifOverrides
 import com.andrewevmiller.tvlauncher.sound.FieldSound
 import com.andrewevmiller.tvlauncher.sound.MotifOverrides
@@ -69,6 +72,14 @@ class AppContainer(private val app: Application) : HomeDeps {
     }
 
     override val screensaver: ScreensaverController by lazy { SystemScreensaverController(app) }
+
+    /**
+     * The sleep timer. The alarm receiver reaches the same instance through here, also in a process that was started
+     * just for the alarm; the sound engine and the screensaver are only touched if the timer really fires.
+     */
+    val sleepTimer: SleepTimerController by lazy {
+        SystemSleepTimer(app, endActions = { AndroidSleepEndActions(app, { sound }, { screensaver }) })
+    }
 
     /** Lets the Oxyfield dream read the reduced-motion setting; it runs once at dream start, off no UI thread work. */
     fun installDreamHooks() {

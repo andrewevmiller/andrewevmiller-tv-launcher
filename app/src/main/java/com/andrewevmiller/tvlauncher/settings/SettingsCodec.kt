@@ -1,5 +1,6 @@
 package com.andrewevmiller.tvlauncher.settings
 
+import com.andrewevmiller.tvlauncher.sleep.SleepPresets
 import com.andrewevmiller.tvlauncher.sound.Waveform
 
 /**
@@ -20,6 +21,7 @@ object SettingsCodec {
         waveform: String?,
         screensaver: String?,
         dotGridAlpha: Float?,
+        sleepMinutes: Int? = null,
     ): LauncherSettings = LauncherSettings(
         darkMode = darkMode ?: defaults.darkMode,
         reducedMotion = reducedMotion ?: defaults.reducedMotion,
@@ -27,6 +29,7 @@ object SettingsCodec {
         waveform = decodeWaveform(waveform),
         screensaver = decodeScreensaver(screensaver),
         dotGridAlpha = clampDotGridAlpha(dotGridAlpha),
+        sleepMinutes = SleepPresets.sanitize(sleepMinutes),
     )
 
     fun encodeWaveform(w: Waveform): String = w.name

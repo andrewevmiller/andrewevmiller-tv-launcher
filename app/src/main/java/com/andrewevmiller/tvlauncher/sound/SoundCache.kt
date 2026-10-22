@@ -30,6 +30,7 @@ class FixedClips(
     val launchFallback: Clip,
     val sleep: Clip,
     val wake: Clip,
+    val windDown: Clip,
 ) {
     init {
         require(tickNormal.size == TICK_ROWS && tickHeld.size == TICK_ROWS) { "need $TICK_ROWS tick clips per kind" }
@@ -167,6 +168,7 @@ class SoundCache(
                 launchFallback = clip(FixedSounds.launchFallback()),
                 sleep = clip(FixedSounds.sleep()),
                 wake = clip(FixedSounds.wake()),
+                windDown = clip(FixedSounds.windDown()),
             )
         }
     }

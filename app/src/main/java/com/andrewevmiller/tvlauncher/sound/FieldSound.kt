@@ -26,8 +26,19 @@ interface FieldSound {
     fun sleep()
     fun wake()
 
+    /** The sleep timer ran out: a short, quiet, descending closing sound. The default body falls back to [sleep] for fakes. */
+    fun windDown() = sleep()
+
     /** Two ticks, select, a launch motif. Used by Settings when the waveform changes. */
     fun preview()
+
+    /**
+     * True once the sounds are rendered and will actually play. The real engine renders its sound set in the
+     * background after it is built, and every sound is silently dropped until that is done. A caller that builds
+     * the engine just before playing one (the sleep timer, in a process started for its alarm) polls this first.
+     * The default is true, for fakes and for implementations with nothing to render.
+     */
+    fun isReady(): Boolean = true
 }
 
 /** Silent implementation for previews, tests, and when audio is unavailable. */
@@ -39,6 +50,7 @@ object NoOpFieldSound : FieldSound {
     override fun launch(app: LauncherApp) = Unit
     override fun sleep() = Unit
     override fun wake() = Unit
+    override fun windDown() = Unit
     override fun preview() = Unit
 }
 

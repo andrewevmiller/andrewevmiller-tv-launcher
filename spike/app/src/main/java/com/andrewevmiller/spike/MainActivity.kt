@@ -26,7 +26,7 @@ import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 
 /**
- * One screen, two spikes. Left column: D-pad focusable buttons. Right column: results (focus it with
+ * One screen, three spikes. Left column: D-pad focusable buttons. Right column: results (focus it with
  * Right, scroll with Up/Down). Every result line is also written to logcat tag "FieldSpike".
  *
  * Plain framework Views on purpose: nothing to go wrong at compile time except the two probes.
@@ -40,6 +40,10 @@ class MainActivity : Activity() {
     private lateinit var prefs: SharedPreferences
     private lateinit var epg: EpgProbe
     private lateinit var dream: DreamProbe
+    private lateinit var sleep: SleepProbe
+
+    /** "<run id>:<done>" of the E3 run whose result was last written to the pane, so coming back shows each once. */
+    private var lastE3Shown = ""
 
     private val buf = StringBuilder()
     private val handler = Handler(Looper.getMainLooper())
@@ -63,6 +67,7 @@ class MainActivity : Activity() {
         prefs = getSharedPreferences(Spike.PREFS, MODE_PRIVATE)
         epg = EpgProbe(applicationContext)
         dream = DreamProbe(this) { line -> emit(line) }
+        sleep = SleepProbe(applicationContext) { line -> emit(line) }
         buildUi()
         rebuildDreamButtons()
         refreshStatus()
@@ -72,6 +77,7 @@ class MainActivity : Activity() {
     override fun onResume() {
         super.onResume()
         refreshStatus()
+        showLastE3IfNew()
     }
 
     override fun onPause() {
@@ -120,19 +126,22 @@ class MainActivity : Activity() {
     }
 
     private fun emitIntro() {
-        emit("FIELD SPIKE  (E1 Watch Next, E2 screensaver)")
+        emit("FIELD SPIKE  (E1 Watch Next, E2 screensaver, E3 sleep timer)")
         emit(Build.MANUFACTURER + " " + Build.MODEL + ", Android " + Build.VERSION.RELEASE +
             " (API " + Build.VERSION.SDK_INT + ")")
         emit("Up/Down: buttons. Right: focus this pane, then Up/Down scrolls. Left: back to buttons.")
         emit("E1: press E1.0, then E1.1. Change the permission state with adb (spike/README.md), run E1.1 again, then E1.3.")
         emit("E2: press E2.0 and E2.1, then a, b1, b2, b3, c. After each, if a screensaver appeared press any key to wake, then mark it.")
+        emit("E3: press E3.0, then a run button (A, B, C, D). It fires 20 s later: go to YouTube/Netflix and start a video. Come back afterwards and mark what you saw.")
         emit("Every line is also in: adb logcat -s FieldSpike")
         emit("")
     }
 
     private fun refreshStatus() {
         statusView.text = ReportFormat.stateTitle(epg.state()) + "\nWRITE_SECURE_SETTINGS: " +
-            (if (dream.hasWriteSecure()) "granted" else "not granted")
+            (if (dream.hasWriteSecure()) "granted" else "not granted") +
+            "\nCan draw over apps: " + (if (sleep.canDrawOverlays()) "yes" else "no") +
+            "\n" + SleepReport.statusLine(sleep.store.latest(), System.currentTimeMillis())
     }
 
     // ---- E1 -------------------------------------------------------------------------------------
@@ -219,6 +228,58 @@ class MainActivity : Activity() {
         for (a in attempts) {
             for (l in ReportFormat.e2Row(a.label, a.screensaver, a.call, a.lostFocus, a.visible)) emit(l)
         }
+    }
+
+    // ---- E3 -------------------------------------------------------------------------------------
+
+    private fun e3Run(method: String) {
+        emit("")
+        emit("--- " + now() + " E3." + method + " " + E3Method.title(method))
+        val r = sleep.schedule(method)
+        if (r.api == null) {
+            emit("    COULD NOT SCHEDULE: " + r.error)
+            refreshStatus()
+            return
+        }
+        emit("    alarm: " + r.api + "  (run #" + r.id + ")")
+        emit("    canDrawOverlays now = " + sleep.canDrawOverlays())
+        emit("")
+        emit("    >>> Now go to YouTube/Netflix and start a video. Firing at " +
+            SleepReport.clock(r.firesAt) + " <<<")
+        emit("    Press Home, open the video app, start playback. Come back here afterwards:")
+        emit("    the result is saved even if this app is killed. Then mark what you saw.")
+        refreshStatus()
+    }
+
+    /** The result of the newest run, once, when the owner comes back (also after this process died). */
+    private fun showLastE3IfNew() {
+        val run = sleep.store.latest() ?: return
+        if (!run.has(E3Field.FIRED_AT)) return
+        val stamp = run.id.toString() + ":" + run.get(E3Field.DONE)
+        if (stamp == lastE3Shown) return
+        lastE3Shown = stamp
+        emit("")
+        emit("E3 result while you were away:")
+        for (l in SleepReport.runLines(run, System.currentTimeMillis())) emit(l)
+    }
+
+    private fun e3Mark(field: String, value: String) {
+        val runs = sleep.store.allRuns()
+        val run = runs.lastOrNull { it.has(E3Field.FIRED_AT) } ?: runs.lastOrNull()
+        if (run == null) {
+            emit("no E3 run to mark yet")
+            return
+        }
+        sleep.store.put(run.id, field, value, sync = false)
+        emit("marked E3 run #" + run.id + " (" + run.method + "): " + field + " = " + value)
+        refreshStatus()
+    }
+
+    private fun e3Summary() {
+        val header = Build.MANUFACTURER + " " + Build.MODEL + ", Android " + Build.VERSION.RELEASE +
+            " (API " + Build.VERSION.SDK_INT + ")"
+        emit("")
+        for (l in SleepReport.summary(header, sleep.store.allRuns(), System.currentTimeMillis())) emit(l)
     }
 
     private fun rebuildDreamButtons() {
@@ -318,6 +379,23 @@ class MainActivity : Activity() {
             refreshStatus()
         }
         addNote(left, "After d1, press a / b1 / b2 / c again, then d2.")
+
+        addHeader(left, "E3  SLEEP TIMER FROM THE BACKGROUND")
+        addNote(left, "A run button sets a 20 s alarm. Then go to a video app and play something.")
+        addButton(left, "E3.0  Status") {
+            emit("")
+            sleep.status()
+            refreshStatus()
+        }
+        addButton(left, "E3.A  Pause + system screensaver") { e3Run(E3Method.A) }
+        addButton(left, "E3.B  Pause + own dim activity") { e3Run(E3Method.B) }
+        addButton(left, "E3.C  Same as B, overlay allowed") { e3Run(E3Method.C) }
+        addButton(left, "E3.D  Pause only (control)") { e3Run(E3Method.D) }
+        addButton(left, "E3 mark: picture STOPPED") { e3Mark(E3Field.OWNER_PICTURE, "STOPPED") }
+        addButton(left, "E3 mark: picture KEPT PLAYING") { e3Mark(E3Field.OWNER_PICTURE, "PLAYING") }
+        addButton(left, "E3 mark: dim SHOWED") { e3Mark(E3Field.OWNER_DIM, "SHOWED") }
+        addButton(left, "E3 mark: dim NOTHING") { e3Mark(E3Field.OWNER_DIM, "NOTHING") }
+        addButton(left, "E3 summary") { e3Summary() }
 
         addHeader(left, "RESULTS")
         addButton(left, "Mark last attempt: SHOWED") { mark("SHOWED") }

@@ -11,5 +11,8 @@ class FieldApplication : Application() {
         super.onCreate()
         CrashGuard.install(this)
         container.installDreamHooks()
+        // Alarms do not survive a reboot or a force-stop. The launcher is Home, so it starts at boot; building the
+        // sleep timer here re-arms a stored deadline that is still in the future (and drops a stale one).
+        container.sleepTimer
     }
 }

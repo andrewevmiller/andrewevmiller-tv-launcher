@@ -98,6 +98,28 @@ object FixedSounds {
         ),
     )
 
+    /**
+     * The sleep timer ran out: [sleep]'s counterpart. One slow detuned note that sinks an octave (E3 to E2, where
+     * [sleep] ended its rise) while the filter closes and the level fades out, so it settles instead of announcing.
+     * The shared envelope is a straight dB-per-second decay over [VoiceSpec.dur], so the longer note already fades
+     * slower than [sleep] (about 16 dB/s against 28). Gentle fold, no attack click. Quiet: the peak is about 0.6x
+     * [select]'s; [VoiceSpec.gain] is the one knob if it is too loud or too faint.
+     */
+    fun windDown(): List<VoiceSpec> = listOf(
+        VoiceSpec(
+            freq = 165.0,
+            glideTo = 82.4,
+            dur = 2.6,
+            gain = 0.011,
+            detune = 25.0,
+            fold = 1.2,
+            drive = 4.0,
+            lpFrom = 2600.0,
+            lpTo = 350.0,
+            q = 3.0,
+        ),
+    )
+
     /** Leaving a screensaver: a short bright sweep. */
     fun wake(): List<VoiceSpec> = listOf(
         VoiceSpec(

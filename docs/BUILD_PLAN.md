@@ -341,7 +341,7 @@ Gate **G1** (owner): `./scripts/deploy.sh` → TV shows the placeholder home wit
 
 | ID | Task | Model | Deliverables | Acceptance |
 |---|---|---|---|---|
-| D1 | `OxyfieldDreamService`: dot field at 44px/1080p, ripples brightening line→muted→accent, clock bottom-left, frame cap 30fps, reduced-motion still frame | Sonnet | `ambient/` | Owner sets it via `deploy.sh` and sees it on idle |
+| D1 | `OxyfieldDreamService`: dot field at 44px/1080p, ripples brightening line→muted→accent, clock bottom-left (time with seconds, then weekday and date), frame cap 30fps, reduced-motion still frame | Sonnet | `ambient/` | Owner sets it via `deploy.sh` and sees it on idle |
 | D2 | `ScreensaverController` impl: read/write `screensaver_components`, `startNow()` using the method E2 proves works | Sonnet | `ambient/` | Switching in settings changes the actual screensaver |
 | D3 | Photos row hand-off: selecting a gallery tile calls `startNow()` with Google's screensaver selected; fallback toast if refused | Haiku | `ambient/` | Device check G3 |
 

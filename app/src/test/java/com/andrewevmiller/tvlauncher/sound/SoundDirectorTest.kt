@@ -70,6 +70,17 @@ class SoundDirectorTest {
     }
 
     @Test
+    fun windDownPlaysItsOwnClipNotSleep() {
+        val rig = Rig(fakeFactory)
+        assertFalse(rig.fixed.windDown.samples.contentEquals(rig.fixed.sleep.samples))
+        rig.director.windDown()
+        // the 2.6 s clip is longer than the default drain, which is sized for the 1.7 s sleep
+        assertPlays(rig.fixed.windDown, rig.drain(rig.fixed.windDown.size + 100))
+        assertEquals(1, rig.wakes)
+        assertTrue(rig.errors.isEmpty())
+    }
+
+    @Test
     fun tickPicksTheRowClipAndClampsTheRow() {
         val rig = Rig(fakeFactory)
         for (row in listOf(0, 2, 7, 11)) {
@@ -116,7 +127,7 @@ class SoundDirectorTest {
         val rig = Rig(fakeFactory)
         rig.allowedNow = false
         val d = rig.director
-        d.tick(0); d.edge(); d.select(); d.back(); d.sleep(); d.wake()
+        d.tick(0); d.edge(); d.select(); d.back(); d.sleep(); d.wake(); d.windDown()
         d.launch("com.plexapp.android", AppCategory.VIDEO)
         d.playPreview()
         assertSilent(rig.drain())
@@ -129,7 +140,7 @@ class SoundDirectorTest {
     fun nothingPlaysBeforeTheFirstRenderIsDone() {
         val rig = Rig(fakeFactory, prepared = false)
         val d = rig.director
-        d.tick(0); d.select(); d.launch("com.x", AppCategory.OTHER); d.playPreview()
+        d.tick(0); d.select(); d.windDown(); d.launch("com.x", AppCategory.OTHER); d.playPreview()
         assertSilent(rig.drain())
         assertTrue(rig.errors.isEmpty())
     }
@@ -256,10 +267,10 @@ class SoundDirectorTest {
             wakeWriter = { throw IllegalStateException("writer") },
             onError = { what, _ -> rig.errors += what },
         )
-        failing.tick(1); failing.edge(); failing.select(); failing.back(); failing.sleep(); failing.wake()
+        failing.tick(1); failing.edge(); failing.select(); failing.back(); failing.sleep(); failing.wake(); failing.windDown()
         failing.launch("com.x", AppCategory.OTHER)
         failing.playPreview()
-        assertEquals(8, rig.errors.size)
+        assertEquals(9, rig.errors.size)
 
         // a failing writer wake-up after the voice is queued is reported, not thrown
         val wakeFails = SoundDirector(
@@ -268,7 +279,7 @@ class SoundDirectorTest {
             onError = { what, _ -> rig.errors += what },
         )
         wakeFails.select()
-        assertEquals(9, rig.errors.size)
+        assertEquals(10, rig.errors.size)
     }
 
     @Test

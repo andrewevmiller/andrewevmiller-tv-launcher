@@ -22,9 +22,13 @@ class VoiceRendererTest {
         "launch" to FixedSounds.launchFallback(),
         "sleep" to FixedSounds.sleep(),
         "wake" to FixedSounds.wake(),
+        "windDown" to FixedSounds.windDown(),
     )
 
     private val ceilingLinear = 10.0.pow(-1.0 / 20.0)
+
+    /** The faintest sample counted as audible content in the wind-down test: -66 dBFS. */
+    private val audible = 5e-4f
 
     /** Single plain voice: near-identity shaper, wide-open low-pass, no click. */
     private fun plain(freq: Double, dur: Double, gain: Double = 0.03, glideTo: Double? = null, at: Double = 0.0) = VoiceSpec(
@@ -105,9 +109,90 @@ class VoiceRendererTest {
         assertEquals(2400 + 6240 + tail, out.size)
         // the 1.7 s sleep sound: 1.73 s
         assertEquals(83040 + tail, r.render(FixedSounds.sleep()).size)
+        // the 2.6 s wind-down: 2.63 s
+        assertEquals(126240 + tail, r.render(FixedSounds.windDown()).size)
         assertEquals(0, r.render(emptyList()).size)
         // a spec that cannot sound is skipped rather than crashing
         assertEquals(0, r.render(listOf(VoiceSpec(freq = 440.0, dur = 0.0))).size)
+    }
+
+    /**
+     * The sleep timer's closing sound, in every waveform. What "quiet", "descending", "audible" and "no click" mean:
+     *  - peak at most 0.65 x select's and 0.45 x launch's (measured 0.41-0.61 and 0.25-0.35), and at least 0.25 x
+     *    select's so it is still there on a TV speaker;
+     *  - audible content = up to the last sample above -66 dBFS (5e-4, which is -56 dBFS after the engine's +10 dB
+     *    output gain), 2.0-3.2 s (measured 2.14-2.25 s), and the buffer itself is 2.0-3.2 s (2.68 s);
+     *  - the zero-crossing frequency of the first 0.4 s is at least 1.5x that of the last 0.4 s before `dur`
+     *    (measured 1.74-2.38; the sine is also pinned to the E3 -> E2 glide's mean pitch);
+     *  - the first sample is silent and the first 0.5 ms stays under 5% of the peak (the 3 ms exponential attack
+     *    from -80 dB), and the last 10 ms is digital silence (under 1e-6).
+     */
+    @Test
+    fun windDownIsAQuietDescendingSettleInEveryWaveform() {
+        val spec = FixedSounds.windDown().single()
+        val report = StringBuilder("windDown per waveform: peak/select, peak/launch, audible seconds, zero-crossing first -> last\n")
+        for (wf in Waveform.values()) {
+            val r = VoiceRenderer(wf)
+            val out = r.render(listOf(spec))
+            val peak = TestDsp.peak(out)
+            val selectPeak = TestDsp.peak(r.render(FixedSounds.select()))
+            val launchPeak = TestDsp.peak(r.render(FixedSounds.launchFallback()))
+
+            assertTrue("$wf finite", TestDsp.allFinite(out))
+            assertTrue("$wf peak $peak", peak <= 1.0 && peak <= ceilingLinear)
+            assertTrue("$wf peak/select ${peak / selectPeak}", peak <= 0.65 * selectPeak)
+            assertTrue("$wf peak/launch ${peak / launchPeak}", peak <= 0.45 * launchPeak)
+            assertTrue("$wf still present: peak/select ${peak / selectPeak}", peak >= 0.25 * selectPeak)
+
+            val bufferSeconds = out.size.toDouble() / sr
+            assertTrue("$wf buffer $bufferSeconds s", bufferSeconds in 2.0..3.2)
+            var lastAudible = 0
+            for (i in out.indices) if (abs(out[i]) >= audible) lastAudible = i
+            val audibleSeconds = lastAudible.toDouble() / sr
+            assertTrue("$wf audible content $audibleSeconds s", audibleSeconds in 2.0..3.2)
+
+            val d = DoubleArray(out.size) { out[it].toDouble() }
+            val first = d.copyOfRange(0, (0.4 * sr).toInt())
+            val last = d.copyOfRange(((spec.dur - 0.4) * sr).toInt(), (spec.dur * sr).toInt())
+            val fFirst = TestDsp.zeroCrossingFrequency(first, sr)
+            val fLast = TestDsp.zeroCrossingFrequency(last, sr)
+            assertTrue("$wf first 0.4 s ${"%.0f".format(fFirst)} Hz vs last 0.4 s ${"%.0f".format(fLast)} Hz", fFirst > 1.5 * fLast)
+
+            assertTrue("$wf starts silent: ${out[0]}", abs(out[0]) < 1e-6f)
+            val head = out.copyOfRange(0, (0.0005 * sr).toInt()).maxOf { abs(it) }
+            assertTrue("$wf first 0.5 ms $head vs peak $peak", head <= 0.05 * peak)
+            val tail = out.copyOfRange(out.size - (0.01 * sr).toInt(), out.size).maxOf { abs(it) }
+            assertTrue("$wf last 10 ms $tail", tail < 1e-6f)
+
+            report.append(
+                "  %-12s %.2f  %.2f  %.2f s  %.0f -> %.0f Hz\n".format(wf.name, peak / selectPeak, peak / launchPeak, audibleSeconds, fFirst, fLast),
+            )
+        }
+        println(report)
+    }
+
+    @Test
+    fun windDownSineGlidesFromE3DownToE2() {
+        val spec = FixedSounds.windDown().single()
+        val out = VoiceRenderer(Waveform.SINE).render(listOf(spec))
+        val d = DoubleArray(out.size) { out[it].toDouble() }
+        // an exponential glide f(t) = 165 * (82.4/165)^(t/2.6): the mean log-frequency over a window is its midpoint's
+        fun expected(t: Double) = spec.freq * (spec.glideTo!! / spec.freq).pow(t / spec.dur)
+        val first = TestDsp.zeroCrossingFrequency(d.copyOfRange(0, (0.4 * sr).toInt()), sr)
+        val last = TestDsp.zeroCrossingFrequency(d.copyOfRange(((spec.dur - 0.4) * sr).toInt(), (spec.dur * sr).toInt()), sr)
+        assertEquals("first 0.4 s", expected(0.2), first, 0.06 * expected(0.2))
+        assertEquals("last 0.4 s", expected(spec.dur - 0.2), last, 0.06 * expected(spec.dur - 0.2))
+    }
+
+    @Test
+    fun windDownRendersDeterministically() {
+        for (wf in Waveform.values()) {
+            val specs = FixedSounds.windDown()
+            val a = VoiceRenderer(wf, seed = 1L).render(specs)
+            assertTrue("$wf same renderer twice", a.contentEquals(VoiceRenderer(wf, seed = 1L).render(specs)))
+            val reused = VoiceRenderer(wf, seed = 1L)
+            assertTrue("$wf reused renderer", reused.render(specs).contentEquals(reused.render(specs)))
+        }
     }
 
     @Test

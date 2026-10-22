@@ -13,9 +13,14 @@ import com.andrewevmiller.tvlauncher.theme.DarkFieldColors
  * Select it with
  * `adb shell settings put secure screensaver_components com.andrewevmiller.tvlauncher/.ambient.OxyfieldDreamService`
  * or from Settings (via [SystemScreensaverController]).
+ *
+ * The sleep timer can start this dream in a dimmed form: it sets [SleepDimRequest] first, and a dream that
+ * [SleepDimRequest.consume]s a live request fades to near-black and holds a still frame (see [OxyfieldView.startSleepDim]).
+ * A dream started without that request is the normal screensaver, unchanged.
  */
 class OxyfieldDreamService : DreamService() {
     private var oxyfieldView: OxyfieldView? = null
+    private var sleepDim = false
 
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
@@ -32,11 +37,18 @@ class OxyfieldDreamService : DreamService() {
             typeface = plexMono(),
         )
         oxyfieldView = view
+
+        // One-shot, and it expires, so only the dream the sleep timer just started is dimmed. Armed here so a
+        // reduced-motion dream never paints a bright frame first; the fade clock restarts in onDreamingStarted.
+        sleepDim = SleepDimRequest.consume()
+        if (sleepDim) view.startSleepDim()
         setContentView(view)
     }
 
     override fun onDreamingStarted() {
         super.onDreamingStarted()
+        // The dream is on screen now: the 45 s fade runs from here.
+        if (sleepDim) oxyfieldView?.startSleepDim()
         oxyfieldView?.start()
     }
 
