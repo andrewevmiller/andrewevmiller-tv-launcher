@@ -58,6 +58,7 @@ class MainActivity : ComponentActivity() {
     private var systemTiles by mutableStateOf<List<SystemTile>>(emptyList())
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        enableStrictModeInDebug()
         super.onCreate(savedInstanceState)
         // A launcher is the bottom of the stack; Back only leaves the drawer.
         onBackPressedDispatcher.addCallback(this) {
@@ -136,6 +137,21 @@ class MainActivity : ComponentActivity() {
               }
             }
         }
+    }
+
+    /**
+     * In a debuggable build, log (never crash on) disk and network work on the main thread and leaked
+     * closeables; look for the "StrictMode" tag in logcat. Release builds are untouched. AGP 8 generates
+     * no BuildConfig by default, so debuggability comes from the app's flags.
+     */
+    private fun enableStrictModeInDebug() {
+        if (applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE == 0) return
+        android.os.StrictMode.setThreadPolicy(
+            android.os.StrictMode.ThreadPolicy.Builder().detectDiskReads().detectDiskWrites().detectNetwork().penaltyLog().build(),
+        )
+        android.os.StrictMode.setVmPolicy(
+            android.os.StrictMode.VmPolicy.Builder().detectLeakedClosableObjects().detectLeakedSqlLiteObjects().penaltyLog().build(),
+        )
     }
 
     /**
