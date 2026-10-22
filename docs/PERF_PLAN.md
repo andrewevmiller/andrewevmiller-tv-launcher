@@ -275,6 +275,14 @@ Tests: `AppStampsTest`, `SnapshotCodecTest` (29 cases).
 - Device: change the system language, return Home: labels update (digest includes the locale).
 - Two quick resumes in a row produce one scan, not two overlapping ones.
 
+**Follow-up (startup restore speed-up):** a cold-start trace on the TV showed content appearing at about
+0.86 s although the first frame is drawn at 0.22 s, because `AppLoader.restore` took 500 to 650 ms to decode
+Home's 39 artwork files one at a time on a background-priority thread, before publishing. Restore now decodes
+Home's cached files on three short-lived normal-priority threads (`decodeCachedInParallel`), splitting the
+hardware-bitmap budget up front, and falls back to the old one-at-a-time path for anything missing or
+unreadable. Checked in the Robolectric harness, including a missing and a corrupt cache file. **Not timed on
+the TV:** compare `restored N apps from snapshot in X ms` (was 495 ms) and the time to first content.
+
 **Rollback:** `git revert` of the PF2 commit restores the old `thread { load }` path.
 
 ---
