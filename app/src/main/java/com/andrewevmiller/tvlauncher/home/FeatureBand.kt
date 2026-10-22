@@ -1,8 +1,13 @@
 package com.andrewevmiller.tvlauncher.home
 
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -12,46 +17,75 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.PointMode
-import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.PointMode
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import androidx.tv.material3.Text
 import com.andrewevmiller.tvlauncher.home.data.LauncherApp
+import com.andrewevmiller.tvlauncher.home.data.NowPlaying
 import com.andrewevmiller.tvlauncher.theme.Field
 import com.andrewevmiller.tvlauncher.theme.FieldDimens
 import com.andrewevmiller.tvlauncher.theme.FieldShapes
 import com.andrewevmiller.tvlauncher.theme.fieldTile
 import kotlinx.coroutines.android.awaitFrame
+import kotlinx.coroutines.delay
 import kotlin.math.exp
 import kotlin.math.hypot
 import kotlin.random.Random
 
-/** What the band shows: an app and a line about when it was last opened (null if never). */
+/** An app the band can feature, with a line about when it was last opened. */
 data class Feature(val app: LauncherApp, val lastOpened: String?)
+
+private const val ROTATE_MS = 6000L
 
 /**
  * The feature band: a panel with hairlines above and below running edge to edge, a kicker, a
- * serif title, one line of body, a CTA, and the dot-field with slow ripples on the right.
+ * serif title, one line of body, buttons, and a picture panel on the right.
+ *
+ * What it shows: whatever is playing right now if something is, otherwise your recent apps one at a
+ * time. The recents turn over every six seconds (not at all with reduced motion), with a row of dots
+ * saying where you are. The Open button opens whichever one is showing when you press it.
  */
 @Composable
-fun FeatureBand(feature: Feature, onOpen: () -> Unit, modifier: Modifier = Modifier) {
+fun FeatureBand(
+    features: List<Feature>,
+    nowPlaying: NowPlaying?,
+    onOpen: (Feature) -> Unit,
+    onOpenPlaying: (NowPlaying) -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val colors = Field.colors
+    val reduced = Field.reducedMotion
+    var index by remember { mutableIntStateOf(0) }
+    LaunchedEffect(features.size, reduced, nowPlaying == null) {
+        if (features.size < 2 || reduced || nowPlaying != null) return@LaunchedEffect
+        while (true) {
+            delay(ROTATE_MS)
+            index = (index + 1) % features.size
+        }
+    }
+    if (index >= features.size) index = 0
     Column(
         modifier
             .layout { measurable, c ->
@@ -67,43 +101,115 @@ fun FeatureBand(feature: Feature, onOpen: () -> Unit, modifier: Modifier = Modif
             Modifier.padding(horizontal = FieldDimens.safeHorizontal, vertical = 16.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Column(Modifier.weight(1f)) {
-                Text(
-                    "FEATURED · ${feature.app.label}".uppercase(),
-                    style = Field.type.sectionLabel,
-                    color = colors.muted,
-                )
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    feature.app.label,
-                    style = Field.type.bandTitle,
-                    color = colors.ink, maxLines = 1,
-                )
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    feature.lastOpened?.let { "Last opened $it. Select to open it again." } ?: "Nothing opened yet. Select to launch it.",
-                    style = Field.type.bodySmall,
-                    color = colors.muted,
-                    modifier = Modifier.width(320.dp),
-                )
-                Spacer(Modifier.height(12.dp))
-                OpenButton(onOpen)
+            // A fixed height keeps the band from changing size as the text changes.
+            Box(Modifier.weight(1f).height(152.dp)) {
+                if (nowPlaying != null) {
+                    PlayingText(nowPlaying, onOpenPlaying)
+                } else {
+                    val shown = features[index]
+                    Crossfade(
+                        targetState = shown,
+                        animationSpec = if (reduced) snap() else tween(350),
+                        label = "featureText",
+                    ) { f -> RecentText(f, features.size, index, onOpen) }
+                }
             }
             Spacer(Modifier.width(28.dp))
-            DotField(Modifier.size(300.dp, 108.dp))
+            Box(Modifier.size(300.dp, 108.dp)) {
+                val art = nowPlaying?.art
+                if (art != null) {
+                    Image(
+                        art, null,
+                        Modifier.fillMaxWidth().height(108.dp).clip(RoundedCornerShape(4.dp))
+                            .border(FieldDimens.hairline, colors.line, RoundedCornerShape(4.dp)),
+                        contentScale = ContentScale.Crop,
+                    )
+                } else {
+                    DotField(Modifier.size(300.dp, 108.dp))
+                }
+            }
         }
         Box(Modifier.fillMaxWidth().height(FieldDimens.hairline).background(colors.line))
     }
 }
 
 @Composable
-private fun OpenButton(onClick: () -> Unit) {
+private fun RecentText(feature: Feature, count: Int, index: Int, onOpen: (Feature) -> Unit) {
+    val colors = Field.colors
+    Column(Modifier.fillMaxWidth()) {
+        Kicker("FEATURED · ${feature.app.label}")
+        Spacer(Modifier.height(4.dp))
+        Title(feature.app.label)
+        Spacer(Modifier.height(4.dp))
+        Body(feature.lastOpened?.let { "Last opened $it. Select to open it again." } ?: "Select to open it.")
+        Spacer(Modifier.height(12.dp))
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            BandButton("Open →") { onOpen(feature) }
+            if (count > 1) {
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    repeat(count) { i ->
+                        Box(
+                            Modifier.size(6.dp).background(if (i == index) colors.ink else colors.line, CircleShape),
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PlayingText(playing: NowPlaying, onOpen: (NowPlaying) -> Unit) {
+    Column(Modifier.fillMaxWidth()) {
+        Kicker("NOW PLAYING · ${playing.appLabel}")
+        Spacer(Modifier.height(4.dp))
+        Title(playing.title)
+        Spacer(Modifier.height(4.dp))
+        Body(playing.subtitle ?: if (playing.playing) "Playing" else "Paused")
+        Spacer(Modifier.height(12.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            BandButton(if (playing.playing) "Pause" else "Play") { playing.onToggle() }
+            BandButton("Open →") { onOpen(playing) }
+        }
+    }
+}
+
+@Composable
+private fun Kicker(text: String) {
+    Text(
+        text.uppercase(),
+        style = Field.type.sectionLabel,
+        color = Field.colors.muted, maxLines = 1,
+    )
+}
+
+@Composable
+private fun Title(text: String) {
+    Text(
+        text,
+        style = Field.type.bandTitle,
+        color = Field.colors.ink, maxLines = 1,
+    )
+}
+
+@Composable
+private fun Body(text: String) {
+    Text(
+        text,
+        style = Field.type.bodySmall,
+        color = Field.colors.muted, maxLines = 2,
+        modifier = Modifier.width(320.dp),
+    )
+}
+
+@Composable
+private fun BandButton(label: String, onClick: () -> Unit) {
     val colors = Field.colors
     var focused by remember { mutableStateOf(false) }
     Text(
-        "Open →",
+        label,
         style = Field.type.cta,
-        // The one place the accent fills: the focused CTA, with dark text on it.
+        // The one place the accent fills: the focused button, with dark text on it.
         color = if (focused) colors.bg else colors.ink,
         modifier = Modifier
             .onFocusChanged { focused = it.hasFocus }
