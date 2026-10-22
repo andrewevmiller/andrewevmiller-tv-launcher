@@ -167,6 +167,7 @@ fun HomeScreen(
         "recent".takeIf { !drawer && recent.isNotEmpty() },
         "screensaver".takeIf { !drawer && screensaver != null },
         "system".takeIf { !drawer && systemTiles.isNotEmpty() },
+        "tools".takeIf { !drawer && tools != null },
     )
     fun reveal(itemKey: String, top: Float = 0f, height: Float = -1f) {
         scope.launch {
