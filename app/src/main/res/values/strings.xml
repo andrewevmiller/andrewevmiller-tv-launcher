@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">Field Launcher</string>
+    <string name="remote_key_service_description">Lets the launcher take over a few remote buttons (Settings and Tuner). It reads nothing from the screen.</string>
 </resources>

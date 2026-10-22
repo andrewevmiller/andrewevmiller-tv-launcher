@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
@@ -36,10 +37,11 @@ private enum class Route { Home, Log, Settings }
  * filter clears and the drawer closes. [settingsRequests] increments on the remote's Menu/Settings key.
  */
 @Composable
-fun FieldRoot(container: AppContainer, homeResets: Int, settingsRequests: Int) {
+fun FieldRoot(container: AppContainer, homeResets: Int, settingsRequests: Int, onContentReady: () -> Unit = {}) {
     val loaded by container.settings.settings.collectAsStateWithLifecycle<LauncherSettings?>(initialValue = null)
     // Wait for the stored theme so a light-mode user never sees a dark flash.
     val settings = loaded ?: return
+    SideEffect { onContentReady() }
 
     FieldTheme(dark = settings.darkMode, reducedMotion = settings.reducedMotion) {
         CompositionLocalProvider(LocalFieldSound provides container.sound) {

@@ -66,7 +66,7 @@ class SleepToolsScreenshotTest {
                 SystemTile("Settings", FieldIcons.Gear) {},
             ),
             chip = Chip.ALL, drawer = false, onChip = {}, onOpenDrawer = {}, onLaunch = {},
-            feature = null, recent = emptyList(), recentOpen = false, onToggleRecent = {},
+            features = emptyList(), nowPlaying = null, onOpenPlaying = {}, recent = emptyList(), recentOpen = false, onToggleRecent = {},
             order = emptyList(), editingPkg = null, onLongPress = {}, onMove = { _, _ -> }, onEditEnd = {},
             pinnedSet = installed.map { it.component.packageName }.toSet(),
             menuApp = null, onMenuPick = {},
