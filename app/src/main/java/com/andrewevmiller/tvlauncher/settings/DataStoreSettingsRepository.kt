@@ -27,6 +27,8 @@ private object SettingsKeys {
     val screensaver = stringPreferencesKey("screensaver")
     val dotGridAlpha = floatPreferencesKey("dot_grid_alpha")
     val sleepMinutes = intPreferencesKey("sleep_minutes")
+    val viewingLogEnabled = booleanPreferencesKey("viewing_log_enabled")
+    val marginNote = stringPreferencesKey("margin_note")
 }
 
 private fun Preferences.toSettings(): LauncherSettings = SettingsCodec.decode(
@@ -37,6 +39,8 @@ private fun Preferences.toSettings(): LauncherSettings = SettingsCodec.decode(
     screensaver = this[SettingsKeys.screensaver],
     dotGridAlpha = this[SettingsKeys.dotGridAlpha],
     sleepMinutes = this[SettingsKeys.sleepMinutes],
+    viewingLogEnabled = this[SettingsKeys.viewingLogEnabled],
+    marginNote = this[SettingsKeys.marginNote],
 )
 
 /**
@@ -64,6 +68,8 @@ class DataStoreSettingsRepository(context: Context) : SettingsRepository {
             prefs[SettingsKeys.screensaver] = SettingsCodec.encodeScreensaver(next.screensaver)
             prefs[SettingsKeys.dotGridAlpha] = SettingsCodec.clampDotGridAlpha(next.dotGridAlpha)
             prefs[SettingsKeys.sleepMinutes] = SleepPresets.sanitize(next.sleepMinutes)
+            prefs[SettingsKeys.viewingLogEnabled] = next.viewingLogEnabled
+            prefs[SettingsKeys.marginNote] = SettingsCodec.encodeMarginNote(next.marginNote)
         }
     }
 }

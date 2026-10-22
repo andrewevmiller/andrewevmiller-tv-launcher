@@ -1,0 +1,1 @@
+shell settings delete secure field_launcher_note

@@ -13,11 +13,15 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
+import com.andrewevmiller.tvlauncher.marginnote.MarginNoteRow
+import com.andrewevmiller.tvlauncher.marginnote.MarginNoteRules
+import com.andrewevmiller.tvlauncher.marginnote.MarginNoteSecureSetting
 import com.andrewevmiller.tvlauncher.AppContainer
 import com.andrewevmiller.tvlauncher.home.data.AppLoader
 import com.andrewevmiller.tvlauncher.home.data.HomeLaunchHistory
@@ -29,7 +33,9 @@ import com.andrewevmiller.tvlauncher.home.data.NowPlayingMonitor
 import com.andrewevmiller.tvlauncher.settings.LauncherSettings
 import com.andrewevmiller.tvlauncher.sound.LocalFieldSound
 import com.andrewevmiller.tvlauncher.theme.FieldIcons
+import com.andrewevmiller.tvlauncher.viewinglog.ui.ViewingLogTile
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -51,6 +57,10 @@ fun FieldHome(
     settings: LauncherSettings,
     onOpenSettings: () -> Unit,
     modifier: Modifier = Modifier,
+    /** Opens the Viewing log (the Tools row tile). */
+    onOpenLog: () -> Unit = {},
+    /** Counts up each time the log closes; focus goes back to the Viewing log tile on each change. */
+    focusLogTile: Int = 0,
 ) {
     val context = LocalContext.current
     val sound = LocalFieldSound.current
@@ -82,6 +92,11 @@ fun FieldHome(
     var editing by remember { mutableStateOf<String?>(null) }
     var menuApp by remember { mutableStateOf<LauncherApp?>(null) }
     var sleepOpen by remember { mutableStateOf(false) }
+    // True while the margin note's editor is open (the row is replaced by the editor, Back discards).
+    var noteEditing by remember { mutableStateOf(false) }
+    // The laptop fallback (`settings put secure field_launcher_note`), re-read each time Home comes back.
+    var secureNote by remember { mutableStateOf(MarginNoteSecureSetting.read(context)) }
+    val scope = rememberCoroutineScope()
 
     val open: (Intent) -> Unit = { intent ->
         sound.select()
@@ -98,7 +113,12 @@ fun FieldHome(
     DisposableEffect(nowPlayingMonitor) { onDispose { nowPlayingMonitor.close() } }
 
     // Cheap when nothing was installed, removed or updated, so installs and uninstalls still show up on return.
-    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { loader.refresh() }
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
+        loader.refresh()
+        secureNote = MarginNoteSecureSetting.read(context)
+        // Copies new app usage into the viewing log (a no-op while the log is off or usage access is not granted).
+        container.viewingLog.refresh()
+    }
     LaunchedEffect(ui.message) {
         if (ui.message != null) {
             delay(4_000)
@@ -106,7 +126,7 @@ fun FieldHome(
         }
     }
     // A launcher is the bottom of the stack: Back only closes the menu, ends a move, or leaves the drawer.
-    BackHandler(enabled = menuApp != null || editing != null || sleepOpen || drawer) {
+    BackHandler(enabled = menuApp != null || editing != null || noteEditing || sleepOpen || drawer) {
         when {
             menuApp != null -> {
                 menuApp = null
@@ -115,6 +135,10 @@ fun FieldHome(
             editing != null -> {
                 editing = null
                 sound.select()
+            }
+            noteEditing -> {
+                noteEditing = false
+                sound.back()
             }
             sleepOpen -> {
                 sleepOpen = false
@@ -246,6 +270,32 @@ fun FieldHome(
                 defaultMinutes = settings.sleepMinutes,
                 open = sleepOpen,
                 onOpenChange = { sleepOpen = it },
+                trailing = {
+                    ViewingLogTile(
+                        onClick = {
+                            sound.select()
+                            onOpenLog()
+                        },
+                        focusRequest = focusLogTile,
+                    )
+                },
+            )
+        },
+        note = {
+            MarginNoteRow(
+                note = MarginNoteRules.merge(settings.marginNote, secureNote),
+                editing = noteEditing,
+                onOpen = {
+                    sound.select()
+                    noteEditing = true
+                },
+                onSave = { text ->
+                    noteEditing = false
+                    sound.select()
+                    scope.launch {
+                        container.settings.update { it.copy(marginNote = MarginNoteRules.sanitize(text)) }
+                    }
+                },
             )
         },
         dotAlpha = settings.dotGridAlpha,

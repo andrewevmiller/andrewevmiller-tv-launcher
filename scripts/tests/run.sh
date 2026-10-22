@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Acceptance tests for scripts/probe.sh, deploy.sh and rescue.sh. Everything runs against
+# Acceptance tests for scripts/probe.sh, deploy.sh, rescue.sh and note.sh. Everything runs against
 # scripts/tests/fake-adb: no device, no real adb. Temp state lives in a mktemp dir, so the
 # real scripts/.deploy-state is never touched.
 set -euo pipefail
@@ -84,6 +84,8 @@ test_deploy_dry_run() {
   local out="$WORK/dry.out" log="$WORK/dry.log"
   if ADB=/nonexistent/adb FAKE_ADB_LOG="$log" "$SCRIPTS_DIR/deploy.sh" --dry-run >"$out" 2>&1; then
     expect_file_eq "(b) deploy --dry-run output equals golden" "$GOLDEN/deploy-dry-run.txt" "$out"
+    expect_match "(b) deploy --dry-run grants usage access next to WRITE_SECURE_SETTINGS" \
+      'adb shell appops set com\.andrewevmiller\.tvlauncher GET_USAGE_STATS allow$' "$out"
   else
     fail "(b) deploy --dry-run exits 0 with no adb binary" "$(tail -n 3 "$out")"
   fi
@@ -231,6 +233,160 @@ test_rescue_dry_run() {
   fi
 }
 
+# device_args LOG_LINE OUT_FILE: runs the remote part of a logged `shell ...` line the way the TV's shell
+# would, with a stub `settings` that writes each argument it receives on its own line to OUT_FILE.
+device_args() {
+  local remote="${1#shell }" out="$2"
+  rm -f "$out"
+  OUT_FILE="$out" sh -c 'settings() { for a in "$@"; do printf "%s\n" "$a" >>"$OUT_FILE"; done; }; '"$remote"
+}
+
+# expect_note_value NAME EXPECTED LOG: the value the TV's `settings put` receives for the one logged call.
+expect_note_value() {
+  local name="$1" expected="$2" log="$3" got=""
+  if [[ ! -s $log ]]; then
+    fail "$name" "no adb call was logged"
+    return
+  fi
+  if ! device_args "$(tail -n 1 "$log")" "$WORK/note-args" 2>"$WORK/note-args.err"; then
+    fail "$name" "remote command did not parse: $(cat "$WORK/note-args.err")"
+    return
+  fi
+  got="$(tail -n 1 "$WORK/note-args")"
+  if [[ $got == "$expected" ]]; then
+    pass "$name"
+  else
+    fail "$name" "expected [$expected] but the TV receives [$got]"
+  fi
+}
+
+# (k) note.sh: dry run, clearing, and the quoting that must reach the TV unchanged.
+test_note_dry_run() {
+  local d="$WORK/k" out
+  mkdir -p "$d"
+  out="$d/dry.out"
+  if ADB=/nonexistent/adb FAKE_ADB_LOG="$d/log" "$SCRIPTS_DIR/note.sh" --dry-run "finish S2 of Severance" >"$out" 2>&1; then
+    expect_file_eq "(k) note --dry-run output equals golden" "$GOLDEN/note-dry-run.txt" "$out"
+  else
+    fail "(k) note --dry-run exits 0 with no adb binary" "$(tail -n 3 "$out")"
+  fi
+  if [[ -e $d/log ]]; then
+    fail "(k) note --dry-run makes no adb calls" "log exists: $d/log"
+  else
+    pass "(k) note --dry-run makes no adb calls"
+  fi
+}
+
+test_note_clear() {
+  local d="$WORK/k-clear"
+  mkdir -p "$d"
+  if ADB="$FAKE_ADB" FAKE_ADB_LOG="$d/log" "$SCRIPTS_DIR/note.sh" >"$d/out" 2>&1; then
+    expect_file_eq "(k) note with no text issues the delete sequence" "$GOLDEN/note-clear-calls.txt" "$d/log"
+  else
+    fail "(k) note with no text exits 0" "$(tail -n 3 "$d/out")"
+  fi
+  rm -f "$d/log"
+  if ADB="$FAKE_ADB" FAKE_ADB_LOG="$d/log" "$SCRIPTS_DIR/note.sh" "" >"$d/out2" 2>&1; then
+    expect_file_eq "(k) note with an empty string clears the same way" "$GOLDEN/note-clear-calls.txt" "$d/log"
+  else
+    fail "(k) note with an empty string exits 0" "$(tail -n 3 "$d/out2")"
+  fi
+  rm -f "$d/log"
+  if ADB="$FAKE_ADB" FAKE_ADB_LOG="$d/log" "$SCRIPTS_DIR/note.sh" "   " >"$d/out3" 2>&1; then
+    expect_file_eq "(k) note with only spaces clears too" "$GOLDEN/note-clear-calls.txt" "$d/log"
+  else
+    fail "(k) note with only spaces exits 0" "$(tail -n 3 "$d/out3")"
+  fi
+}
+
+# Each case sends one value through the fake and checks what the TV's shell hands to `settings`.
+test_note_quoting() {
+  local d="$WORK/k-quote" i=0 text expected
+  mkdir -p "$d"
+  # "text => expected value on the TV" (the separator is in no case)
+  local cases=(
+    "finish S2 of Severance => finish S2 of Severance"
+    "it's done => it's done"
+    "say \"hi\" => say \"hi\""
+    "cost \$HOME and \`date\` => cost \$HOME and \`date\`"
+    "\$(touch /nonexistent/x) => \$(touch /nonexistent/x)"
+    "back\\slash \\n literal => back\\slash \\n literal"
+    "semi; pipe | amp & star * => semi; pipe | amp & star *"
+    "café 😀 => café 😀"
+    "'single' \"double\" \$x \`y\` \\z => 'single' \"double\" \$x \`y\` \\z"
+  )
+  local c
+  for c in "${cases[@]}"; do
+    i=$((i + 1))
+    text="${c%% => *}"
+    expected="${c#* => }"
+    rm -f "$d/log"
+    if ADB="$FAKE_ADB" FAKE_ADB_LOG="$d/log" "$SCRIPTS_DIR/note.sh" "$text" >"$d/out" 2>&1; then
+      expect_note_value "(k) quoting case $i reaches the TV intact" "$expected" "$d/log"
+    else
+      fail "(k) quoting case $i exits 0" "$(tail -n 3 "$d/out")"
+    fi
+  done
+  rm -f "$d/log"
+  if ADB="$FAKE_ADB" FAKE_ADB_LOG="$d/log" "$SCRIPTS_DIR/note.sh" -- "-leading dash" >"$d/out" 2>&1; then
+    expect_note_value "(k) a text after -- may start with a dash" "-leading dash" "$d/log"
+  else
+    fail "(k) a text after -- may start with a dash" "$(tail -n 3 "$d/out")"
+  fi
+}
+
+test_note_sanitising() {
+  local d="$WORK/k-clean"
+  mkdir -p "$d"
+  rm -f "$d/log"
+  ADB="$FAKE_ADB" FAKE_ADB_LOG="$d/log" "$SCRIPTS_DIR/note.sh" "$(printf '  two\nlines\there  ')" >"$d/out" 2>&1 || true
+  expect_note_value "(k) newlines and tabs are stripped and the ends trimmed" "twolineshere" "$d/log"
+
+  # 79 characters, a space, then three more: the cut at 80 leaves a trailing space, which must go too.
+  local long
+  long="$(printf 'x%.0s' {1..79}) bcd"
+  rm -f "$d/log"
+  ADB="$FAKE_ADB" FAKE_ADB_LOG="$d/log" "$SCRIPTS_DIR/note.sh" "$long" >"$d/out" 2>&1 || true
+  expect_note_value "(k) a note over 80 characters is cut and trimmed" "$(printf 'x%.0s' {1..79})" "$d/log"
+  expect_match "(k) cutting a note says so" 'WARN: note is 83 characters; the launcher keeps 80' "$d/out"
+
+  rm -f "$d/log"
+  ADB="$FAKE_ADB" FAKE_ADB_LOG="$d/log" "$SCRIPTS_DIR/note.sh" "$(printf 'y%.0s' {1..80})" >"$d/out" 2>&1 || true
+  expect_note_value "(k) exactly 80 characters is kept whole" "$(printf 'y%.0s' {1..80})" "$d/log"
+  expect_no_match "(k) exactly 80 characters gives no warning" 'WARN' "$d/out"
+}
+
+test_note_arguments() {
+  local d="$WORK/k-args"
+  mkdir -p "$d"
+  if "$SCRIPTS_DIR/note.sh" --help >"$d/help" 2>&1; then
+    expect_match "(k) note --help states the 80 character limit" '80 characters' "$d/help"
+  else
+    fail "(k) note --help exits 0" "$(tail -n 3 "$d/help")"
+  fi
+  if "$SCRIPTS_DIR/note.sh" one two >"$d/two" 2>&1; then
+    fail "(k) two separate arguments are refused" "exit 0"
+  else
+    expect_match "(k) two separate arguments are refused with a hint" 'one quoted argument' "$d/two"
+  fi
+  if "$SCRIPTS_DIR/note.sh" --nope >"$d/unknown" 2>&1; then
+    fail "(k) an unknown option is refused" "exit 0"
+  else
+    expect_match "(k) an unknown option is refused" 'unknown argument: --nope' "$d/unknown"
+  fi
+}
+
+test_note_real_run() {
+  local d="$WORK/k-real"
+  mkdir -p "$d"
+  if ADB="$FAKE_ADB" FAKE_ADB_LOG="$d/log" "$SCRIPTS_DIR/note.sh" "finish S2" >"$d/out" 2>&1; then
+    expect_match "(k) a real run reports the stored length" '^OK: margin note set \(9 characters\)$' "$d/out"
+    expect_file_eq "(k) a real run issues one settings put" "$GOLDEN/note-set-calls.txt" "$d/log"
+  else
+    fail "(k) a real run exits 0" "$(tail -n 3 "$d/out")"
+  fi
+}
+
 test_probe
 test_deploy_dry_run
 test_deploy_real
@@ -241,6 +397,12 @@ test_rescue_previous_uninstalled
 test_rescue_stock
 test_rescue_no_state
 test_rescue_dry_run
+test_note_dry_run
+test_note_clear
+test_note_quoting
+test_note_sanitising
+test_note_arguments
+test_note_real_run
 
 printf '\n%d passed, %d failed\n' "$PASSED" "$FAILED"
 if [[ $FAILED -ne 0 ]]; then

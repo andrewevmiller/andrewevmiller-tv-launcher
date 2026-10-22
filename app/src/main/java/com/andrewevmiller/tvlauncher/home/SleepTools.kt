@@ -45,6 +45,7 @@ private class WasOpen(var value: Boolean)
  * so Back can close the picker first. OK on the tile toggles it and focus lands on the user's default length
  * ([defaultMinutes]); OK on a chip acts, plays the select sound, collapses the picker and returns focus to the
  * tile. The picker also closes by itself when the timer runs out. [now] is the wall clock (tests move it).
+ * [trailing] is any other tile on the same row; the picker opens under the sleep tile only.
  */
 @Composable
 fun SleepTools(
@@ -54,6 +55,8 @@ fun SleepTools(
     onOpenChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
     now: () -> Long = System::currentTimeMillis,
+    /** Another tool tile, drawn to the right of the sleep tile in the same row (the Viewing log). Null draws none. */
+    trailing: (@Composable () -> Unit)? = null,
 ) {
     val sound = LocalFieldSound.current
     val state by controller.state.collectAsState()
@@ -95,6 +98,7 @@ fun SleepTools(
                 },
                 modifier = Modifier.focusRequester(tileRequester),
             )
+            trailing?.invoke()
         }
         if (open) {
             Row(

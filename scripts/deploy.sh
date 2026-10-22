@@ -23,7 +23,7 @@ Makes Field Launcher the TV's home screen. Steps, in order:
   3. record the previous HOME, launcherx/setupwraith states and the screensaver
      in scripts/.deploy-state (not rewritten while our launcher is already HOME)
   4. ./gradlew installDebug, or adb install -r PATH with --apk
-  5. grant WRITE_SECURE_SETTINGS (warns on failure)
+  5. grant WRITE_SECURE_SETTINGS and usage access, GET_USAGE_STATS (warn on failure)
   6. write the previous HOME to the TV (field_launcher_previous_home)
   7. re-enable our HOME activity and make it the default HOME
   8. press HOME, then verify the HOME that is now resolved
@@ -157,6 +157,9 @@ fi
 printf '== 5. permission ==\n'
 run shell pm grant "$HOME_PKG" android.permission.WRITE_SECURE_SETTINGS \
   || warn "could not grant WRITE_SECURE_SETTINGS; the screensaver switch will not work until it is granted"
+# Usage access for the viewing log (non-fatal): without it the log records nothing new.
+run shell appops set "$HOME_PKG" GET_USAGE_STATS allow \
+  || warn "could not grant usage access (GET_USAGE_STATS); the viewing log will not record until it is granted"
 
 # 6. Previous HOME on the TV, for the on-device crash fallback.
 printf '== 6. previous home on the TV ==\n'

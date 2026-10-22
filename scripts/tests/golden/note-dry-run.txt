@@ -1,0 +1,2 @@
+dry run: nothing is changed; each adb command is printed
++ adb shell settings put secure field_launcher_note 'finish S2 of Severance'

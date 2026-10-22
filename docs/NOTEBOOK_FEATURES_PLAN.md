@@ -94,7 +94,7 @@ a session when the screen goes non-interactive; and caps one session at 8 hours 
 cannot run for a day. All thresholds are constants with tests.
 
 **Honest limits.** The duration is time the app was in front, not time a video was actually playing. Music apps
-playing in the background show only the time they were on screen. Anything before the grant is not recorded.
+playing in the background show only the time they were on screen. The first sync after the grant copies in whatever the system still has (about a week, `FIRST_SYNC_LOOKBACK_MILLIS`), so the page is not empty on day one; anything older does not exist. Seen on the real TV: 38 sessions in the first week.
 
 | # | Work | Notes |
 |---|---|---|

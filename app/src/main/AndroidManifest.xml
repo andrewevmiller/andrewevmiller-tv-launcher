@@ -11,6 +11,10 @@
          `adb shell pm grant com.andrewevmiller.tvlauncher android.permission.WRITE_SECURE_SETTINGS` once. -->
     <uses-permission android:name="android.permission.WRITE_SECURE_SETTINGS" />
 
+    <!-- Viewing log: which app was in front and for how long (UsageStatsManager). Not grantable in the UI: deploy.sh
+         runs `adb shell appops set com.andrewevmiller.tvlauncher GET_USAGE_STATS allow` once. Nothing leaves the TV. -->
+    <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS" />
+
     <!-- Sleep timer. Declared only so `adb shell appops set com.andrewevmiller.tvlauncher SYSTEM_ALERT_WINDOW allow`
          is possible if the TV spike shows that starting SleepDimActivity from the alarm receiver needs it.
          Nothing requests it at run time. The timer itself needs no permission: setAlarmClock is exact-alarm exempt. -->

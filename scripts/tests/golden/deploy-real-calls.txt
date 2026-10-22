@@ -7,6 +7,7 @@ shell pm list packages
 shell pm list packages -d
 shell settings get secure screensaver_components
 shell pm grant com.andrewevmiller.tvlauncher android.permission.WRITE_SECURE_SETTINGS
+shell appops set com.andrewevmiller.tvlauncher GET_USAGE_STATS allow
 shell settings put secure field_launcher_previous_home com.gathin.tvhome/.WiiMenuActivity
 shell pm enable com.andrewevmiller.tvlauncher/.HomeAlias
 shell cmd package set-home-activity com.andrewevmiller.tvlauncher/.HomeAlias

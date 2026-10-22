@@ -72,6 +72,7 @@ private const val ROW_SCREENSAVER = 2
 private const val ROW_ABOUT = 3
 private const val ROW_MOTIFS = 4
 private const val ROW_SLEEP = 5
+private const val ROW_VIEWING_LOG = 6
 
 /** How long the "can't start on demand" message stays up. */
 private const val START_MESSAGE_MS = 6_000L
@@ -96,6 +97,8 @@ fun SettingsScreen(
     screensaver: ScreensaverController,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
+    /** Forgets the Viewing log's sessions. Called on the second OK of "Clear log". */
+    onClearViewingLog: () -> Unit = {},
 ) {
     val sound = LocalFieldSound.current
     BackHandler {
@@ -117,6 +120,7 @@ fun SettingsScreen(
                 screensaver = screensaver,
                 current = current,
                 modifier = modifier,
+                onClearViewingLog = onClearViewingLog,
             )
         }
     }
@@ -130,6 +134,7 @@ private fun SettingsContent(
     screensaver: ScreensaverController,
     current: LauncherSettings,
     modifier: Modifier,
+    onClearViewingLog: () -> Unit,
 ) {
     val colors = Field.colors
     val sound = LocalFieldSound.current
@@ -177,6 +182,28 @@ private fun SettingsContent(
         if (startMessage != null) {
             delay(START_MESSAGE_MS)
             startMessage = null
+        }
+    }
+
+    // Clear log: the first OK asks, the second OK clears. Moving focus away un-asks.
+    var clearArmed by remember { mutableStateOf(false) }
+    var clearMessage by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(clearMessage) {
+        if (clearMessage != null) {
+            delay(START_MESSAGE_MS)
+            clearMessage = null
+        }
+    }
+    val onClearLog: () -> Unit = {
+        if (!clearArmed) {
+            confirm()
+            clearArmed = true
+            clearMessage = null
+        } else {
+            sound.select()
+            clearArmed = false
+            clearMessage = "Viewing log cleared."
+            onClearViewingLog()
         }
     }
 
@@ -264,6 +291,17 @@ private fun SettingsContent(
                     edit { it.copy(sleepMinutes = SleepToolsLogic.clampMinutes(minutes)) }
                 },
                 onEdge = { sound.edge() },
+            )
+            viewingLogSection(
+                current = current,
+                onToggle = {
+                    confirm()
+                    edit { it.copy(viewingLogEnabled = !it.viewingLogEnabled) }
+                },
+                clearArmed = clearArmed,
+                clearMessage = clearMessage,
+                onClear = onClearLog,
+                onDisarm = { clearArmed = false },
             )
             aboutSection(versionName)
             motifSection(motifRows, onReroll, onToggleMute, onReset)
@@ -435,6 +473,33 @@ private fun LazyListScope.sleepSection(
         }
     }
     rowItem("sleep-hint", ROW_SLEEP) { Hint("The sleep picker on Home opens on this length.") }
+}
+
+/** Viewing log: the on/off switch, and Clear log (a second OK confirms). The page itself is on the Tools row. */
+private fun LazyListScope.viewingLogSection(
+    current: LauncherSettings,
+    onToggle: () -> Unit,
+    clearArmed: Boolean,
+    clearMessage: String?,
+    onClear: () -> Unit,
+    onDisarm: () -> Unit,
+) {
+    rowItem("viewing-log-header", ROW_VIEWING_LOG) { SectionHeader("Viewing log") }
+    rowItem("viewing-log-toggle", ROW_VIEWING_LOG) {
+        ToggleRow(label = "Viewing log", on = current.viewingLogEnabled, onToggle = onToggle)
+    }
+    rowItem("viewing-log-hint", ROW_VIEWING_LOG) {
+        Hint("Which app was in front, and for how long. Kept on this TV only.")
+    }
+    // The armed prompt is the row's own label, so it is on screen while the row has focus.
+    rowItem("viewing-log-clear", ROW_VIEWING_LOG) {
+        ActionRow(
+            label = if (clearArmed) "Press OK again to clear the log" else "Clear log",
+            onClick = onClear,
+            modifier = Modifier.onFocusChanged { if (!it.hasFocus) onDisarm() },
+        )
+    }
+    if (clearMessage != null) rowItem("viewing-log-message", ROW_VIEWING_LOG) { Hint(clearMessage) }
 }
 
 private fun LazyListScope.aboutSection(versionName: String?) {

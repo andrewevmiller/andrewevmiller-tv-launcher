@@ -24,6 +24,10 @@ data class LauncherSettings(
     val dotGridAlpha: Float = 1f,
     /** The sleep timer's default length in minutes; always one of [SleepPresets.minutes]. */
     val sleepMinutes: Int = SleepPresets.DEFAULT_MINUTES,
+    /** Whether the Viewing log records what is in front. Nothing is read or written while this is off. */
+    val viewingLogEnabled: Boolean = true,
+    /** The owner's margin note: one line, at most 80 characters, no control characters. Empty means none. */
+    val marginNote: String = "",
 )
 
 /** Persisted user settings. Every change is observable, so the UI updates without a restart. */

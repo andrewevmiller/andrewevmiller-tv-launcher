@@ -46,6 +46,15 @@ adb shell pm grant com.andrewevmiller.tvlauncher android.permission.WRITE_SECURE
 
 Without it everything else works; Settings shows "Run scripts/deploy.sh once to allow switching".
 
+The **Viewing log** needs usage access, the `GET_USAGE_STATS` appop, which Android also doesn't offer in the UI.
+`deploy.sh` grants it with the same kind of one-time command:
+
+```bash
+adb shell appops set com.andrewevmiller.tvlauncher GET_USAGE_STATS allow
+```
+
+Without it the log shows an empty page with that command, and records nothing new. The first time it runs after the grant it also copies in the last week or so of usage the TV itself kept, so the page is not empty on day one; anything older than that is not available.
+
 ### Getting your old home screen back
 
 ```bash
@@ -100,6 +109,35 @@ The **Sleep timer** tile is in the **Tools** row at the bottom of Home. Its capt
   `adb shell run-as com.andrewevmiller.tvlauncher cat shared_prefs/field_sleep.xml`.
 
 The normal Oxyfield screensaver clock also shows seconds now.
+
+### Viewing log
+
+The **Viewing log** tile sits next to the sleep timer in the **Tools** row. It shows what you watched: a summary
+(`THIS WEEK  14 h 20 m · 11 sessions`), one bar per day, the top apps with their time, then the sessions by date.
+The chips switch between This week, Last week and Month. Back returns to Home with focus on the tile.
+
+- **What a session is:** the time an app was in front, from when it came up to when it left, with the screen on.
+  Sessions of one app less than 2 minutes apart are joined, anything under 1 minute is dropped, and one session
+  is capped at 8 hours. The launcher, system UI and the screensavers are not recorded.
+- **The honest limits:** this is time an app was in front, not time a video was playing. Music that plays in the
+  background shows only the time its app was on screen. Usage from before the grant is only there if the TV still kept it (about a week), and the first sync copies that in; nothing older exists.
+- **Where it lives:** one file in the launcher's app storage on the TV, kept 90 days. Nothing leaves the TV.
+  The log is on by default once usage access is granted. Settings → Viewing log turns it off (nothing is read or
+  written while it is off), and Clear log (press OK twice) empties it.
+
+### Margin note
+
+A **margin note** is one short line of your own text, shown on Home between the header and the feature band:
+`NOTE  finish S2 of Severance`. It is in the mono style, muted, with a hairline under it.
+
+- **OK on the note line** opens the editor. Type with the TV's on-screen keyboard. **Done** saves; **Back**
+  discards. Saving an empty note removes the line, unless a laptop note is set (see below), which then shows again.
+- With no note, the line shows only while it is focused (`NOTE  add a note`), so an unused note takes no space.
+- The note is at most 80 characters, on one line. Newlines and control characters are dropped, and the ends are trimmed.
+- **From a laptop:** `scripts/note.sh "text"` sets it over adb (`scripts/note.sh ""`, or no text, clears it). It is
+  the fallback when typing on the TV is awkward. The launcher shows it only while its own note is empty, so a note
+  typed on the TV wins. To remove both, clear the laptop note too (`scripts/note.sh` with no text).
+- **Where it lives:** on the TV only, in the launcher's settings. Nothing is sent anywhere.
 
 ## Three on-device questions the spike answers
 

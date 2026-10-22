@@ -71,6 +71,7 @@ shell_cmd() {
     "pm list packages") fx packages ;;
     "pm path "*) pm_path "${@: -1}" ;;
     "pm enable "* | "pm disable-user "* | "pm grant "*) ;;
+    "appops set "*) ;;
     "cmd package resolve-activity "*) resolve ;;
     "cmd package query-activities "*) fx query_home ;;
     "cmd package set-home-activity "*)
