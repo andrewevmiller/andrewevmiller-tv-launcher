@@ -1,148 +1,51 @@
 package com.andrewevmiller.tvlauncher
 
-import android.content.Context
 import android.content.Intent
-import android.media.tv.TvContract
-import android.media.tv.TvInputInfo
-import android.media.tv.TvInputManager
 import android.os.Bundle
-import android.provider.Settings
+import android.view.KeyEvent
 import androidx.activity.ComponentActivity
 import androidx.activity.addCallback
 import androidx.activity.compose.setContent
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.text.font.createFontFamilyResolver
 import androidx.lifecycle.lifecycleScope
+import com.andrewevmiller.tvlauncher.safety.CrashGuard
 import com.andrewevmiller.tvlauncher.theme.Geist
 import com.andrewevmiller.tvlauncher.theme.PlexMono
 import com.andrewevmiller.tvlauncher.theme.PlexSerif
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
-import com.andrewevmiller.tvlauncher.home.Chip
-import com.andrewevmiller.tvlauncher.home.Feature
-import com.andrewevmiller.tvlauncher.home.RecentEntry
-import com.andrewevmiller.tvlauncher.home.data.LaunchHistory
-import com.andrewevmiller.tvlauncher.home.data.NowPlaying
-import com.andrewevmiller.tvlauncher.home.data.NowPlayingMonitor
-import com.andrewevmiller.tvlauncher.home.data.LaunchRecord
-import java.time.Instant
-import java.time.ZoneId
-import java.time.format.DateTimeFormatter
-import com.andrewevmiller.tvlauncher.home.HomeScreen
-import com.andrewevmiller.tvlauncher.home.MenuAction
-import com.andrewevmiller.tvlauncher.home.SystemTile
-import com.andrewevmiller.tvlauncher.home.orderPinned
-import com.andrewevmiller.tvlauncher.home.data.AppLoader
-import com.andrewevmiller.tvlauncher.home.data.InstalledApps
-import com.andrewevmiller.tvlauncher.home.data.LauncherApp
-import androidx.compose.runtime.CompositionLocalProvider
-import com.andrewevmiller.tvlauncher.sound.FieldSound
-import com.andrewevmiller.tvlauncher.sound.LocalFieldSound
-import com.andrewevmiller.tvlauncher.theme.FieldIcons
-import com.andrewevmiller.tvlauncher.theme.FieldTheme
 
 class MainActivity : ComponentActivity() {
-    private lateinit var sound: FieldSound
-    private lateinit var loader: AppLoader
-    private lateinit var history: LaunchHistory
-    private var records by mutableStateOf<List<LaunchRecord>>(emptyList())
-    private var recentOpen by mutableStateOf(false)
-    private lateinit var layoutPrefs: android.content.SharedPreferences
-    private var order by mutableStateOf<List<String>>(emptyList())
-    private var editing by mutableStateOf<String?>(null)
-    private var pinnedSet by mutableStateOf<Set<String>?>(null)
-    private var menuApp by mutableStateOf<LauncherApp?>(null)
-    private var nowPlaying by mutableStateOf<NowPlaying?>(null)
-    private lateinit var nowPlayingMonitor: NowPlayingMonitor
-    private var apps by mutableStateOf<List<LauncherApp>>(emptyList())
-    private var chip by mutableStateOf(Chip.ALL)
-    private var drawer by mutableStateOf(false)
-    private var systemTiles by mutableStateOf<List<SystemTile>>(emptyList())
+    /** Bumped when Home is pressed while we are already running; FieldRoot resets Home on each change. */
+    private var homeResets by mutableIntStateOf(0)
+
+    /** Bumped on the remote's Menu/Settings key; FieldRoot opens Settings. */
+    private var settingsRequests by mutableIntStateOf(0)
+
+    /** Set by FieldRoot once it has composed real content (it draws nothing until the stored theme has loaded). */
+    private var contentReady = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        enableStrictModeInDebug()
         super.onCreate(savedInstanceState)
-        // A launcher is the bottom of the stack; Back only leaves the drawer.
-        onBackPressedDispatcher.addCallback(this) {
-            if (menuApp != null) {
-                menuApp = null
-                sound.back()
-            } else if (editing != null) {
-                editing = null
-                sound.select()
-            } else if (drawer) {
-                drawer = false
-                chip = Chip.ALL
-            }
-        }
+        enableStrictModeInDebug()
         preloadFonts()
-        sound = FieldSound(this)
-        loader = AppLoader(this) {
-            apps = it
-            // Render Home's launch motifs in the background now, so a launch never waits for them.
-            sound.prepareMotifs(it)
-        }
-        nowPlayingMonitor = NowPlayingMonitor(this) { nowPlaying = it }
-        history = LaunchHistory(this)
-        layoutPrefs = getSharedPreferences("layout", MODE_PRIVATE)
-        order = (layoutPrefs.getString("order", "") ?: "").split(';').filter { it.isNotEmpty() }
-        // No saved choice yet means nothing is pinned; Home starts empty and the user picks.
-        pinnedSet = if (layoutPrefs.contains("pinned")) {
-            (layoutPrefs.getString("pinned", "") ?: "").split(';').filter { it.isNotEmpty() }.toSet()
-        } else null
-        records = history.entries()
-        systemTiles = buildSystemTiles()
-        dropWindowBackgroundAfterFirstFrame()
+        dropWindowBackgroundOnceContentIsDrawn()
+        // Debug-only hook for testing the crash-loop fallback: adb ... --ez field.forceCrash true
+        CrashGuard.maybeForceCrash(this, intent)
+        // A launcher is the bottom of the stack; Back has nowhere to go. Drawer and Settings add their own
+        // BackHandlers on top of this one.
+        onBackPressedDispatcher.addCallback(this) { }
+        val container = (application as FieldApplication).container
         setContent {
-            FieldTheme {
-              CompositionLocalProvider(LocalFieldSound provides sound) {
-                HomeScreen(
-                    allApps = apps,
-                    systemTiles = systemTiles,
-                    chip = chip,
-                    drawer = drawer,
-                    onChip = {
-                        sound.select()
-                        chip = it
-                    },
-                    onOpenDrawer = {
-                        sound.select()
-                        drawer = true
-                        chip = Chip.ALL
-                    },
-                    features = featuresFor(),
-                    nowPlaying = nowPlaying,
-                    onOpenPlaying = { openPlaying(it) },
-                    recent = recentFor(),
-                    recentOpen = recentOpen,
-                    order = order,
-                    editingPkg = editing,
-                    pinnedSet = pinnedSet,
-                    menuApp = menuApp,
-                    onMenuPick = { pick(it) },
-                    onLongPress = {
-                        menuApp = it
-                        sound.select()
-                    },
-                    onMove = { app, delta -> move(app, delta) },
-                    onEditEnd = {
-                        editing = null
-                        sound.select()
-                    },
-                    onToggleRecent = {
-                        sound.select()
-                        recentOpen = !recentOpen
-                    },
-                    onLaunch = {
-                        sound.launch(it)
-                        records = history.record(it.component.packageName)
-                        InstalledApps.launch(this, it)
-                    },
-                )
-              }
-            }
+            FieldRoot(
+                container = container,
+                homeResets = homeResets,
+                settingsRequests = settingsRequests,
+                onContentReady = { contentReady = true },
+            )
         }
     }
 
@@ -162,16 +65,17 @@ class MainActivity : ComponentActivity() {
     }
 
     /**
-     * The theme's window background stops a flash before the first frame. Once Compose has drawn that frame
-     * its own root paints the same color over the whole screen, so the window's copy is a second full-screen
-     * fill on every frame for nothing: drop it.
+     * The theme's window background stops a flash before the first frame. Once Compose has drawn real content
+     * its own root paints the same colour over the whole screen, so the window's copy is a second full-screen
+     * fill on every frame for nothing: drop it. FieldRoot draws nothing until the stored theme has loaded (so a
+     * light-mode user never sees a dark flash), so wait for [contentReady] and not just the first draw.
      */
-    private fun dropWindowBackgroundAfterFirstFrame() {
+    private fun dropWindowBackgroundOnceContentIsDrawn() {
         val view = window.decorView
         view.viewTreeObserver.addOnDrawListener(object : android.view.ViewTreeObserver.OnDrawListener {
             private var done = false
             override fun onDraw() {
-                if (done) return
+                if (done || !contentReady) return
                 done = true
                 view.post {
                     window.setBackgroundDrawable(null)
@@ -195,117 +99,15 @@ class MainActivity : ComponentActivity() {
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
-        // Pressing Home always returns to the top of Home.
-        drawer = false
-        chip = Chip.ALL
-        recentOpen = false
-        editing = null
-        menuApp = null
+        setIntent(intent)
+        if (intent.hasCategory(Intent.CATEGORY_HOME)) homeResets++
     }
 
-    override fun onResume() {
-        super.onResume()
-        // Cheap when nothing was installed, removed or updated; otherwise rebuilds only what changed.
-        loader.refresh()
-    }
-
-    override fun onStart() {
-        super.onStart()
-        nowPlayingMonitor.start()
-    }
-
-    override fun onStop() {
-        nowPlayingMonitor.stop()
-        super.onStop()
-    }
-
-    override fun onDestroy() {
-        super.onDestroy()
-        loader.close()
-        nowPlayingMonitor.close()
-        sound.release()
-    }
-
-    /** Moves [app] by [delta] places in the Home order and saves it; the edges answer with the thud. */
-    private fun move(app: LauncherApp, delta: Int) {
-        val current = orderPinned(apps, order, pinnedSet).map { it.component.packageName }.toMutableList()
-        val from = current.indexOf(app.component.packageName)
-        if (from < 0) return
-        val to = (from + delta).coerceIn(0, current.size - 1)
-        if (to == from) return sound.edge()
-        current.add(to, current.removeAt(from))
-        order = current
-        layoutPrefs.edit().putString("order", current.joinToString(";")).apply()
-        sound.tick()
-    }
-
-    private fun isPinned(app: LauncherApp) = pinnedSet?.contains(app.component.packageName) ?: false
-
-    /** Runs the choice from the long-press menu and saves the result on the TV. */
-    private fun pick(action: MenuAction) {
-        val app = menuApp ?: return
-        val pkg = app.component.packageName
-        menuApp = null
-        when (action) {
-            MenuAction.MOVE -> {
-                editing = pkg
-                sound.select()
-            }
-            MenuAction.PIN, MenuAction.UNPIN -> {
-                val current = apps.filter { isPinned(it) }.map { it.component.packageName }.toSet()
-                val nextSet = if (action == MenuAction.PIN) current + pkg else current - pkg
-                // A new pin goes to the end of Home; the saved order keeps everyone else where they were.
-                val nextOrder = orderPinned(apps, order, current).map { it.component.packageName }.filter { it != pkg } +
-                    if (action == MenuAction.PIN) listOf(pkg) else emptyList()
-                pinnedSet = nextSet
-                order = nextOrder
-                layoutPrefs.edit()
-                    .putString("pinned", nextSet.joinToString(";"))
-                    .putString("order", nextOrder.joinToString(";"))
-                    .apply()
-                sound.select()
-            }
+    override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
+        if (keyCode == KeyEvent.KEYCODE_MENU || keyCode == KeyEvent.KEYCODE_SETTINGS) {
+            settingsRequests++
+            return true
         }
-    }
-
-    private fun recentFor(): List<RecentEntry> {
-        val byPkg = apps.associateBy { it.component.packageName }
-        return records.mapNotNull { r -> byPkg[r.packageName]?.let { RecentEntry(it, r.at) } }.take(5)
-    }
-
-    /** The recent apps the band turns through, newest first, each with when it was last opened. */
-    private fun featuresFor(): List<Feature> = recentFor().take(4).map { r ->
-        val at = Instant.ofEpochMilli(r.at).atZone(ZoneId.systemDefault())
-        Feature(r.app, DateTimeFormatter.ofPattern("yyyy-MM-dd 'at' HH:mm").format(at))
-    }
-
-    /** Opens the app that is playing; opening it is how you get at its own controls. */
-    private fun openPlaying(p: NowPlaying) {
-        val intent = packageManager.getLeanbackLaunchIntentForPackage(p.packageName)
-            ?: packageManager.getLaunchIntentForPackage(p.packageName) ?: return
-        open(intent)
-    }
-
-    private fun open(intent: Intent) {
-        sound.select()
-        runCatching { startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
-    }
-
-    private fun buildSystemTiles(): List<SystemTile> {
-        val inputs = runCatching {
-            (getSystemService(Context.TV_INPUT_SERVICE) as TvInputManager).tvInputList
-                .filter { it.type == TvInputInfo.TYPE_HDMI }
-        }.getOrDefault(emptyList())
-        val hdmi = inputs.map { input ->
-            val label = input.loadCustomLabel(this)?.toString() ?: input.loadLabel(this).toString()
-            SystemTile(label, FieldIcons.Port) {
-                open(Intent(Intent.ACTION_VIEW, TvContract.buildChannelUriForPassthroughInput(input.id)))
-            }
-        }
-        return hdmi + listOf(
-            SystemTile("Wi-Fi", FieldIcons.Wifi) { open(Intent(Settings.ACTION_WIFI_SETTINGS)) },
-            SystemTile("Search", FieldIcons.Search) { open(Intent("android.search.action.GLOBAL_SEARCH")) },
-            SystemTile("Settings", FieldIcons.Gear) { open(Intent(Settings.ACTION_SETTINGS)) },
-        )
+        return super.onKeyDown(keyCode, event)
     }
 }

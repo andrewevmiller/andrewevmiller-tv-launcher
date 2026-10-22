@@ -40,12 +40,15 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import kotlinx.coroutines.android.awaitFrame
@@ -56,6 +59,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
@@ -63,6 +67,8 @@ import androidx.compose.ui.unit.sp
 import androidx.tv.material3.Text
 import com.andrewevmiller.tvlauncher.home.data.AppCategory
 import com.andrewevmiller.tvlauncher.home.data.LauncherApp
+import com.andrewevmiller.tvlauncher.sound.LocalFieldSound
+import com.andrewevmiller.tvlauncher.sound.LocalSoundRow
 import com.andrewevmiller.tvlauncher.home.data.NowPlaying
 import com.andrewevmiller.tvlauncher.theme.Field
 import com.andrewevmiller.tvlauncher.theme.FieldDimens
@@ -118,8 +124,17 @@ fun HomeScreen(
     menuApp: LauncherApp?,
     onMenuPick: (MenuAction) -> Unit,
     modifier: Modifier = Modifier,
+    /** Shows the LAUNCHER SETTINGS chip in the header when set (the Menu key opens Settings too). */
+    onOpenSettings: (() -> Unit)? = null,
+    /** The screensaver tiles (Settings → Screensaver has the choice; these start one now). Null hides the row. */
+    screensaver: (@Composable () -> Unit)? = null,
+    /** Scales the dot grid (Settings → Appearance), because panels crush near-black. */
+    dotAlpha: Float = 1f,
 ) {
     val colors = Field.colors
+    val sound = LocalFieldSound.current
+    val focusManager = LocalFocusManager.current
+    val dotColor = colors.line.copy(alpha = colors.line.alpha * dotAlpha.coerceIn(0f, 1f))
     // Worked out only when an input changes, not on every recomposition (the lists are replaced, never edited).
     val apps = remember(allApps, order, pinnedSet, chip, drawer) {
         val matches = { a: LauncherApp -> chip.category == null || a.category == chip.category }
@@ -145,7 +160,9 @@ fun HomeScreen(
     // Rows in list order, so a row that is off screen can be scrolled to by position.
     val itemKeys = listOfNotNull(
         "header", "band".takeIf { (features.isNotEmpty() || nowPlaying != null) && !drawer }, "chips", "apps-head", "apps-grid",
-        "recent".takeIf { !drawer && recent.isNotEmpty() }, "system".takeIf { !drawer && systemTiles.isNotEmpty() },
+        "recent".takeIf { !drawer && recent.isNotEmpty() },
+        "screensaver".takeIf { !drawer && screensaver != null },
+        "system".takeIf { !drawer && systemTiles.isNotEmpty() },
     )
     fun reveal(itemKey: String, top: Float = 0f, height: Float = -1f) {
         scope.launch {
@@ -188,7 +205,21 @@ fun HomeScreen(
         apps.map { Cell.App(it) } + if (drawer) emptyList() else listOf(Cell.All(allApps.size))
     }
     val gridRows = remember(cells) { cells.chunked(COLUMNS) }
-    Box(modifier.fillMaxSize().background(colors.bg).dotGrid(colors.line)) {
+    Box(
+        modifier
+            .fillMaxSize()
+            .background(colors.bg)
+            .dotGrid(dotColor)
+            // Arrow keys nobody below handled: move focus ourselves so we know when it can't move.
+            .onKeyEvent { event ->
+                val direction = event.focusDirection() ?: return@onKeyEvent false
+                if (event.type == KeyEventType.KeyDown) {
+                    val moved = focusManager.moveFocus(direction)
+                    if (!moved && event.nativeKeyEvent.repeatCount == 0) sound.edge()
+                }
+                true
+            },
+    ) {
         CompositionLocalProvider(LocalBringIntoViewSpec provides NoAutoScroll) {
         LazyColumn(
             state = listState,
@@ -198,18 +229,22 @@ fun HomeScreen(
             ),
         ) {
             item("header") {
-                ClockHeader(if (drawer) "All apps" else "Home")
+                ClockHeader(if (drawer) "All apps" else "Home", onOpenSettings = onOpenSettings)
                 Spacer(Modifier.height(18.dp))
             }
             if ((features.isNotEmpty() || nowPlaying != null) && !drawer) {
                 item("band") {
-                    FeatureBand(features, nowPlaying, onOpen = { onLaunch(it.app) }, onOpenPlaying = onOpenPlaying, modifier = toTop)
+                    CompositionLocalProvider(LocalSoundRow provides 0) {
+                        FeatureBand(features, nowPlaying, onOpen = { onLaunch(it.app) }, onOpenPlaying = onOpenPlaying, modifier = toTop)
+                    }
                     Spacer(Modifier.height(18.dp))
                 }
             }
             item("chips") {
-                Row(toTop.padding(horizontal = 4.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                    Chip.entries.forEach { c -> ChipPill(c.label, selected = c == chip) { onChip(c) } }
+                CompositionLocalProvider(LocalSoundRow provides 1) {
+                    Row(toTop.padding(horizontal = 4.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                        Chip.entries.forEach { c -> ChipPill(c.label, selected = c == chip) { onChip(c) } }
+                    }
                 }
                 Spacer(Modifier.height(10.dp))
             }
@@ -227,6 +262,7 @@ fun HomeScreen(
             // One block with every tile placed by index. A tile keeps its identity (and focus) when it
             // changes place, and slides to its new spot instead of being rebuilt in another row.
             item("apps-grid") {
+              CompositionLocalProvider(LocalSoundRow provides 2) {
                 val rowCount = gridRows.size
                 val stepX = FieldDimens.bannerWidth + gridColumnGap
                 val stepY = FieldDimens.bannerHeight + gridRowGap
@@ -275,12 +311,24 @@ fun HomeScreen(
                         }
                     }
                 }
+              }
             }
             if (!drawer && recent.isNotEmpty()) {
                 item("recent") {
                     Column(Modifier.onFocusChanged { if (it.hasFocus) reveal("recent") }) {
                         SectionHead(if (recentOpen) "Recent" else "Recent · ${recent.size} hidden")
-                        RecentRow(recent, recentOpen, onToggleRecent, onLaunch)
+                        CompositionLocalProvider(LocalSoundRow provides 3) {
+                            RecentRow(recent, recentOpen, onToggleRecent, onLaunch)
+                        }
+                        Spacer(Modifier.height(10.dp))
+                    }
+                }
+            }
+            if (!drawer && screensaver != null) {
+                item("screensaver") {
+                    Column(Modifier.onFocusChanged { if (it.hasFocus) reveal("screensaver") }) {
+                        SectionHead("Screensaver · start one now")
+                        CompositionLocalProvider(LocalSoundRow provides 4) { screensaver() }
                         Spacer(Modifier.height(10.dp))
                     }
                 }
@@ -289,8 +337,10 @@ fun HomeScreen(
                 item("system") {
                     Column(Modifier.onFocusChanged { if (it.hasFocus) reveal("system") }) {
                         SectionHead("Inputs & system")
-                        Row(Modifier.padding(horizontal = 4.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                            systemTiles.forEach { SystemTileView(it) }
+                        CompositionLocalProvider(LocalSoundRow provides 5) {
+                            Row(Modifier.padding(horizontal = 4.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                                systemTiles.forEach { SystemTileView(it) }
+                            }
                         }
                     }
                 }
@@ -309,6 +359,14 @@ fun HomeScreen(
             }
         }
     }
+}
+
+private fun KeyEvent.focusDirection(): FocusDirection? = when (key) {
+    Key.DirectionUp -> FocusDirection.Up
+    Key.DirectionDown -> FocusDirection.Down
+    Key.DirectionLeft -> FocusDirection.Left
+    Key.DirectionRight -> FocusDirection.Right
+    else -> null
 }
 
 /** Turns off the automatic scroll-on-focus; HomeScreen scrolls itself so there is only one motion. */

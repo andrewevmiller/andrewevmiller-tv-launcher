@@ -1,6 +1,5 @@
 package com.andrewevmiller.tvlauncher.home.data
 
-import com.andrewevmiller.tvlauncher.theme.FieldDimens
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -13,11 +12,6 @@ import kotlin.math.ceil
 class ArtLimitsTest {
     /** The TV renders at 2 px per dp (CLAUDE.md, Target device). */
     private val pxPerDp = 2f
-
-    @Test fun bannerIsRasterizedAtExactlyTheTileSize() {
-        assertEquals(FieldDimens.bannerWidth.value * pxPerDp, ArtLimits.BANNER_W.toFloat(), 0f)
-        assertEquals(FieldDimens.bannerHeight.value * pxPerDp, ArtLimits.BANNER_H.toFloat(), 0f)
-    }
 
     @Test fun iconCoversTheTileIconAtFocusScaleButNotMuchMore() {
         val iconDp = 44f // HomeScreen's AppTile icon

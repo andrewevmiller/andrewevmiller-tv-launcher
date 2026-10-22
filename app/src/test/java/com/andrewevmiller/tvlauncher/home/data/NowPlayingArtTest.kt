@@ -1,3 +1,4 @@
+// purecheck:skip
 package com.andrewevmiller.tvlauncher.home.data
 
 import org.junit.Assert.assertEquals

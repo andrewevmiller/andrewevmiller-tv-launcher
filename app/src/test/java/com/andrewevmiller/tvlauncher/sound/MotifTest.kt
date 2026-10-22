@@ -2,125 +2,162 @@ package com.andrewevmiller.tvlauncher.sound
 
 import com.andrewevmiller.tvlauncher.home.data.AppCategory
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** The motif generator must match the mockup draw for draw; these are the golden vectors from docs/BUILD_PLAN.md 8.3. */
+/** Golden vectors from docs/BUILD_PLAN.md §8.2–§8.3, cross-checked against the mockup's JS (motifFor). */
 class MotifTest {
-    @Test fun fnv1aMatchesTheReferenceValues() {
-        assertEquals(0x811c9dc5.toInt(), Motif.fnv1a(""))
-        assertEquals(0xe40c292c.toInt(), Motif.fnv1a("a"))
-    }
 
-    @Test fun mulberry32MatchesTheReferenceValues() {
-        val r = Motif.mulberry32(1)
-        assertEquals(0.6270739406, r(), 1e-9)
-        assertEquals(0.0027357212, r(), 1e-9)
-        assertEquals(0.5274470400, r(), 1e-9)
-    }
-
-    private class Golden(val pkg: String, val seed: String, val midi: List<Int>, val gap: Int, val hold: Boolean)
-
-    private val golden = listOf(
-        Golden("com.google.android.youtube.tv", "aeeb3003", listOf(64, 69, 74, 79), 59, false),
-        Golden("com.netflix.ninja", "cf47f8ae", listOf(57, 60, 62, 64), 62, false),
-        Golden("com.plexapp.android", "b14e01c1", listOf(62, 64, 69, 74), 56, true),
-        Golden("com.spotify.tv.android", "87686563", listOf(64, 69, 72, 74), 59, false),
-        Golden("com.aspiro.tidal", "e3c340c6", listOf(60, 64, 69), 45, true),
-        Golden("com.limelight", "ede9906b", listOf(64, 69, 72, 76), 48, false),
-        Golden("com.retroarch", "a899f578", listOf(62, 64, 67, 72), 44, true),
-        Golden("com.alphainventor.filemanager", "1c4fa632", listOf(64, 69, 72), 60, false),
-        Golden("com.andrewevmiller.analyzer", "d8b6682d", listOf(60, 64, 67), 55, true),
+    private data class Golden(
+        val pkg: String,
+        val seed: UInt,
+        val notes: List<String>,
+        val gapMs: Int,
+        val hold: Boolean,
     )
 
-    @Test fun everyGoldenMotifMatches() {
-        for (g in golden) {
-            assertEquals("seed of ${g.pkg}", g.seed, "%08x".format(Motif.fnv1a(g.pkg)))
-            val plan = Motif.plan(g.pkg)
-            assertEquals("notes of ${g.pkg}", g.midi, plan.midi)
-            assertEquals("gap of ${g.pkg}", g.gap, plan.gapMs)
-            assertEquals("hold of ${g.pkg}", g.hold, plan.hold)
+    private val goldenMotifs = listOf(
+        Golden("com.google.android.youtube.tv", 0xaeeb3003u, listOf("E4", "A4", "D5", "G5"), 59, false),
+        Golden("com.netflix.ninja", 0xcf47f8aeu, listOf("A3", "C4", "D4", "E4"), 62, false),
+        Golden("com.plexapp.android", 0xb14e01c1u, listOf("D4", "E4", "A4", "D5"), 56, true),
+        Golden("com.spotify.tv.android", 0x87686563u, listOf("E4", "A4", "C5", "D5"), 59, false),
+        Golden("com.aspiro.tidal", 0xe3c340c6u, listOf("C4", "E4", "A4"), 45, true),
+        Golden("com.limelight", 0xede9906bu, listOf("E4", "A4", "C5", "E5"), 48, false),
+        Golden("com.retroarch", 0xa899f578u, listOf("D4", "E4", "G4", "C5"), 44, true),
+        Golden("com.alphainventor.filemanager", 0x1c4fa632u, listOf("E4", "A4", "C5"), 60, false),
+        Golden("com.andrewevmiller.analyzer", 0xd8b6682du, listOf("C4", "E4", "G4"), 55, true),
+    )
+
+    @Test
+    fun fnv1aMatchesReferenceValues() {
+        assertEquals(0x811c9dc5u, fnv1a32(""))
+        assertEquals(0xe40c292cu, fnv1a32("a"))
+    }
+
+    @Test
+    fun mulberry32MatchesMockupForSeedOne() {
+        val r = Mulberry32(1u)
+        assertEquals(0.6270739406, r.next(), 1e-9)
+        assertEquals(0.0027357212, r.next(), 1e-9)
+        assertEquals(0.5274470400, r.next(), 1e-9)
+    }
+
+    @Test
+    fun mulberry32StaysInUnitInterval() {
+        val r = Mulberry32(0xffffffffu)
+        repeat(10_000) {
+            val v = r.next()
+            assertTrue("out of range: $v", v >= 0.0 && v < 1.0)
         }
     }
 
-    @Test fun theSameAppAlwaysGetsTheSameTune() {
-        val a = Motif.voices("com.netflix.ninja", AppCategory.VIDEO)
-        val b = Motif.voices("com.netflix.ninja", AppCategory.VIDEO)
-        assertEquals(a.map { it.f }, b.map { it.f })
-        assertEquals(a.map { it.at }, b.map { it.at })
-    }
-
-    @Test fun timbresMatchTheSpecTable() {
-        // docs/BUILD_PLAN.md 8.2: voices, detune, drive, fold, crush, lp from -> to, Q, click
-        fun check(c: AppCategory, voices: Int, detune: Double, drive: Double, fold: Double, crush: Int, from: Double, to: Double, q: Double, click: Double) {
-            val t = Motif.timbre(c)
-            assertEquals("$c voices", voices, t.voices)
-            assertEquals("$c detune", detune, t.detune, 0.0)
-            assertEquals("$c drive", drive, t.drive, 0.0)
-            assertEquals("$c fold", fold, t.fold, 0.0)
-            assertEquals("$c crush", crush, t.crush)
-            assertEquals("$c lpFrom", from, t.lpFrom, 0.0)
-            assertEquals("$c lpTo", to, t.lpTo, 0.0)
-            assertEquals("$c q", q, t.q, 0.0)
-            assertEquals("$c click", click, t.click, 0.0)
+    @Test
+    fun everyGoldenMotifMatchesTheBuildPlanTable() {
+        for (g in goldenMotifs) {
+            val m = motifFor(g.pkg)
+            assertEquals("seed ${g.pkg}", g.seed, m.seed)
+            assertEquals("notes ${g.pkg}", g.notes, m.midi.map(::noteName))
+            assertEquals("gap ${g.pkg}", g.gapMs, m.gapMs)
+            assertEquals("hold ${g.pkg}", g.hold, m.hold)
         }
-        check(AppCategory.VIDEO, 2, 14.0, 4.0, 0.0, 0, 2400.0, 900.0, 2.0, 0.015)
-        check(AppCategory.MUSIC, 3, 10.0, 5.0, 1.3, 0, 3200.0, 1100.0, 7.0, 0.02)
-        check(AppCategory.GAMES, 2, 6.0, 8.0, 0.0, 8, 7000.0, 3000.0, 1.5, 0.02)
-        check(AppCategory.TOOLS, 1, 0.0, 10.0, 2.0, 0, 5000.0, 2000.0, 1.5, 0.045)
-        check(AppCategory.OTHER, 2, 9.0, 6.0, 1.5, 0, 4000.0, 1500.0, 2.0, 0.02)
     }
 
-    @Test fun voiceLayoutFollowsTheSpec() {
-        for (g in golden) {
-            val voices = Motif.voices(g.pkg, AppCategory.OTHER)
-            val notes = voices.dropLast(1)
-            val sub = voices.last()
-            assertEquals(g.midi.size, notes.size)
-            // note i starts at i * gap; the last is held 0.24 s or released at 0.1 s; the others last 0.11 s
-            notes.forEachIndexed { i, v ->
-                assertEquals(i * g.gap / 1000.0, v.at, 1e-12)
-                val expectedDur = if (i == notes.lastIndex) (if (g.hold) 0.24 else 0.1) else 0.11
-                assertEquals(expectedDur, v.dur, 0.0)
-                assertEquals(0.026, v.gain, 1e-12)
-                assertEquals(if (i == 0) 0.02 else 0.0, v.click, 0.0)
+    @Test
+    fun goldenMidiValuesAreTheTableValues() {
+        assertEquals(listOf(64, 69, 74, 79), motifFor("com.google.android.youtube.tv").midi)
+        assertEquals(listOf(57, 60, 62, 64), motifFor("com.netflix.ninja").midi)
+        assertEquals(listOf(62, 64, 69, 74), motifFor("com.plexapp.android").midi)
+        assertEquals(listOf(64, 69, 72, 74), motifFor("com.spotify.tv.android").midi)
+        assertEquals(listOf(60, 64, 69), motifFor("com.aspiro.tidal").midi)
+        assertEquals(listOf(64, 69, 72, 76), motifFor("com.limelight").midi)
+        assertEquals(listOf(62, 64, 67, 72), motifFor("com.retroarch").midi)
+        assertEquals(listOf(64, 69, 72), motifFor("com.alphainventor.filemanager").midi)
+        assertEquals(listOf(60, 64, 67), motifFor("com.andrewevmiller.analyzer").midi)
+    }
+
+    @Test
+    fun frequenciesFollowEqualTemperamentFromA4() {
+        val m = motifFor("com.plexapp.android")   // D4 E4 A4 D5
+        assertEquals(listOf(62, 64, 69, 74), m.midi)
+        assertEquals(293.6647679, m.frequencies[0], 1e-6)   // D4
+        assertEquals(329.6275569, m.frequencies[1], 1e-6)   // E4
+        assertEquals(440.0, m.frequencies[2], 1e-9)         // A4
+        assertEquals(587.3295358, m.frequencies[3], 1e-6)   // D5
+    }
+
+    @Test
+    fun motifsAlwaysRiseAndStayInTheAMinorPentatonic() {
+        val packages = goldenMotifs.map { it.pkg } + (0 until 300).map { "com.example.app$it" }
+        val pentatonicPitchClasses = setOf(9, 0, 2, 4, 7)   // A C D E G
+        for (pkg in packages) {
+            for (reroll in 0..3) {
+                val m = motifFor(pkg, reroll)
+                assertTrue("note count for $pkg#$reroll", m.midi.size == 3 || m.midi.size == 4)
+                m.midi.zipWithNext().forEach { (a, b) -> assertTrue("not rising for $pkg#$reroll: $a -> $b", a < b) }
+                m.midi.forEach { assertTrue("off scale for $pkg#$reroll: $it", it % 12 in pentatonicPitchClasses) }
+                assertTrue("gap for $pkg#$reroll", m.gapMs in 35..70)
+                assertEquals(m.midi.size, m.frequencies.size)
             }
-            // the sub sits two octaves under the first note
-            assertEquals(notes.first().f / 4, sub.f, 1e-9)
-            assertEquals(0.03, sub.gain, 1e-12)
         }
     }
 
-    @Test fun humanizingScalesPitchAndLevelButNotTheTune() {
-        val plain = Motif.voices("com.plexapp.android", AppCategory.VIDEO)
-        val human = Motif.voices("com.plexapp.android", AppCategory.VIDEO, Humanize(cents = 5.0, velocity = 1.1))
-        val ratio = Math.pow(2.0, 5.0 / 1200)
-        plain.dropLast(1).zip(human.dropLast(1)).forEach { (p, h) ->
-            assertEquals(p.f * ratio, h.f, 1e-9)
-            assertEquals(p.gain * 1.1, h.gain, 1e-12)
-        }
+    @Test
+    fun defaultRerollCountIsTheUnrolledMotif() {
+        assertEquals(motifFor("com.netflix.ninja"), motifFor("com.netflix.ninja", 0))
     }
 
-    @Test fun humanizeDrawsCentsThenLevelWithinTheSpecRanges() {
-        val draws = doubleArrayOf(0.0, 1.0).iterator()
-        val low = Humanize.random { 0.0 }
-        assertEquals(-5.0, low.cents, 0.0)
-        assertEquals(0.9, low.velocity, 1e-12)
-        val high = Humanize.random { 1.0 }
-        assertEquals(5.0, high.cents, 0.0)
-        assertEquals(1.1, high.velocity, 1e-12)
-        // order: the first draw is the pitch, the second the level
-        val mixed = Humanize.random { if (draws.hasNext()) draws.next() else 0.5 }
-        assertEquals(-5.0, mixed.cents, 0.0)
-        assertEquals(1.1, mixed.velocity, 1e-12)
-        assertTrue(Humanize.NONE.cents == 0.0 && Humanize.NONE.velocity == 1.0)
+    @Test
+    fun rerollUsesTheHashSuffixSeed() {
+        assertEquals(fnv1a32("com.plexapp.android#1"), motifFor("com.plexapp.android", 1).seed)
+        assertEquals(0xa6a8c6d5u, motifFor("com.plexapp.android", 1).seed)
     }
 
-    @Test fun playbackRateShiftsPitchByTheRightNumberOfCents() {
-        assertEquals(48000, Humanize.NONE.playbackRate(48000))
-        val up = Humanize(5.0, 1.0).playbackRate(48000)
-        val down = Humanize(-5.0, 1.0).playbackRate(48000)
-        assertEquals(48139, up) // 48000 * 2^(5/1200)
-        assertEquals(47862, down)
+    @Test
+    fun rerollChangesTheMotifDeterministically() {
+        val base = motifFor("com.plexapp.android")
+        val rerolled = motifFor("com.plexapp.android", 1)
+        assertNotEquals(base, rerolled)
+        assertEquals(rerolled, motifFor("com.plexapp.android", 1))
+        // Mockup-derived reroll vectors (same generator, seed fnv1a(pkg + "#" + n)).
+        assertEquals(listOf(57, 60, 64, 69), rerolled.midi)
+        assertEquals(46, rerolled.gapMs)
+        assertEquals(false, rerolled.hold)
+        val second = motifFor("com.plexapp.android", 2)
+        assertEquals(0xa3a8c21cu, second.seed)
+        assertEquals(listOf(60, 64, 67), second.midi)
+        assertEquals(46, second.gapMs)
+        assertEquals(true, second.hold)
+        val ninja = motifFor("com.netflix.ninja", 1)
+        assertEquals(0xff11d6b2u, ninja.seed)
+        assertEquals(listOf(60, 64, 67), ninja.midi)
+        assertEquals(37, ninja.gapMs)
+        assertEquals(true, ninja.hold)
+        val analyzer = motifFor("com.andrewevmiller.analyzer", 3)
+        assertEquals(0xe383a3bbu, analyzer.seed)
+        assertEquals(listOf(57, 62, 64), analyzer.midi)
+        assertEquals(47, analyzer.gapMs)
+        assertEquals(true, analyzer.hold)
+    }
+
+    @Test
+    fun timbreTableMatchesTheBuildPlan() {
+        assertEquals(Timbre("warm", 2, 14.0, 4.0, 0.0, 0.0, 2400.0, 900.0, 2.0, 0.015), timbreFor(AppCategory.VIDEO))
+        assertEquals(Timbre("resonant", 3, 10.0, 5.0, 1.3, 0.0, 3200.0, 1100.0, 7.0, 0.02), timbreFor(AppCategory.MUSIC))
+        assertEquals(Timbre("crushed", 2, 6.0, 8.0, 0.0, 8.0, 7000.0, 3000.0, 1.5, 0.02), timbreFor(AppCategory.GAMES))
+        assertEquals(Timbre("clipped", 1, 0.0, 10.0, 2.0, 0.0, 5000.0, 2000.0, 1.5, 0.045), timbreFor(AppCategory.TOOLS))
+        assertEquals(Timbre("plain", 2, 9.0, 6.0, 1.5, 0.0, 4000.0, 1500.0, 2.0, 0.02), timbreFor(AppCategory.OTHER))
+    }
+
+    @Test
+    fun noteNamesUseScientificPitch() {
+        assertEquals("A3", noteName(57))
+        assertEquals("C4", noteName(60))
+        assertEquals("C#4", noteName(61))
+        assertEquals("E4", noteName(64))
+        assertEquals("A4", noteName(69))
+        assertEquals("C5", noteName(72))
+        assertEquals("E5", noteName(76))
+        assertEquals("B3", noteName(59))
     }
 }

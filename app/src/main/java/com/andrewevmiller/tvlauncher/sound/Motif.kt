@@ -3,97 +3,113 @@ package com.andrewevmiller.tvlauncher.sound
 import com.andrewevmiller.tvlauncher.home.data.AppCategory
 import kotlin.math.floor
 import kotlin.math.pow
-import kotlin.math.roundToInt
 
-/** Timbre of a launch motif, by app category. */
-internal class Timbre(
-    val voices: Int, val detune: Double, val drive: Double, val fold: Double, val crush: Int,
-    val lpFrom: Double, val lpTo: Double, val q: Double, val click: Double,
-)
+/*
+ * Per-app launch motifs: a bit-exact port of the mockup's motifFor (docs/mockup/field-launcher-mockup.html,
+ * lines 482-509) and BUILD_PLAN §8.2. Pure Kotlin so the golden vectors in §8.3 run on the JVM.
+ * The order of r() draws is part of the contract: do not reorder them.
+ */
+
+private val MOTIF_SCALE = intArrayOf(0, 3, 5, 7, 10)  // A minor pentatonic
+private const val MOTIF_ROOT_MIDI = 57                // A3
+private val NOTE_NAMES = arrayOf("C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B")
 
 /**
- * Per-launch variation: pitch in cents (about +-5) and level (about +-10%). Applied when the motif is
- * played, not when it is rendered, so one rendered buffer serves every launch.
+ * FNV-1a, 32-bit, over UTF-16 code units (JS charCodeAt). Offset basis 0x811c9dc5, prime 0x01000193.
+ * UInt arithmetic wraps modulo 2^32, which matches Math.imul.
  */
-internal class Humanize(val cents: Double, val velocity: Double) {
-    /** Playback rate for a buffer rendered at [rate] Hz, so that it sounds [cents] higher or lower. */
-    fun playbackRate(rate: Int): Int = (rate * 2.0.pow(cents / 1200)).roundToInt()
-
-    companion object {
-        val NONE = Humanize(0.0, 1.0)
-
-        /** Same draw order and ranges as the mockup: cents first, then level. */
-        fun random(random: () -> Double): Humanize = Humanize(random() * 10 - 5, 0.9 + random() * 0.2)
+fun fnv1a32(input: String): UInt {
+    var h = 0x811c9dc5u
+    for (ch in input) {
+        h = h xor ch.code.toUInt()
+        h *= 0x01000193u
     }
+    return h
 }
 
 /**
- * The per-app launch motif. The generator (FNV-1a of the package name seeds mulberry32; A minor
- * pentatonic from A3) must match the mockup exactly, draw for draw, so the TV plays the tunes
- * auditioned there. See the golden vectors in docs/BUILD_PLAN.md section 8.3.
+ * mulberry32, the mockup's PRNG. Int arithmetic wraps exactly like Math.imul; `ushr` is JS `>>>`.
+ * [next] returns an unsigned 32-bit value divided by 2^32, so it lies in [0, 1).
  */
-internal object Motif {
-    fun timbre(c: AppCategory) = when (c) {
-        AppCategory.VIDEO -> Timbre(2, 14.0, 4.0, 0.0, 0, 2400.0, 900.0, 2.0, 0.015)
-        AppCategory.MUSIC -> Timbre(3, 10.0, 5.0, 1.3, 0, 3200.0, 1100.0, 7.0, 0.02)
-        AppCategory.GAMES -> Timbre(2, 6.0, 8.0, 0.0, 8, 7000.0, 3000.0, 1.5, 0.02)
-        AppCategory.TOOLS -> Timbre(1, 0.0, 10.0, 2.0, 0, 5000.0, 2000.0, 1.5, 0.045)
-        AppCategory.OTHER -> Timbre(2, 9.0, 6.0, 1.5, 0, 4000.0, 1500.0, 2.0, 0.02)
-    }
+class Mulberry32(seed: UInt) {
+    private var state: Int = seed.toInt()
 
-    fun fnv1a(s: String): Int {
-        var h = 0x811c9dc5.toInt()
-        for (ch in s) h = (h xor ch.code) * 0x01000193
-        return h
+    fun next(): Double {
+        state += 0x6D2B79F5
+        var t = state
+        t = (t xor (t ushr 15)) * (t or 1)
+        t = t xor (t + ((t xor (t ushr 7)) * (t or 61)))
+        val out = t xor (t ushr 14)
+        return (out.toLong() and 0xFFFFFFFFL).toDouble() / 4294967296.0
     }
+}
 
-    fun mulberry32(seed0: Int): () -> Double {
-        var seed = seed0
-        return {
-            seed += 0x6D2B79F5
-            var t = seed
-            t = (t xor (t ushr 15)) * (t or 1)
-            t = t xor (t + (t xor (t ushr 7)) * (t or 61))
-            ((t xor (t ushr 14)).toLong() and 0xFFFFFFFFL).toDouble() / 4294967296.0
-        }
+/** Sound parameters for one category. Drive is BEFORE the global x1.6 multiplier (applied by the synth). */
+data class Timbre(
+    val label: String,
+    val voices: Int,
+    val detune: Double,
+    val drive: Double,
+    val fold: Double,
+    val crush: Double,
+    val lpFrom: Double,
+    val lpTo: Double,
+    val q: Double,
+    val click: Double,
+)
+
+/** BUILD_PLAN §8.2 timbre table (mockup TIMBRE). */
+fun timbreFor(category: AppCategory): Timbre = when (category) {
+    AppCategory.VIDEO -> Timbre("warm", 2, 14.0, 4.0, 0.0, 0.0, 2400.0, 900.0, 2.0, 0.015)
+    AppCategory.MUSIC -> Timbre("resonant", 3, 10.0, 5.0, 1.3, 0.0, 3200.0, 1100.0, 7.0, 0.02)
+    AppCategory.GAMES -> Timbre("crushed", 2, 6.0, 8.0, 0.0, 8.0, 7000.0, 3000.0, 1.5, 0.02)
+    AppCategory.TOOLS -> Timbre("clipped", 1, 0.0, 10.0, 2.0, 0.0, 5000.0, 2000.0, 1.5, 0.045)
+    AppCategory.OTHER -> Timbre("plain", 2, 9.0, 6.0, 1.5, 0.0, 4000.0, 1500.0, 2.0, 0.02)
+}
+
+/**
+ * A generated launch motif. [midi] is always strictly rising; [frequencies] is 440·2^((midi−69)/12).
+ * [gapMs] is the spacing between note onsets; [hold] asks for a longer final note.
+ */
+data class Motif(
+    val seed: UInt,
+    val midi: List<Int>,
+    val frequencies: List<Double>,
+    val gapMs: Int,
+    val hold: Boolean,
+)
+
+/**
+ * The motif for an app. With [rerollCount] 0 the seed is fnv1a32(packageName); after a re-roll it is
+ * fnv1a32(packageName + "#" + rerollCount). Category does not enter here; it only picks the timbre.
+ */
+fun motifFor(packageName: String, rerollCount: Int = 0): Motif {
+    val seed = if (rerollCount == 0) fnv1a32(packageName) else fnv1a32(packageName + "#" + rerollCount)
+    val r = Mulberry32(seed)
+
+    val count = if (r.next() < 0.3) 4 else 3
+    var deg = floor(r.next() * 5).toInt()
+    val degs = ArrayList<Int>(count)
+    degs.add(deg)
+    for (i in 1 until count) {
+        deg += 1 + floor(r.next() * 2).toInt()   // always rising
+        degs.add(deg)
     }
+    val gapMs = jsRound(35 + r.next() * 35)
+    val hold = r.next() < 0.5
 
-    /** The notes of a motif: pentatonic degrees, the matching MIDI notes, the gap between them, and whether the last one is held. */
-    class Plan(val degrees: List<Int>, val gapMs: Int, val hold: Boolean) {
-        val midi: List<Int> get() = degrees.map { d -> 57 + SCALE[d % 5] + 12 * (d / 5) }
-    }
+    // deg is never negative, so Int division equals the mockup's Math.floor(deg / 5).
+    val midi = degs.map { d -> MOTIF_ROOT_MIDI + MOTIF_SCALE[d % 5] + 12 * (d / 5) }
+    // Double division: (midi - 69) / 12 must not truncate.
+    val frequencies = midi.map { m -> 440.0 * 2.0.pow((m - 69) / 12.0) }
+    return Motif(seed, midi, frequencies, gapMs, hold)
+}
 
-    private val SCALE = intArrayOf(0, 3, 5, 7, 10)
+/** Scientific pitch name, e.g. 64 → "E4" (octave = midi / 12 − 1). */
+fun noteName(midi: Int): String = NOTE_NAMES[midi.mod(12)] + (midi.floorDiv(12) - 1)
 
-    fun plan(pkg: String): Plan {
-        val r = mulberry32(fnv1a(pkg))
-        val count = if (r() < 0.3) 4 else 3
-        var deg = floor(r() * 5).toInt()
-        val degs = mutableListOf(deg)
-        for (i in 1 until count) {
-            deg += 1 + floor(r() * 2).toInt()
-            degs += deg
-        }
-        val gap = (35 + r() * 35).roundToInt()
-        val hold = r() < 0.5
-        return Plan(degs, gap, hold)
-    }
-
-    fun voices(pkg: String, category: AppCategory, human: Humanize = Humanize.NONE): List<Voice> {
-        val plan = plan(pkg)
-        val freqs = plan.midi.map { m -> 440.0 * 2.0.pow((m - 69) / 12.0) }
-        val tb = timbre(category)
-        val cents = human.cents
-        val vel = human.velocity
-        val voices = freqs.mapIndexed { i, f ->
-            val last = i == freqs.lastIndex
-            Voice(
-                f * 2.0.pow(cents / 1200), i * plan.gapMs / 1000.0, if (last) (if (plan.hold) 0.24 else 0.1) else 0.11, 0.026 * vel,
-                voices = tb.voices, detune = tb.detune, fold = tb.fold, drive = tb.drive, crush = tb.crush,
-                lpFrom = tb.lpFrom, lpTo = tb.lpTo, q = tb.q, click = if (i == 0) tb.click else 0.0,
-            )
-        }
-        val sub = Voice(freqs[0] / 4, 0.0, 0.26, 0.03 * vel, voices = 1, detune = 0.0, fold = 0.0, drive = 3.0, lpFrom = 400.0, lpTo = 150.0)
-        return voices + sub
-    }
+/** JS Math.round: nearest integer, halves round toward +∞. Computed without floating-point rounding error. */
+private fun jsRound(x: Double): Int {
+    val f = floor(x)
+    return (if (x - f >= 0.5) f + 1 else f).toInt()
 }

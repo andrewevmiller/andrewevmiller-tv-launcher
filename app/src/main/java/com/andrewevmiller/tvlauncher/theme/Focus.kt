@@ -54,6 +54,7 @@ fun Modifier.fieldFocus(
     val colors = LocalFieldColors.current
     val reduced = LocalReducedMotion.current
     val sound = com.andrewevmiller.tvlauncher.sound.LocalFieldSound.current
+    val soundRow = com.andrewevmiller.tvlauncher.sound.LocalSoundRow.current
     // 0 at rest, 1 focused. Deliberately not read in composition.
     val progress = remember { Animatable(0f) }
     val scope = rememberCoroutineScope()
@@ -63,7 +64,7 @@ fun Modifier.fieldFocus(
             val now = it.isFocused || it.hasFocus
             if (now == focus.on) return@onFocusChanged
             focus.on = now
-            if (now) sound?.tick()
+            if (now) sound.tick(soundRow)
             scope.launch {
                 progress.animateTo(
                     targetValue = if (now) 1f else 0f,

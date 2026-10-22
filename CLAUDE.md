@@ -34,6 +34,11 @@ A personal Android TV launcher for one Hisense TV, in the andrewevmiller.com
   their icon large (~44dp), not a small glyph in the corner.
 - Settings → Sound: interface sounds on/off, waveform picker (see Design rules), per-app motif
   re-roll / mute.
+- Apps are a **grid**, not a carousel: `FieldDimens.appGridColumns` (4) columns of those tiles, wrapping. Home
+  shows the pinned apps with an "All apps" tile as the last cell, which opens a full-screen grid of every app.
+  Chips filter the grid in place. Recent, Photos and System tiles stay horizontal rows. D-pad rules, edit mode and
+  focus survival are specified in `docs/BUILD_PLAN.md` §5.4; grid navigation and reorder are pure functions with
+  unit tests.
 - The Recent row is collapsed by default: a single "Show recent" chip with a hidden count.
   Expanding is per-session; it collapses again on Home.
 
@@ -57,6 +62,14 @@ integrator will apply it.
 | `app/.../ambient/` | Agent D: ambient (Oxyfield screensaver + hand-off to Google's photo screensaver) |
 | `spike/` (separate Gradle module, not included in `:app`) | Agent E: spikes (Watch Next access; starting Google's photo screensaver on demand) |
 | `app/.../sound/`, `app/src/main/res/raw/`, `tools/sound/` | Agent F: interface sounds |
+| `app/.../settings/` (except `SettingsRepository.kt`) | Agent G: settings |
+| `tools/purecheck/`, `docs/` (except `docs/mockup/` when a brief names it), `CLAUDE.md`, `README.md`, `.claude/` | Integrator |
+
+**Contract files** (the interfaces in `docs/BUILD_PLAN.md` §5.2: `sound/FieldSound.kt`, `sound/Waveform.kt`,
+`sound/MotifOverrides.kt`, `settings/SettingsRepository.kt`, `ambient/ScreensaverController.kt`,
+`home/data/AppsRepository.kt`, `home/data/AppCategory.kt`, `home/data/LayoutStore.kt`,
+`home/data/FakeAppsRepository.kt`, `ui/icons/FieldIcons.kt` names, `ui/icons/FieldIcon.kt`) are integrator-owned even though they sit in another agent's directory.
+Implement them; don't change their signatures. If one must change, say so under "Requested shared changes".
 
 New dependencies: list them in your report; don't edit the version catalog.
 
@@ -68,6 +81,65 @@ Android SDK and run `./gradlew :app:testDebugUnitTest :app:assembleRelease` (set
 Judge performance only on `./gradlew installRelease` followed by `adb shell cmd package compile -f -m speed
 com.andrewevmiller.tvlauncher` (debug Compose is much slower; see `docs/PERF_PLAN.md`). Keep code
 conservative: stable Compose / tv-material APIs, no experimental opt-ins unless unavoidable.
+
+**purecheck (works in the cloud).** Maven Central and the Gradle plugin portal are reachable, so any Kotlin
+file with no `import android.*`, `androidx.*`, `com.google.android.*` or `...tvlauncher.R` is compiled and its
+JUnit 4 tests are run by a plain-JVM build:
+
+```bash
+gradle -p tools/purecheck test        # or ./gradlew -p tools/purecheck test
+gradle -p tools/purecheck pureReport  # which files are compiled vs skipped
+```
+
+Tests live in `app/src/test/java/...` (JUnit 4 + `runBlocking`; no coroutines-test, no Robolectric, no mockito)
+so the same file runs under both purecheck and the owner's `./gradlew testDebugUnitTest`. A pure file that
+references an Android-dependent type fails to compile in purecheck on purpose: split the logic from the glue.
+Write DSP, motif generation, throttles, counters, codecs, grid navigation and reorder as pure Kotlin behind
+small interfaces, and keep the Android/Compose layer thin. Add `// purecheck:skip` to a file that must be
+skipped despite having no Android imports. Maven Central rate-limits bursts (HTTP 429); if a first run fails
+that way, rerun with `GRADLE_OPTS="-Dorg.gradle.internal.repository.max.tentatives=10
+-Dorg.gradle.internal.repository.initial.backoff=3000"` and `--max-workers=1`. Dependencies are cached after one
+success. **Run purecheck before you report done**, and put its output in your handoff.
+
+**Many agents, 4 CPUs.** Run purecheck through `bash <main-checkout>/tools/purecheck.sh` (from your worktree root): it takes a
+lock so runs queue one at a time and reuses one warm Gradle daemon (about 10 s per run instead of 60 s cold, with no CPU
+storm). The Android layer can be compiled in the cloud now that `dl.google.com` is allowed and the SDK is installed at
+`~/android-sdk`: `bash <main-checkout>/tools/compile.sh [gradle tasks]` (default `:app:compileDebugKotlin`) is likewise
+serialised. The integrator runs it on each merged batch; do not run it in a loop.
+
+## How the app is put together (as built)
+- `FieldApplication` owns an `AppContainer` (lazy singletons: settings, apps + launch history, motif overrides, sound
+  engine, screensaver controller). `MainActivity` hosts `FieldRoot`, which switches between Home and Settings, and
+  resets Home when the Home button is pressed (`onNewIntent`). The Menu key opens Settings.
+- Home is `FieldHome` (`home/FieldHome.kt`) around `HomeScreen`: the layout from the mockup with the feature band,
+  a collapsed Recent row, the long-press pin menu (Move / Pin / Unpin), reorder, the All-apps drawer as the same
+  frame, HDMI/Wi-Fi/Search/Settings tiles and the screensaver tiles. It reads apps with `InstalledApps` and keeps
+  pins and order in SharedPreferences `layout` and recents in `launch_history` (`HomeLaunchHistory`), the files the
+  TV already has from the earlier build. Focus ticks take their pitch from `LocalSoundRow`, which `HomeScreen` sets per row.
+- Merge note (2026-10-21): this branch met a separately built Home on `main` (PR #3/#4). Where the two built the same
+  thing, the newer, `main`'s Home screen and its pin menu, won. The sound engine, Settings, crash fallback and
+  screensavers stay from the first build, because `main` had only a subset of them. The earlier row-based Home
+  (`HomeContent` on `HomeFrame`, `home/apps/` grid, drawer, edit mode, `RecordingAppsRepository`/`LaunchLog`) is still
+  in the tree and under test but is not routed from `FieldRoot`; delete it or switch back in one place.
+- `HomeContent` takes a `HomeDeps` interface (implemented by `AppContainer`), so tests pass fakes.
+- Tests: pure JUnit in `app/src/test/` runs under both purecheck and AGP; Robolectric Compose tests run the real
+  focus and key handling on the JVM (a Compose test clock quirk: avoid `captureToImage()`, see
+  `ui/ScreenshotSupport.kt`). Opt-in screenshots: `FIELD_SCREENSHOTS=1 tools/compile.sh :app:testDebugUnitTest
+  --tests '*ScreenshotTest*'` writes PNGs to `app/build/screenshots/` at the TV's 1920x1080 / density 320.
+- `tools/sound` renders every sound to WAV for desktop listening, with the app's own code.
+- Look at screenshots after any visual change: several real layout problems (blank captions, a clipped time, an
+  indented row, two entries both called "Settings") were invisible to every test and obvious in a render.
+
+## Home activity, previous home, and the crash fallback (shared by scripts/ and safety/)
+- The manifest registers HOME on `.HomeAlias` (an `activity-alias` of `MainActivity`), not on `MainActivity`.
+  The default home is set with `cmd package set-home-activity com.andrewevmiller.tvlauncher/.HomeAlias`.
+  `MainActivity` keeps LAUNCHER + LEANBACK_LAUNCHER, so the app stays startable by hand.
+- `deploy.sh` records the previous home on the host in `scripts/.deploy-state` and also writes it on the TV with
+  `adb shell settings put secure field_launcher_previous_home <package/.Activity>`, so the app can read it
+  (reading any `Settings.Secure` key needs no permission).
+- The on-device fallback disables `.HomeAlias` with `PackageManager.setComponentEnabledSetting(..., DONT_KILL_APP)`
+  and starts the previous home. It must never do that unless at least one other enabled HOME activity exists:
+  never leave the TV with no HOME. Re-enabling is `deploy.sh` (or `pm enable com.andrewevmiller.tvlauncher/.HomeAlias`).
 
 ## Target device
 Hisense "SmartTV 4K", **Google TV on Android 12 (API 31)**, MediaTek SoC. Probe taken 2026-10-21.

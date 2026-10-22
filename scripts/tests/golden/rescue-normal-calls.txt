@@ -1,0 +1,5 @@
+shell pm path com.gathin.tvhome
+shell cmd package set-home-activity com.gathin.tvhome/.WiiMenuActivity
+shell settings put secure screensaver_components com.google.android.apps.tv.dreamx/.service.Backdrop
+shell settings delete secure field_launcher_previous_home
+shell input keyevent KEYCODE_HOME

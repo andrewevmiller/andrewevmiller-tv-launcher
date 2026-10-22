@@ -5,9 +5,6 @@ import androidx.compose.runtime.Immutable
 import androidx.compose.ui.graphics.ImageBitmap
 import kotlinx.coroutines.flow.Flow
 
-/** Coarse grouping used by the chip filters. */
-enum class AppCategory { VIDEO, MUSIC, GAMES, TOOLS, OTHER }
-
 @Immutable
 data class LauncherApp(
     val component: ComponentName,

@@ -7,10 +7,15 @@
     <!-- Needed on API 30+ to enumerate other apps' launch activities. -->
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
 
+    <!-- Lets the Settings screen switch the system screensaver. Not grantable in the UI: deploy.sh runs
+         `adb shell pm grant com.andrewevmiller.tvlauncher android.permission.WRITE_SECURE_SETTINGS` once. -->
+    <uses-permission android:name="android.permission.WRITE_SECURE_SETTINGS" />
+
     <!-- Lets the quick settings show whether the TV is online. -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
     <application
+        android:name=".FieldApplication"
         android:allowBackup="false"
         android:banner="@drawable/banner"
         android:icon="@drawable/banner"
@@ -28,17 +33,45 @@
             android:resumeWhilePausing="true"
             android:screenOrientation="landscape"
             android:stateNotNeeded="true">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.HOME" />
-                <category android:name="android.intent.category.DEFAULT" />
-            </intent-filter>
+            <!-- Listed in the app drawer and startable by hand even when HomeAlias is disabled. -->
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
                 <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!--
+          The HOME registration lives on an alias so the crash-loop fallback (safety/) can disable just this
+          alias to hand Home back to the previous launcher, while MainActivity stays launchable by hand.
+          deploy.sh sets this component as the default home: com.andrewevmiller.tvlauncher/.HomeAlias
+        -->
+        <activity-alias
+            android:name=".HomeAlias"
+            android:enabled="true"
+            android:exported="true"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.HOME" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity-alias>
+
+        <!-- Oxyfield: our dot-field screensaver. Selected via Settings or
+             `settings put secure screensaver_components com.andrewevmiller.tvlauncher/.ambient.OxyfieldDreamService`. -->
+        <service
+            android:name=".ambient.OxyfieldDreamService"
+            android:exported="true"
+            android:icon="@drawable/banner"
+            android:label="Oxyfield"
+            android:permission="android.permission.BIND_DREAM_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.dreams.DreamService" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </service>
+
         <!-- Answers the remote's Settings button (the system asks for this panel; nothing else on this TV provides it). -->
         <activity
             android:name=".panel.NotificationPanelActivity"

@@ -5,7 +5,8 @@ design language. This document is the operating plan for building it with a team
 **Sonnet 5.5** and **Haiku 5.5** agents working in parallel, coordinated by one integrator.
 
 - Visual and interaction reference: [`docs/mockup/field-launcher-mockup.html`](mockup/field-launcher-mockup.html)
-  (also published at https://claude.ai/artifact/6tfS68Vrs7oQKB1oPWmcXS)
+  (also published at https://claude.ai/artifact/6tfS68Vrs7oQKB1oPWmcXS).
+  The mockup's Apps section is the §5.4 grid (task M1, done); it also adds a `grid` icon for the "All apps" tile and six unpinned sample apps so the drawer scrolls.
 - Agent rules and file ownership: [`CLAUDE.md`](../CLAUDE.md). **If this plan and `CLAUDE.md` disagree, `CLAUDE.md` wins.**
 - Design source: andrewevmiller.com design language (tokens already in `theme/Tokens.kt`)
 
@@ -16,6 +17,7 @@ design language. This document is the operating plan for building it with a team
 **Goals**
 - Replace the current home screen (the gathin "Wii Menu" launcher) on the owner's Hisense TV with a launcher that looks and behaves like the mockup.
 - Dark mode by default, light (parchment) as a setting.
+- Apps are shown as a **grid** (4 columns of 192×108dp tiles, wrapping), not a single scrolling carousel row. Spec in §5.4.
 - D-pad first: every screen is fully usable with arrows, OK, Back and Home.
 - An interface sound system with selectable waveforms and per-app generative launch motifs.
 - Two screensaver options: our Oxyfield animation, and Google's own photo screensaver (ambient mode) with your Google Photos albums.
@@ -30,8 +32,21 @@ design language. This document is the operating plan for building it with a team
 
 ## 2. Current state
 
+Updated 2026-10-21 after the first full build session. Everything in this plan except the owner's device gates is done.
+
 | Item | Status |
 |---|---|
+| Gradle project, Compose for TV, minSdk 31 / target 34 | Done |
+| Theme tokens, bundled fonts, focus style, dot grid | Done |
+| Interactive mockup with sound engine, motifs, waveforms, screensavers, app grid | Done (`docs/mockup/`, published as an artifact) |
+| Contracts (§5.2), purecheck harness, build helpers | Done |
+| Wave 1: probe/deploy/rescue scripts (fake-adb tested), crash-loop fallback | Done |
+| Wave 2: home core, components, icons, ambient, spikes, sound (synth, motifs, renderer, mixer, engine), settings | Done and merged |
+| Wave 3: wiring (`AppContainer`, `FieldRoot`, `HomeContent`), launch history, lint, UI behaviour tests, sound tool | Done (see §12) |
+| Cloud compile | **Unblocked**: `dl.google.com` allowed, Android SDK at `~/android-sdk`; `./gradlew assembleDebug testDebugUnitTest :app:lintDebug` all green |
+| Owner device gates G1 to G4 | **Not run**: need the TV (§10, §12) |
+
+---|---|
 | Gradle project, Compose for TV, minSdk 31 / target 34 | Done |
 | Theme tokens, bundled fonts (Plex Serif, Plex Mono, Geist), focus style, dot grid | Done |
 | Home frame (header, hairline rows, slots), `AppsRepository` interface | Done |
@@ -39,8 +54,6 @@ design language. This document is the operating plan for building it with a team
 | Commits pushed to GitHub | Done |
 | Device facts | Done: Google TV, Android 12 / API 31, 960×540dp, MediaTek TIF, see `CLAUDE.md` § Target device |
 | Compiling in the cloud | **Blocked**: `dl.google.com` not on the environment's allowed domains |
-
-Nothing in `app/` has been compiled yet. Treat the first owner-side `./gradlew installDebug` as a gate (G1 below).
 
 ---
 
@@ -167,7 +180,7 @@ app/src/main/java/com/andrewevmiller/tvlauncher/
   home/ClockHeader.kt             Integrator
   home/data/AppsRepository.kt     Integrator   contract
   home/data/*                     B            repository impl, persistence
-  home/apps/                      B            favorites row, drawer, system tiles, edit mode
+  home/apps/                      B            app grid (favorites), all-apps drawer grid, system tiles, edit mode
   ui/components/                  C            chips, feature band, timeline entry, gallery tile
   ui/icons/                       C            line icon set (ImageVector)
   ambient/                        D            Oxyfield DreamService, screensaver switcher
@@ -176,6 +189,7 @@ app/src/main/java/com/andrewevmiller/tvlauncher/
   safety/                         A            crash-loop fallback
 scripts/                          A            probe, deploy, rescue
 tools/sound/                      F            desktop preview/render CLI (JVM)
+tools/purecheck/                  Integrator   plain-JVM build that compiles + tests all Android-free sources
 spike/                            E            standalone test app(s)
 ```
 
@@ -225,9 +239,56 @@ interface ScreensaverController {
 
 Per-app motif overrides (re-roll seed, mute) are stored by F alongside its own data, keyed by package name.
 
+**As built (I1).** The contracts above are in the repo with these refinements, all in the same packages:
+- `Waveform` is in its own Android-free file (`sound/Waveform.kt`), and `AppCategory` in `home/data/AppCategory.kt`,
+  so the pure sound core and `tools/purecheck` can use them. `FieldSound.kt` keeps the interface, `NoOpFieldSound`
+  and `LocalFieldSound`.
+- `sound/MotifOverrides.kt` adds the interface Settings needs for the per-app motif list:
+  `MotifOverrides { overrides: Flow<Map<String, MotifOverride>>; reroll(pkg); setMuted(pkg, Boolean); reset(pkg) }`
+  with `MotifOverride(rerollCount, muted)`. F implements it; G consumes it.
+- `home/data/LayoutStore.kt` adds `FieldLayout(pinned: List<String>, hidden: Set<String>)` keyed by
+  `ComponentName.flattenToString()`, and `LayoutStore { layout: Flow<FieldLayout>; update(transform) }`.
+  B2 implements it with DataStore; B1 builds `AppsRepository` on top of it.
+- Fakes for previews and tests: `FakeAppsRepository`, `FakeSettingsRepository`, `FakeMotifOverrides`,
+  `InMemoryLayoutStore`, `NoOpFieldSound`, `NoOpScreensaverController`.
+- `ui/icons/FieldIcons.kt` fixes the icon names (`FieldIcons.Play, Note, Pad, Tool, Wave, Port, Gear, Wifi, Search, Folder, Grid, Points`, plus `forCategory(AppCategory)`) with placeholder bodies, and `FieldIcon(icon, modifier, size, tint)` draws one. C5 fills in the glyphs; everyone else codes against the names now.
+- The manifest registers HOME on `.HomeAlias`; see `CLAUDE.md` "Home activity, previous home, and the crash fallback".
+
 ### 5.3 Wiring (done by the integrator in wave 3)
 
 `MainActivity` builds the repositories, provides `LocalFieldSound`, reads `LauncherSettings` into `FieldTheme(dark, reducedMotion)`, and passes real rows to `HomeScreen`.
+
+### 5.4 App grid (product decision)
+
+Apps are a grid, not a carousel. Recent, Photos and System tiles stay horizontal rows.
+
+**Geometry.** The canvas is 960×540dp, the safe content width is 864dp. Four 192dp tiles plus three 32dp gaps
+fill it exactly, so the grid's edges line up with the hairlines (5 columns would need 1024dp). Constants live in
+`FieldDimens`: `appGridColumns = 4`, `appGridColumnGap = 32.dp`, `appGridRowGap = 20.dp`. The tile is the same
+192×108 `fieldTile` as before; focus scale-up (1.06) fits inside the gaps.
+
+**Where it appears.**
+- Home: an "Apps" section showing the pinned apps as a wrapping grid. The last cell is always an "All apps" tile.
+  The section is non-lazy (a `Column` of `Row`s inside one `LazyColumn` item); pinned lists are short.
+- Drawer: "All apps" opens a full-screen grid of every non-hidden app (`LazyVerticalGrid`, same columns, same tile).
+  Back returns to Home with focus on the "All apps" tile.
+- The chips row filters the grid in place, on Home and in the drawer.
+
+**D-pad rules.** Pure function `gridMove(index, count, columns, direction)` returning a `GridMove` of
+`Stay(index)`, `Edge`, `ExitUp` or `ExitDown`, unit-tested in `tools/purecheck`:
+- ← →: move within the grid row; never wrap; at a row's end return `Edge` (plays `FieldSound.edge()`).
+- ↑ ↓: move to the same column in the adjacent grid row; if that row is shorter, land on its last tile.
+- ↑ from the first grid row returns `ExitUp` (focus goes to the chips row); ↓ from the last returns `ExitDown`
+  (focus goes to the next section).
+- Entering the grid from above or below lands on the column nearest the previously focused item.
+- `FieldSound.tick(row)` uses the visual row, so each grid row has its own pitch.
+
+**Edit mode** (long-press OK on a tile): the tile lifts. ← → swap with the neighbour, ↑ ↓ move it one grid row
+(±`columns` positions, clamped), OK drops it, Back cancels. Pin and Hide are actions on the focused tile.
+Reorder is a pure function `reorder(list, from, to)`, unit-tested in `tools/purecheck`.
+
+**Focus survival.** After any list change (pin, unpin, hide, install, uninstall, filter) focus is re-requested on
+the tile now at the previous index, clamped to the new size. Each tile owns a `FocusRequester` keyed by index.
 
 ---
 
@@ -256,19 +317,25 @@ Gate **G1** (owner): `./scripts/deploy.sh` → TV shows the placeholder home wit
 |---|---|---|---|---|
 | B1 | `AppsRepository` impl: query `LEANBACK_LAUNCHER` + `LAUNCHER`, load banner (fallback icon), map category, refresh on package add/remove | Sonnet | `home/data/` | Unit tests with a fake `PackageManager` wrapper; real app list on device |
 | B2 | Layout persistence (DataStore): pinned order, hidden set | Haiku | `home/data/` | Round-trip unit tests |
-| B3 | Favorites row + app drawer: 192×108 tiles, icon ~44dp when no banner, `fieldTile` focus, launch via `FieldSound.launch` then `startActivity` | Sonnet | `home/apps/` | Matches mockup; focus never lost when list changes |
-| B4 | Edit mode: long-press OK → move/pin/hide with D-pad | Sonnet | `home/apps/` | Device check G3 |
+| B3 | App grid + all-apps drawer (§5.4): shared `AppTile` (192×108, icon ~44dp when no banner, `fieldTile` focus), 4-column favorites grid on Home ending in an "All apps" tile, full-screen `LazyVerticalGrid` drawer, 2D D-pad focus rules, launch via `FieldSound.launch` then `startActivity` | Sonnet | `home/apps/` | Matches §5.4; pure grid-navigation function unit-tested in `tools/purecheck`; focus never lost when list changes |
+| B4 | Edit mode: long-press OK → move (← → swap neighbour, ↑ ↓ jump one grid row) / pin / hide with D-pad | Sonnet | `home/apps/` | Pure reorder function unit-tested; device check G3 |
 | B5 | System tiles: inputs (per probe), Wi-Fi, Search, Settings | Sonnet | `home/apps/` | Each tile opens the right screen on the TV |
 
 **C: Components and icons**
 
 | ID | Task | Model | Deliverables | Acceptance |
 |---|---|---|---|---|
-| C1 | Chips row with filter callback | Sonnet | `ui/components/` | Preview + focus behaves like mockup |
+| C1 | Chips row with filter callback (filters the app grid in place, on Home and in the drawer) | Sonnet | `ui/components/` | Preview + focus behaves like mockup |
 | C2 | Feature band (panel, mono kicker, serif title, CTA that fills accent on focus, small Oxyfield canvas slot) | Sonnet | `ui/components/` | Matches mockup |
 | C3 | Timeline entry + collapsible Recent row ("Show recent · N hidden" chip, collapsed by default, collapses on Home) | Sonnet | `ui/components/` | Matches mockup |
 | C4 | Gallery tile (±0.8° alternating tilt, straightens on focus, mono caption on focus) | Sonnet | `ui/components/` | Matches mockup |
 | C5 | Icon set as `ImageVector`s from the mockup's SVG paths: play, note, pad, tool, wave, port, gear, wifi, search, folder, points. Stroke 1.7 @24dp, round caps/joins | Haiku | `ui/icons/` | Every icon renders in a preview grid; checker confirms stroke/cap values |
+
+**M: Mockup** (docs only; keeps the visual reference in step with the plan)
+
+| ID | Task | Model | Deliverables | Acceptance |
+|---|---|---|---|---|
+| M1 (done) | Change the mockup's Favorites carousel to the §5.4 grid: 4 columns, 192×108 tiles, "All apps" last cell, 2D arrow-key focus with the §5.4 rules, chips filter the grid; row indices in `select()`/`move()` become key-based so adding grid rows doesn't break the other rows | Haiku (escalate to Sonnet after two failures) | `docs/mockup/` | Scripted Playwright check: arrow keys reproduce the §5.4 cases; no console errors; other rows still work |
 
 **D: Ambient**
 
@@ -380,13 +447,13 @@ Device checks for the owner: <steps> | none
 
 | Gate | Who | When | Pass criteria |
 |---|---|---|---|
-| G0 | Agent / integrator | Every task (needs P3) | `./gradlew :app:compileDebugKotlin testDebugUnitTest` green |
+| G0 | Agent / integrator | Every task | `gradle -p tools/purecheck test` green (works in the cloud; compiles and tests every Android-free source), plus checker clean. With P3, also `./gradlew :app:compileDebugKotlin testDebugUnitTest` |
 | G1 | Owner | End of wave 1 | Deploy, see placeholder home, rescue works |
 | G2 | Owner | Mid wave 2 | Spikes E1/E2 results; forced-crash fallback works |
 | G3 | Owner | End of wave 2 (per feature APK) | Feature-specific device checks from handoff reports |
 | G4 | Owner | End of wave 3 | Full checklist §10 |
 
-Without P3, G0 becomes "integrator reads the diff and the checker reports", and compile errors surface at the owner's next gate. Batch owner gates so the owner does one deploy per wave, not one per task.
+Without P3, the Android/Compose layer is not compiled in the cloud: G0 covers the pure logic through purecheck, the checker reviews the glue, and compile errors in the glue surface at the owner's next gate. Batch owner gates so the owner does one deploy per wave, not one per task.
 
 ### 7.5 Running a wave
 1. Integrator writes briefs for every task in the wave.
@@ -503,8 +570,10 @@ Motifs:
 | Pre-rendering many apps × waveforms is slow | Low | Lag after waveform change | Render only the current waveform; background thread; motifs rendered lazily on first focus if needed |
 | Haiku tasks drift from spec | Medium | Rework | Golden vectors and mechanical acceptance checks; escalate to Sonnet after two failures |
 | Parallel agents conflict in shared files | Medium | Merge pain | Ownership table, contracts first, integrator-only shared edits, checker C-X2 |
-| No cloud compile (P3 not done) | Current | Errors found late | Batch owner builds per wave; keep APIs conservative |
+| No cloud compile of `:app` (P3 not done) | Current | Errors found late | `tools/purecheck` compiles and tests all pure logic in the cloud; glue stays thin; checkers review it; batch owner builds per wave; keep APIs conservative |
 | Near-black dot grid invisible on the panel | Medium | Texture lost | Dot brightness setting, tuned in G1 |
+| Grid focus is lost when tiles scroll out of a lazy grid, or when pin/hide changes the list | Medium | D-pad dead until a key press | Keep grid navigation as a pure function (unit-tested); explicit `FocusRequester` per tile index; re-request focus at the clamped index after list changes; Home grid is non-lazy |
+| Home grid grows tall and pushes Recent/Photos/System far down | Medium | Long scroll to reach lower rows | Last cell is "All apps"; pinned apps beyond the Home grid's rows live in the drawer; tune row cap in I5 |
 
 ---
 
@@ -518,8 +587,10 @@ Motifs:
 **Home**
 - [ ] Fonts are Plex Serif / Geist / Plex Mono; dot grid visible but quiet; everything inside the safe area
 - [ ] Focus: accent border, scale-up, tilted gallery tiles straighten; never lost after installs/uninstalls
-- [ ] Favorites: real banners; apps without banners show a large icon; pin, reorder, hide work and persist across reboot
-- [ ] Chips filter favorites
+- [ ] Apps are a 4-column grid (not a carousel); the last cell is "All apps", which opens a full-screen grid of every app
+- [ ] Grid D-pad: ← → stay in the row (edge thud at the ends), ↑ ↓ keep the column, short last row lands on its last tile, ↑ from the top row reaches the chips, ↓ from the bottom row reaches the next section
+- [ ] Favorites: real banners; apps without banners show a large icon; pin, reorder (including ↑ ↓ across grid rows), hide work and persist across reboot
+- [ ] Chips filter the grid
 - [ ] Recent row collapsed by default, expands, collapses again on Home
 - [ ] System tiles open inputs, Wi-Fi, search, settings
 
@@ -546,3 +617,46 @@ Motifs:
 - F1 golden vectors pass; F7 renders all sounds; the owner signs off the sound by ear against the mockup.
 - README covers install, rescue, and the one-time permission grant.
 - `CLAUDE.md` and this plan reflect what was actually built.
+
+---
+
+## 12. Build status and deviations (as built)
+
+Verified in the cloud on the integration branch: `./gradlew assembleDebug testDebugUnitTest :app:lintDebug` and
+`tools/purecheck.sh` are green (see the README for counts at the time of writing). Nothing has run on the TV.
+
+**Found only because the real compiler and test runners were available** (all fixed): an invalid XML comment in
+`themes.xml` (`--bg`), a `size` shadowing bug in `DotGrid`, TV input type constants copied the wrong way round
+(`TYPE_TUNER` is 0, `TYPE_OTHER` is 1000: the real tuner input would have been dropped), a test using JVM-only
+management classes, and a `<queries>` attribute typo in the spike manifest.
+
+**Deviations from the plan as written**
+
+| Plan said | As built | Why |
+|---|---|---|
+| Favorites row (carousel) | 4-column app grid with an "All apps" drawer (§5.4) | Owner request |
+| Photos row of gallery tiles | Two screensaver tiles: Google Photos slideshow and Oxyfield | Photos aren't readable by the launcher; the tiles do something real |
+| Feature band shows a Watch Next item | Shows the app you opened last (welcome text before the first launch) | Watch Next access is unconfirmed until spike E1 runs on the TV |
+| Recent from Watch Next | Recent from the launcher's own launch history (`home/data/LaunchHistory.kt`) | Same; the fallback the plan named |
+| No entry to the launcher's Settings | SETTINGS chip in the header, and the remote's Menu key | The settings screen needed a way in |
+| HOME registered on `MainActivity` | Registered on `.HomeAlias` | Lets the crash fallback disable Home without making the app unlaunchable |
+| `AppsRepository` impl on top of a DataStore store | Same, plus `FieldLayout.seeded` | A fresh install pins sensible defaults once; unpinning everything doesn't bring them back |
+| D3 as a separate Haiku task | Done by the ambient builder | One small function; a cold agent would cost more than it saved |
+| Agents never compile (no SDK) | Agents run `tools/purecheck.sh`; the integrator compiles each merged batch with `tools/compile.sh` | SDK became available mid-session; compiles are serialised because the box has 4 CPUs |
+| All `:app` tests pure JVM | Plus Robolectric Compose UI tests (`app/src/test/.../ui/`) | They run the real focus and key-dispatch code on the JVM |
+
+**Owner gates still to run** (batch them: one deploy)
+
+1. G1: `./scripts/probe.sh`, `./scripts/deploy.sh`, see Home, `./scripts/rescue.sh` brings the gathin launcher back.
+2. G2: run the spike (`spike/README.md`), paste the results back; force the crash fallback twice.
+3. G3/G4: the checklist in §10. The per-agent device checks (listening to the waveforms and tuning
+   `OUTPUT_GAIN_DB`, system input tiles via `adb logcat -s FieldSystemTiles`, screensaver start methods via
+   `adb logcat -s FieldAmbient`, banner sharpness, dot-grid brightness) are the things most likely to need a tweak.
+
+**Known risks carried forward**
+
+- First-tick latency after the audio track idles, and overall loudness, are untested on the Hisense SoC.
+- If the TV registers its HDMI or tuner inputs unusually, tiles may be missing; `FieldSystemTiles` logs say why.
+- Long-press OK relies on the remote repeating the key; an IR remote that doesn't repeat can't enter edit mode.
+- Google TV may still prefer its own launcher in some flows (the plan's top risk); `deploy.sh` sets our alias as
+  the default home and the first device gate confirms it.

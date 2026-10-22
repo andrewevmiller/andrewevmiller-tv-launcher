@@ -1,0 +1,14 @@
+get-state
+get-serialno
+shell cmd package resolve-activity --brief -c android.intent.category.HOME -a android.intent.action.MAIN
+shell pm list packages
+shell pm list packages -d
+shell pm list packages
+shell pm list packages -d
+shell settings get secure screensaver_components
+shell pm grant com.andrewevmiller.tvlauncher android.permission.WRITE_SECURE_SETTINGS
+shell settings put secure field_launcher_previous_home com.gathin.tvhome/.WiiMenuActivity
+shell pm enable com.andrewevmiller.tvlauncher/.HomeAlias
+shell cmd package set-home-activity com.andrewevmiller.tvlauncher/.HomeAlias
+shell input keyevent KEYCODE_HOME
+shell cmd package resolve-activity --brief -c android.intent.category.HOME -a android.intent.action.MAIN
