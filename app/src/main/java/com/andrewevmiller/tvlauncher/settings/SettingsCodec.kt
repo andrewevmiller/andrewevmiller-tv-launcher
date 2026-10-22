@@ -1,5 +1,6 @@
 package com.andrewevmiller.tvlauncher.settings
 
+import com.andrewevmiller.tvlauncher.marginnote.MarginNoteRules
 import com.andrewevmiller.tvlauncher.sleep.SleepPresets
 import com.andrewevmiller.tvlauncher.sound.Waveform
 
@@ -23,6 +24,7 @@ object SettingsCodec {
         dotGridAlpha: Float?,
         sleepMinutes: Int? = null,
         viewingLogEnabled: Boolean? = null,
+        marginNote: String? = null,
     ): LauncherSettings = LauncherSettings(
         darkMode = darkMode ?: defaults.darkMode,
         reducedMotion = reducedMotion ?: defaults.reducedMotion,
@@ -32,7 +34,14 @@ object SettingsCodec {
         dotGridAlpha = clampDotGridAlpha(dotGridAlpha),
         sleepMinutes = SleepPresets.sanitize(sleepMinutes),
         viewingLogEnabled = viewingLogEnabled ?: defaults.viewingLogEnabled,
+        marginNote = encodeMarginNote(marginNote),
     )
+
+    /**
+     * The margin note as stored and shown: sanitised (no control characters, trimmed, at most 80
+     * characters). Null, junk, or a note that is only spaces gives "". Used on decode and on encode.
+     */
+    fun encodeMarginNote(raw: String?): String = MarginNoteRules.sanitize(raw)
 
     fun encodeWaveform(w: Waveform): String = w.name
 
