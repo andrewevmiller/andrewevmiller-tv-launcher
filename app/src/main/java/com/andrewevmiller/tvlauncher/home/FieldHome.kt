@@ -27,6 +27,7 @@ import com.andrewevmiller.tvlauncher.home.data.LauncherApp
 import com.andrewevmiller.tvlauncher.settings.LauncherSettings
 import com.andrewevmiller.tvlauncher.sound.LocalFieldSound
 import com.andrewevmiller.tvlauncher.theme.FieldIcons
+import com.andrewevmiller.tvlauncher.viewinglog.ui.ViewingLogTile
 import kotlinx.coroutines.delay
 import java.time.Instant
 import java.time.ZoneId
@@ -49,6 +50,10 @@ fun FieldHome(
     settings: LauncherSettings,
     onOpenSettings: () -> Unit,
     modifier: Modifier = Modifier,
+    /** Opens the Viewing log (the Tools row tile). */
+    onOpenLog: () -> Unit = {},
+    /** Counts up each time the log closes; focus goes back to the Viewing log tile on each change. */
+    focusLogTile: Int = 0,
 ) {
     val context = LocalContext.current
     val sound = LocalFieldSound.current
@@ -236,6 +241,15 @@ fun FieldHome(
                 defaultMinutes = settings.sleepMinutes,
                 open = sleepOpen,
                 onOpenChange = { sleepOpen = it },
+                trailing = {
+                    ViewingLogTile(
+                        onClick = {
+                            sound.select()
+                            onOpenLog()
+                        },
+                        focusRequest = focusLogTile,
+                    )
+                },
             )
         },
         dotAlpha = settings.dotGridAlpha,

@@ -13,6 +13,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.andrewevmiller.tvlauncher.home.FieldToast
@@ -25,8 +26,9 @@ import com.andrewevmiller.tvlauncher.settings.SettingsScreen
 import com.andrewevmiller.tvlauncher.sound.LocalFieldSound
 import com.andrewevmiller.tvlauncher.theme.FieldDimens
 import com.andrewevmiller.tvlauncher.theme.FieldTheme
+import com.andrewevmiller.tvlauncher.viewinglog.ui.ViewingLogScreen
 
-private enum class Route { Home, Settings }
+private enum class Route { Home, Log, Settings }
 
 /**
  * The launcher's UI root. [homeResets] increments each time Home is pressed (MainActivity.onNewIntent): it
@@ -45,13 +47,16 @@ fun FieldRoot(container: AppContainer, homeResets: Int, settingsRequests: Int) {
             var route by remember(homeResets) { mutableStateOf(Route.Home) }
             val ui = remember(homeResets) { HomeUiState() }
             var notice by remember { mutableStateOf(CrashGuard.pendingNotice(context)) }
+            // Counts each return from the Viewing log, so the Tools tile takes focus back.
+            var logReturns by remember(homeResets) { mutableStateOf(0) }
 
             LaunchedEffect(settingsRequests) {
                 if (settingsRequests > 0) route = Route.Settings
             }
 
             when (route) {
-                Route.Home -> Box(Modifier.fillMaxSize()) {
+                // The log is drawn over Home. Home stays composed (its list keeps its place) but cannot take focus.
+                Route.Home, Route.Log -> Box(Modifier.fillMaxSize()) {
                     // Home pressed again: a fresh FieldHome, so Recent collapses, the filter clears and the drawer closes.
                     key(homeResets) {
                         FieldHome(
@@ -59,6 +64,29 @@ fun FieldRoot(container: AppContainer, homeResets: Int, settingsRequests: Int) {
                             ui = ui,
                             settings = settings,
                             onOpenSettings = { route = Route.Settings },
+                            modifier = if (route == Route.Home) Modifier else Modifier.focusProperties { canFocus = false },
+                            onOpenLog = {
+                                container.viewingLog.refresh()
+                                route = Route.Log
+                            },
+                            focusLogTile = logReturns,
+                        )
+                    }
+                    if (route == Route.Log) {
+                        val installed by container.apps.apps.collectAsStateWithLifecycle(initialValue = emptyList())
+                        val sessions by container.viewingLog.sessions.collectAsStateWithLifecycle()
+                        val labels = remember(installed) { installed.associate { it.component.packageName to it.label } }
+                        val usageGranted = remember { container.viewingLog.hasUsageAccess() }
+                        ViewingLogScreen(
+                            sessions = sessions,
+                            enabled = settings.viewingLogEnabled,
+                            usageGranted = usageGranted,
+                            labelOf = { pkg -> labels[pkg] ?: pkg.substringAfterLast('.') },
+                            onBack = {
+                                logReturns++
+                                route = Route.Home
+                            },
+                            dotAlpha = settings.dotGridAlpha,
                         )
                     }
                     notice?.let { n ->
@@ -85,6 +113,7 @@ fun FieldRoot(container: AppContainer, homeResets: Int, settingsRequests: Int) {
                     apps = container.apps,
                     screensaver = container.screensaver,
                     onBack = { route = Route.Home },
+                    onClearViewingLog = { container.viewingLog.clear() },
                 )
             }
         }

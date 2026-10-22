@@ -42,5 +42,10 @@ object FieldIcons {
     val Wifi = icon("wifi", "M2.5 9a14 14 0 0 1 19 0M5.5 12.5a9.5 9.5 0 0 1 13 0M8.5 16a5 5 0 0 1 7 0", circle(12f, 19f, 0.8f))
     /** Same path as `ui/icons/IconPaths.kt` "moon" and the mockup's `ICON.moon`. */
     val Moon = icon("moon", "M20 14.2A8.5 8.5 0 1 1 9.8 4a8 8 0 0 0 10.2 10.2z")
+    /**
+     * The Viewing log tile. The mockup has no "log" glyph: its Viewing log tile draws `svg('wave')`, so this uses the
+     * same path as `ui/icons/IconPaths.kt` "wave" and the mockup's `ICON.wave`.
+     */
+    val Log = icon("wave", "M2 12h3l2-6 3 12 3-9 2 5 2-2h5")
     val Search = icon("search", circle(10.5f, 10.5f, 6f), "m15 15 5.5 5.5")
 }
