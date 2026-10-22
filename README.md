@@ -125,6 +125,20 @@ The chips switch between This week, Last week and Month. Back returns to Home wi
   The log is on by default once usage access is granted. Settings → Viewing log turns it off (nothing is read or
   written while it is off), and Clear log (press OK twice) empties it.
 
+### Margin note
+
+A **margin note** is one short line of your own text, shown on Home between the header and the feature band:
+`NOTE  finish S2 of Severance`. It is in the mono style, muted, with a hairline under it.
+
+- **OK on the note line** opens the editor. Type with the TV's on-screen keyboard. **Done** saves; **Back**
+  discards. Saving an empty note removes the line, unless a laptop note is set (see below), which then shows again.
+- With no note, the line shows only while it is focused (`NOTE  add a note`), so an unused note takes no space.
+- The note is at most 80 characters, on one line. Newlines and control characters are dropped, and the ends are trimmed.
+- **From a laptop:** `scripts/note.sh "text"` sets it over adb (`scripts/note.sh ""`, or no text, clears it). It is
+  the fallback when typing on the TV is awkward. The launcher shows it only while its own note is empty, so a note
+  typed on the TV wins. To remove both, clear the laptop note too (`scripts/note.sh` with no text).
+- **Where it lives:** on the TV only, in the launcher's settings. Nothing is sent anywhere.
+
 ## Three on-device questions the spike answers
 
 `spike/` is a separate small app that checks (1) whether the TV lets a third-party app read other apps'
