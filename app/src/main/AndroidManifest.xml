@@ -36,6 +36,20 @@
                 <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
             </intent-filter>
         </activity>
+        <!-- Answers the remote's Settings button (the system asks for this panel; nothing else on this TV provides it). -->
+        <activity
+            android:name=".panel.NotificationPanelActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:launchMode="singleTop"
+            android:taskAffinity=""
+            android:theme="@style/Theme.FieldLauncher.Panel">
+            <intent-filter>
+                <action android:name="android.app.action.TOGGLE_NOTIFICATION_HANDLER_PANEL" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+
         <!-- Lets the launcher read media sessions for the Now playing band. Reads no notifications. -->
         <service
             android:name=".home.data.NowPlayingListener"
