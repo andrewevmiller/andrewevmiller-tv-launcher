@@ -105,6 +105,9 @@ object ArtLimits {
     const val MAX_HARDWARE = 300
 
     fun hardwareAllowed(inUse: Int): Boolean = inUse < MAX_HARDWARE
+
+    /** How many more bitmaps may go to GPU memory when [inUse] already have. */
+    fun gpuSlots(inUse: Int): Int = (MAX_HARDWARE - inUse).coerceAtLeast(0)
 }
 
 /** Naming and cleanup rules for the cached artwork files. Keyed by build, so an update gets a new file. */

@@ -34,6 +34,13 @@ class ArtLimitsTest {
         assertFalse(ArtLimits.hardwareAllowed(ArtLimits.MAX_HARDWARE + 1))
     }
 
+    @Test fun gpuSlotsAreWhatIsLeftOfTheCap() {
+        assertEquals(ArtLimits.MAX_HARDWARE, ArtLimits.gpuSlots(0))
+        assertEquals(1, ArtLimits.gpuSlots(ArtLimits.MAX_HARDWARE - 1))
+        assertEquals(0, ArtLimits.gpuSlots(ArtLimits.MAX_HARDWARE))
+        assertEquals(0, ArtLimits.gpuSlots(ArtLimits.MAX_HARDWARE + 50))
+    }
+
     @Test fun snapshotsFromBeforeTheArtworkResizeAreIgnored() {
         // A version 1 snapshot points at 192 px icon files; reading it would keep them. It must be rebuilt.
         val out = ByteArrayOutputStream()
