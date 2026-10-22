@@ -88,6 +88,7 @@ class MainActivity : ComponentActivity() {
         } else null
         records = history.entries()
         systemTiles = buildSystemTiles()
+        dropWindowBackgroundAfterFirstFrame()
         setContent {
             FieldTheme {
               CompositionLocalProvider(LocalFieldSound provides sound) {
@@ -135,6 +136,26 @@ class MainActivity : ComponentActivity() {
               }
             }
         }
+    }
+
+    /**
+     * The theme's window background stops a flash before the first frame. Once Compose has drawn that frame
+     * its own root paints the same color over the whole screen, so the window's copy is a second full-screen
+     * fill on every frame for nothing: drop it.
+     */
+    private fun dropWindowBackgroundAfterFirstFrame() {
+        val view = window.decorView
+        view.viewTreeObserver.addOnDrawListener(object : android.view.ViewTreeObserver.OnDrawListener {
+            private var done = false
+            override fun onDraw() {
+                if (done) return
+                done = true
+                view.post {
+                    window.setBackgroundDrawable(null)
+                    view.viewTreeObserver.removeOnDrawListener(this)
+                }
+            }
+        })
     }
 
     /** Reads the font files on a background thread now, so the first frame doesn't wait for them on the main thread. */
