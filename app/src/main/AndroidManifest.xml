@@ -15,6 +15,8 @@
          is possible if the TV spike shows that starting SleepDimActivity from the alarm receiver needs it.
          Nothing requests it at run time. The timer itself needs no permission: setAlarmClock is exact-alarm exempt. -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <!-- Lets the quick settings show whether the TV is online. -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
     <application
         android:name=".FieldApplication"
@@ -92,5 +94,43 @@
             android:stateNotNeeded="true"
             android:taskAffinity="com.andrewevmiller.tvlauncher.sleep"
             android:theme="@style/Theme.FieldLauncher" />
+        <!-- Answers the remote's Settings button (the system asks for this panel; nothing else on this TV provides it). -->
+        <activity
+            android:name=".panel.NotificationPanelActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:launchMode="singleTop"
+            android:taskAffinity=""
+            android:theme="@style/Theme.FieldLauncher.Panel">
+            <intent-filter>
+                <action android:name="android.app.action.TOGGLE_NOTIFICATION_HANDLER_PANEL" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+
+        <!-- Lets the launcher read media sessions for the Now playing band. Reads no notifications. -->
+        <service
+            android:name=".home.data.NowPlayingListener"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
+
+        <!-- Takes over the Settings and Tuner remote buttons; off until enabled with tools/remote.ps1. -->
+        <service
+            android:name=".remote.RemoteKeyService"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/remote_key_service" />
+        </service>
     </application>
 </manifest>

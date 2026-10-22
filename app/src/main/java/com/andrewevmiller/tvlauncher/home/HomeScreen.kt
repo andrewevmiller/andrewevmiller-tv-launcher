@@ -69,6 +69,7 @@ import com.andrewevmiller.tvlauncher.home.data.AppCategory
 import com.andrewevmiller.tvlauncher.home.data.LauncherApp
 import com.andrewevmiller.tvlauncher.sound.LocalFieldSound
 import com.andrewevmiller.tvlauncher.sound.LocalSoundRow
+import com.andrewevmiller.tvlauncher.home.data.NowPlaying
 import com.andrewevmiller.tvlauncher.theme.Field
 import com.andrewevmiller.tvlauncher.theme.FieldDimens
 import com.andrewevmiller.tvlauncher.theme.FieldIcons
@@ -108,7 +109,9 @@ fun HomeScreen(
     onChip: (Chip) -> Unit,
     onOpenDrawer: () -> Unit,
     onLaunch: (LauncherApp) -> Unit,
-    feature: Feature?,
+    features: List<Feature>,
+    nowPlaying: NowPlaying?,
+    onOpenPlaying: (NowPlaying) -> Unit,
     recent: List<RecentEntry>,
     recentOpen: Boolean,
     onToggleRecent: () -> Unit,
@@ -132,8 +135,11 @@ fun HomeScreen(
     val sound = LocalFieldSound.current
     val focusManager = LocalFocusManager.current
     val dotColor = colors.line.copy(alpha = colors.line.alpha * dotAlpha.coerceIn(0f, 1f))
-    val matches = { a: LauncherApp -> chip.category == null || a.category == chip.category }
-    val apps = if (drawer) allApps.filter(matches) else orderPinned(allApps, order, pinnedSet).filter(matches)
+    // Worked out only when an input changes, not on every recomposition (the lists are replaced, never edited).
+    val apps = remember(allApps, order, pinnedSet, chip, drawer) {
+        val matches = { a: LauncherApp -> chip.category == null || a.category == chip.category }
+        if (drawer) allApps.filter(matches) else orderPinned(allApps, order, pinnedSet).filter(matches)
+    }
     val requesters = remember { mutableMapOf<String, FocusRequester>() }
     val gesture = remember { OkGesture() }
     val listState = rememberLazyListState()
@@ -151,8 +157,22 @@ fun HomeScreen(
     // which read as jumpiness. This is the only scroll now: one eased move that keeps the focused
     // thing 40dp inside the screen. A new move starts from wherever the last one had got to.
     val density = LocalDensity.current
+    // Rows in list order, so a row that is off screen can be scrolled to by position.
+    val itemKeys = listOfNotNull(
+        "header", "band".takeIf { (features.isNotEmpty() || nowPlaying != null) && !drawer }, "chips", "apps-head", "apps-grid",
+        "recent".takeIf { !drawer && recent.isNotEmpty() },
+        "screensaver".takeIf { !drawer && screensaver != null },
+        "system".takeIf { !drawer && systemTiles.isNotEmpty() },
+    )
     fun reveal(itemKey: String, top: Float = 0f, height: Float = -1f) {
         scope.launch {
+            // Focus can land on a row that is composed but not on screen (the Recent / Inputs rows
+            // just below a full grid). It is not in the visible list then, so bring it into view first;
+            // otherwise focus moves unseen and the page seems stuck.
+            if (listState.layoutInfo.visibleItemsInfo.none { it.key == itemKey }) {
+                val index = itemKeys.indexOf(itemKey)
+                if (index >= 0) listState.animateScrollToItem(index)
+            }
             val info = listState.layoutInfo
             val item = info.visibleItemsInfo.firstOrNull { it.key == itemKey }
             if (item == null) return@launch
@@ -181,8 +201,10 @@ fun HomeScreen(
             scrollGuard.holding = false
         }
     }
-    val cells: List<Cell> = apps.map { Cell.App(it) } + if (drawer) emptyList() else listOf(Cell.All(allApps.size))
-    val gridRows = cells.chunked(COLUMNS)
+    val cells: List<Cell> = remember(apps, drawer, allApps.size) {
+        apps.map { Cell.App(it) } + if (drawer) emptyList() else listOf(Cell.All(allApps.size))
+    }
+    val gridRows = remember(cells) { cells.chunked(COLUMNS) }
     Box(
         modifier
             .fillMaxSize()
@@ -210,10 +232,10 @@ fun HomeScreen(
                 ClockHeader(if (drawer) "All apps" else "Home", onOpenSettings = onOpenSettings)
                 Spacer(Modifier.height(18.dp))
             }
-            if (feature != null && !drawer) {
+            if ((features.isNotEmpty() || nowPlaying != null) && !drawer) {
                 item("band") {
                     CompositionLocalProvider(LocalSoundRow provides 0) {
-                        FeatureBand(feature, onOpen = { onLaunch(feature.app) }, modifier = toTop)
+                        FeatureBand(features, nowPlaying, onOpen = { onLaunch(it.app) }, onOpenPlaying = onOpenPlaying, modifier = toTop)
                     }
                     Spacer(Modifier.height(18.dp))
                 }
@@ -231,7 +253,7 @@ fun HomeScreen(
                 if (!drawer && apps.isEmpty() && chip == Chip.ALL) {
                     Text(
                         "Nothing is pinned yet. Open All apps, hold OK on an app and choose Pin to Home.",
-                        style = Field.type.body.copy(fontSize = 14.sp, lineHeight = 21.sp),
+                        style = Field.type.bodySmall,
                         color = colors.muted,
                         modifier = Modifier.padding(bottom = 14.dp),
                     )
@@ -360,7 +382,7 @@ private fun SectionHead(label: String) {
     Spacer(Modifier.height(10.dp))
     Text(
         label.uppercase(),
-        style = Field.type.label.copy(fontSize = 11.5.sp, lineHeight = 14.sp, letterSpacing = 0.08.em),
+        style = Field.type.sectionLabel,
         color = colors.muted,
     )
     Spacer(Modifier.height(8.dp))
@@ -371,7 +393,7 @@ private fun ChipPill(label: String, selected: Boolean, onClick: () -> Unit) {
     val colors = Field.colors
     Text(
         label,
-        style = Field.type.caption.copy(fontSize = 12.sp, lineHeight = 16.sp, letterSpacing = 0.04.em),
+        style = Field.type.chip,
         color = if (selected) colors.ink else colors.muted,
         modifier = Modifier
             .fieldTile(onClick, FieldShapes.chip)
@@ -454,12 +476,12 @@ private fun AppTile(
                 Column {
                     Text(
                         app.label,
-                        style = Field.type.bodyStrong.copy(fontSize = 14.sp, lineHeight = 17.sp),
+                        style = Field.type.tileTitle,
                         color = colors.ink, maxLines = 1, overflow = TextOverflow.Ellipsis,
                     )
                     Text(
                         app.category.name,
-                        style = Field.type.caption.copy(fontSize = 10.sp, lineHeight = 13.sp, letterSpacing = 0.06.em),
+                        style = Field.type.tileCaption,
                         color = colors.muted,
                     )
                 }
@@ -480,10 +502,10 @@ private fun AllAppsTile(count: Int, onClick: () -> Unit) {
     ) {
         Image(FieldIcons.Grid, null, Modifier.size(44.dp), colorFilter = ColorFilter.tint(colors.muted))
         Column {
-            Text("All apps", style = Field.type.bodyStrong.copy(fontSize = 14.sp, lineHeight = 17.sp), color = colors.ink)
+            Text("All apps", style = Field.type.tileTitle, color = colors.ink)
             Text(
                 "$count INSTALLED",
-                style = Field.type.caption.copy(fontSize = 10.sp, lineHeight = 13.sp, letterSpacing = 0.06.em),
+                style = Field.type.tileCaption,
                 color = colors.muted,
             )
         }
@@ -499,7 +521,7 @@ private fun SystemTileView(tile: SystemTile) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Image(tile.icon, null, Modifier.size(22.dp), colorFilter = ColorFilter.tint(colors.muted))
-        Text(tile.label, style = Field.type.bodyStrong.copy(fontSize = 13.sp, lineHeight = 16.sp), color = colors.ink, maxLines = 2)
+        Text(tile.label, style = Field.type.systemLabel, color = colors.ink, maxLines = 2)
     }
 }
 

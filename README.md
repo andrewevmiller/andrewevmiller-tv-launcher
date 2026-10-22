@@ -128,6 +128,26 @@ Pins and their order are kept in the app's saved data. Updating with `./gradlew 
 
 The backup is written to `%USERPROFILE%\.field-launcher\pins.xml`. Add `-IncludeHistory` to keep Recent and the featured band too, `-Serial` to pick a device, `-File` to choose where the backup goes. It needs a debug build.
 
+### Featured band
+The band at the top of Home shows what is playing right now (title, artist or episode, a Play/Pause button, album art when the app provides it). When nothing is playing it turns through your four most recent apps every six seconds.
+
+Reading what other apps are playing needs notification-listener access, which the TV has no screen for. Grant it once over adb (the launcher never reads a notification):
+
+```powershell
+./tools/now-playing.ps1 enable    # also: disable, status
+```
+
+Installing a new build switches it off again, and so does an uninstall, so run `enable` again after every install.
+
+### Remote buttons
+Some buttons are taken by the TV's system before any app sees them. On this TV the Settings, Tuner and User buttons go to a Google TV launcher that is disabled, so they do nothing. The launcher can take them over as an accessibility service, which Android keeps off until you switch it on:
+
+```powershell
+./tools/remote.ps1 enable    # also: disable, status
+```
+
+Out of the box the Settings button opens a notifications panel (with an Open Settings shortcut) and the Tuner button opens Stremio. The service reads nothing from the screen, only key presses, and only touches the buttons listed in `RemoteKeys` (`app/.../remote/RemoteKeyService.kt`). Back, Home, Power, the arrows, OK and volume can never be remapped. `disable` puts every button back. Installing a new build switches the service off again (as does an uninstall), so run `enable` again after every install.
+
 ## Fonts
 
 IBM Plex Serif, IBM Plex Mono and Geist are bundled under the SIL Open Font License; see `licenses/`.
