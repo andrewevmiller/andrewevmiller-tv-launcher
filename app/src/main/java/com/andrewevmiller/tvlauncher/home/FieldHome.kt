@@ -24,6 +24,8 @@ import com.andrewevmiller.tvlauncher.home.data.HomeLaunchHistory
 import com.andrewevmiller.tvlauncher.home.data.InstalledApps
 import com.andrewevmiller.tvlauncher.home.data.LaunchRecord
 import com.andrewevmiller.tvlauncher.home.data.LauncherApp
+import com.andrewevmiller.tvlauncher.home.data.NowPlaying
+import com.andrewevmiller.tvlauncher.home.data.NowPlayingMonitor
 import com.andrewevmiller.tvlauncher.settings.LauncherSettings
 import com.andrewevmiller.tvlauncher.sound.LocalFieldSound
 import com.andrewevmiller.tvlauncher.theme.FieldIcons
@@ -80,12 +82,18 @@ fun FieldHome(
     var editing by remember { mutableStateOf<String?>(null) }
     var menuApp by remember { mutableStateOf<LauncherApp?>(null) }
 
-    val systemTiles = remember {
-        buildSystemTiles(context) { intent ->
-            sound.select()
-            runCatching { context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
-        }
+    val open: (Intent) -> Unit = { intent ->
+        sound.select()
+        runCatching { context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
     }
+    val systemTiles = remember { buildSystemTiles(context, open) }
+
+    // What some other app is playing right now (needs notification-listener access; see tools/now-playing.ps1).
+    var nowPlaying by remember { mutableStateOf<NowPlaying?>(null) }
+    val nowPlayingMonitor = remember { NowPlayingMonitor(context) { nowPlaying = it } }
+    LifecycleEventEffect(Lifecycle.Event.ON_START) { nowPlayingMonitor.start() }
+    LifecycleEventEffect(Lifecycle.Event.ON_STOP) { nowPlayingMonitor.stop() }
+    DisposableEffect(nowPlayingMonitor) { onDispose { nowPlayingMonitor.stop() } }
 
     // Cheap when nothing was installed, removed or updated, so installs and uninstalls still show up on return.
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { loader.refresh() }
@@ -120,14 +128,17 @@ fun FieldHome(
         return records.mapNotNull { r -> byPkg[r.packageName]?.let { RecentEntry(it, r.at) } }.take(5)
     }
 
-    /** The app opened most recently; the band stays hidden until something has been opened (#5). */
-    fun featureFor(): Feature? {
-        val recent = recentFor().firstOrNull()
-        if (recent != null) {
-            val at = Instant.ofEpochMilli(recent.at).atZone(ZoneId.systemDefault())
-            return Feature(recent.app, DateTimeFormatter.ofPattern("yyyy-MM-dd 'at' HH:mm").format(at))
-        }
-        return null
+    /** The recent apps the band turns through, newest first, each with when it was last opened. */
+    fun featuresFor(): List<Feature> = recentFor().take(4).map { r ->
+        val at = Instant.ofEpochMilli(r.at).atZone(ZoneId.systemDefault())
+        Feature(r.app, DateTimeFormatter.ofPattern("yyyy-MM-dd 'at' HH:mm").format(at))
+    }
+
+    /** Opens the app that is playing; opening it is how you get at its own controls. */
+    fun openPlaying(p: NowPlaying) {
+        val intent = context.packageManager.getLeanbackLaunchIntentForPackage(p.packageName)
+            ?: context.packageManager.getLaunchIntentForPackage(p.packageName) ?: return
+        open(intent)
     }
 
     /** Moves [app] by [delta] places in the Home order and saves it; the edges answer with the thud. */
@@ -189,7 +200,9 @@ fun FieldHome(
             records = history.record(app.component.packageName)
             InstalledApps.launch(context, app)
         },
-        feature = featureFor(),
+        features = featuresFor(),
+        nowPlaying = nowPlaying,
+        onOpenPlaying = { openPlaying(it) },
         recent = recentFor(),
         recentOpen = recentOpen,
         onToggleRecent = {
