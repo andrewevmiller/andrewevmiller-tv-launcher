@@ -109,7 +109,8 @@ fun FieldHome(
     val nowPlayingMonitor = remember { NowPlayingMonitor(context) { nowPlaying = it } }
     LifecycleEventEffect(Lifecycle.Event.ON_START) { nowPlayingMonitor.start() }
     LifecycleEventEffect(Lifecycle.Event.ON_STOP) { nowPlayingMonitor.stop() }
-    DisposableEffect(nowPlayingMonitor) { onDispose { nowPlayingMonitor.stop() } }
+    // Each composition makes its own monitor, and each owns a thread: close() stops listening and ends it.
+    DisposableEffect(nowPlayingMonitor) { onDispose { nowPlayingMonitor.close() } }
 
     // Cheap when nothing was installed, removed or updated, so installs and uninstalls still show up on return.
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {

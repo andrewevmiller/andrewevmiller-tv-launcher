@@ -50,6 +50,26 @@ Compose in keyboard input mode through `LocalInputModeManager` before requesting
 
 ---
 
+## Follow-up: return to Home
+
+Owner measurement on the PF1 to PF6 build: each return from an app has a few slow frames (95th percentile
+42 to 65 ms, worst 150 ms), fewer on each repeat. Reading the return path found nothing heavy in
+`onNewIntent` or `onResume`, so the likely cause is Android dropping the launcher's graphics caches while
+another app is in front. Not proven; a Perfetto trace of one return, and the `gfxinfo` counters (Slow UI
+thread, Slow issue draw commands, Slow bitmap uploads, Missed Vsync), would say.
+
+**Now-playing hardening (done, building, not run on the TV).** The newer now-playing band did its work in
+`onStart`, on the main thread, on every return: media-session binder calls, pulling the full-size album art
+out of the session (again on every playback or metadata change), and an app label lookup. It now runs on its
+own background thread; art is extracted once per track and scaled to what the band draws (600x216 px, covering,
+never upscaled) into a hardware bitmap; a change is reported only when something the band shows changed;
+labels are cached; every callback is guarded so a dead session cannot crash the app; and it is closed in
+`onDestroy`. Checked with a Robolectric harness (outside the repo): `start()` returns in about 5 ms, five
+position ticks produce no report, pausing reuses the same art object, a new track gets new art, stop/start
+reports again, and no sessions reports null.
+
+---
+
 ## 1. Approach
 
 1. Measure first (PF0). Decide from numbers, not from this document.

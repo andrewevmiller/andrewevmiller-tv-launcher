@@ -1,8 +1,10 @@
 package com.andrewevmiller.tvlauncher.viewinglog
 
 import android.content.Context
+import android.util.Log
 import com.andrewevmiller.tvlauncher.settings.SettingsRepository
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -38,10 +40,12 @@ class ViewingLogService(
      */
     fun refresh() {
         scope.launch(Dispatchers.IO) {
-            lock.withLock {
-                if (!settings.settings.first().viewingLogEnabled) return@withLock
-                if (usageAccessGranted(context)) UsageSync(feed, store).run(clock())
-                state.value = store.read()
+            guarded("refresh") {
+                lock.withLock {
+                    if (!settings.settings.first().viewingLogEnabled) return@withLock
+                    if (usageAccessGranted(context)) UsageSync(feed, store).run(clock())
+                    state.value = store.read()
+                }
             }
         }
     }
@@ -49,10 +53,31 @@ class ViewingLogService(
     /** Inside the lock, so a sync that was already reading cannot publish the old sessions after the clear. */
     override fun clear() {
         scope.launch(Dispatchers.IO) {
-            lock.withLock {
-                store.write(emptyList())
-                state.value = emptyList()
+            guarded("clear") {
+                lock.withLock {
+                    store.write(emptyList())
+                    state.value = emptyList()
+                }
             }
         }
+    }
+
+    /**
+     * The log is a nicety: a failed usage query, a full disk or a platform quirk must never take the launcher down
+     * (the crash guard counts crashes and could hand Home back), so a failure is logged and the next refresh tries
+     * again. Cancellation still propagates.
+     */
+    private inline fun guarded(what: String, block: () -> Unit) {
+        try {
+            block()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (t: Throwable) {
+            Log.w(TAG, "viewing log $what failed", t)
+        }
+    }
+
+    private companion object {
+        const val TAG = "FieldViewingLog"
     }
 }
