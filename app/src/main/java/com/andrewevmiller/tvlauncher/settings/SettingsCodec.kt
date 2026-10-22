@@ -22,6 +22,7 @@ object SettingsCodec {
         screensaver: String?,
         dotGridAlpha: Float?,
         sleepMinutes: Int? = null,
+        viewingLogEnabled: Boolean? = null,
     ): LauncherSettings = LauncherSettings(
         darkMode = darkMode ?: defaults.darkMode,
         reducedMotion = reducedMotion ?: defaults.reducedMotion,
@@ -30,6 +31,7 @@ object SettingsCodec {
         screensaver = decodeScreensaver(screensaver),
         dotGridAlpha = clampDotGridAlpha(dotGridAlpha),
         sleepMinutes = SleepPresets.sanitize(sleepMinutes),
+        viewingLogEnabled = viewingLogEnabled ?: defaults.viewingLogEnabled,
     )
 
     fun encodeWaveform(w: Waveform): String = w.name

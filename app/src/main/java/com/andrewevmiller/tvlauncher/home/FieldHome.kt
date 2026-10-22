@@ -89,7 +89,11 @@ fun FieldHome(
     }
 
     // Cheap when nothing was installed, removed or updated, so installs and uninstalls still show up on return.
-    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { loader.refresh() }
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
+        loader.refresh()
+        // Copies new app usage into the viewing log (a no-op while the log is off or usage access is not granted).
+        container.viewingLog.refresh()
+    }
     LaunchedEffect(ui.message) {
         if (ui.message != null) {
             delay(4_000)

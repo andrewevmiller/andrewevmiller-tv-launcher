@@ -21,6 +21,7 @@ import com.andrewevmiller.tvlauncher.sound.DataStoreMotifOverrides
 import com.andrewevmiller.tvlauncher.sound.FieldSound
 import com.andrewevmiller.tvlauncher.sound.MotifOverrides
 import com.andrewevmiller.tvlauncher.sound.FieldSoundEngine
+import com.andrewevmiller.tvlauncher.viewinglog.ViewingLogService
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -80,6 +81,9 @@ class AppContainer(private val app: Application) : HomeDeps {
     val sleepTimer: SleepTimerController by lazy {
         SystemSleepTimer(app, endActions = { AndroidSleepEndActions(app, { sound }, { screensaver }) })
     }
+
+    /** The Viewing log: copies usage in when Home resumes, and holds the sessions the log screen shows. */
+    val viewingLog: ViewingLogService by lazy { ViewingLogService(app, settings, scope) }
 
     /** Lets the Oxyfield dream read the reduced-motion setting; it runs once at dream start, off no UI thread work. */
     fun installDreamHooks() {
