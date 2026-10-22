@@ -70,19 +70,19 @@ fun FeatureBand(feature: Feature, onOpen: () -> Unit, modifier: Modifier = Modif
             Column(Modifier.weight(1f)) {
                 Text(
                     "FEATURED · ${feature.app.label}".uppercase(),
-                    style = Field.type.label.copy(fontSize = 11.5.sp, lineHeight = 14.sp, letterSpacing = 0.08.em),
+                    style = Field.type.sectionLabel,
                     color = colors.muted,
                 )
                 Spacer(Modifier.height(4.dp))
                 Text(
                     feature.app.label,
-                    style = Field.type.heading.copy(fontSize = 24.sp, lineHeight = 28.sp),
+                    style = Field.type.bandTitle,
                     color = colors.ink, maxLines = 1,
                 )
                 Spacer(Modifier.height(4.dp))
                 Text(
                     feature.lastOpened?.let { "Last opened $it. Select to open it again." } ?: "Nothing opened yet. Select to launch it.",
-                    style = Field.type.body.copy(fontSize = 14.sp, lineHeight = 21.sp),
+                    style = Field.type.bodySmall,
                     color = colors.muted,
                     modifier = Modifier.width(320.dp),
                 )
@@ -102,7 +102,7 @@ private fun OpenButton(onClick: () -> Unit) {
     var focused by remember { mutableStateOf(false) }
     Text(
         "Open →",
-        style = Field.type.caption.copy(fontSize = 12.5.sp, lineHeight = 16.sp, letterSpacing = 0.06.em),
+        style = Field.type.cta,
         // The one place the accent fills: the focused CTA, with dark text on it.
         color = if (focused) colors.bg else colors.ink,
         modifier = Modifier

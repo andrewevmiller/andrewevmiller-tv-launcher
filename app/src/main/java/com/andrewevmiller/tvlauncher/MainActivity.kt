@@ -10,6 +10,13 @@ import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.addCallback
 import androidx.activity.compose.setContent
+import androidx.compose.ui.text.font.createFontFamilyResolver
+import androidx.lifecycle.lifecycleScope
+import com.andrewevmiller.tvlauncher.theme.Geist
+import com.andrewevmiller.tvlauncher.theme.PlexMono
+import com.andrewevmiller.tvlauncher.theme.PlexSerif
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -51,6 +58,7 @@ class MainActivity : ComponentActivity() {
     private var systemTiles by mutableStateOf<List<SystemTile>>(emptyList())
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        enableStrictModeInDebug()
         super.onCreate(savedInstanceState)
         // A launcher is the bottom of the stack; Back only leaves the drawer.
         onBackPressedDispatcher.addCallback(this) {
@@ -65,6 +73,7 @@ class MainActivity : ComponentActivity() {
                 chip = Chip.ALL
             }
         }
+        preloadFonts()
         sound = FieldSound(this)
         loader = AppLoader(this) {
             apps = it
@@ -80,6 +89,7 @@ class MainActivity : ComponentActivity() {
         } else null
         records = history.entries()
         systemTiles = buildSystemTiles()
+        dropWindowBackgroundAfterFirstFrame()
         setContent {
             FieldTheme {
               CompositionLocalProvider(LocalFieldSound provides sound) {
@@ -125,6 +135,53 @@ class MainActivity : ComponentActivity() {
                     },
                 )
               }
+            }
+        }
+    }
+
+    /**
+     * In a debuggable build, log (never crash on) disk and network work on the main thread and leaked
+     * closeables; look for the "StrictMode" tag in logcat. Release builds are untouched. AGP 8 generates
+     * no BuildConfig by default, so debuggability comes from the app's flags.
+     */
+    private fun enableStrictModeInDebug() {
+        if (applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE == 0) return
+        android.os.StrictMode.setThreadPolicy(
+            android.os.StrictMode.ThreadPolicy.Builder().detectDiskReads().detectDiskWrites().detectNetwork().penaltyLog().build(),
+        )
+        android.os.StrictMode.setVmPolicy(
+            android.os.StrictMode.VmPolicy.Builder().detectLeakedClosableObjects().detectLeakedSqlLiteObjects().penaltyLog().build(),
+        )
+    }
+
+    /**
+     * The theme's window background stops a flash before the first frame. Once Compose has drawn that frame
+     * its own root paints the same color over the whole screen, so the window's copy is a second full-screen
+     * fill on every frame for nothing: drop it.
+     */
+    private fun dropWindowBackgroundAfterFirstFrame() {
+        val view = window.decorView
+        view.viewTreeObserver.addOnDrawListener(object : android.view.ViewTreeObserver.OnDrawListener {
+            private var done = false
+            override fun onDraw() {
+                if (done) return
+                done = true
+                view.post {
+                    window.setBackgroundDrawable(null)
+                    view.viewTreeObserver.removeOnDrawListener(this)
+                }
+            }
+        })
+    }
+
+    /** Reads the font files on a background thread now, so the first frame doesn't wait for them on the main thread. */
+    private fun preloadFonts() {
+        val resolver = createFontFamilyResolver(this)
+        lifecycleScope.launch(Dispatchers.Default) {
+            runCatching {
+                resolver.preload(PlexSerif)
+                resolver.preload(Geist)
+                resolver.preload(PlexMono)
             }
         }
     }

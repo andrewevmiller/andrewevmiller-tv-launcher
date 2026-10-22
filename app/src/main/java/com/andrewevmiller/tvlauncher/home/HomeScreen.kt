@@ -117,8 +117,11 @@ fun HomeScreen(
     modifier: Modifier = Modifier,
 ) {
     val colors = Field.colors
-    val matches = { a: LauncherApp -> chip.category == null || a.category == chip.category }
-    val apps = if (drawer) allApps.filter(matches) else orderPinned(allApps, order, pinnedSet).filter(matches)
+    // Worked out only when an input changes, not on every recomposition (the lists are replaced, never edited).
+    val apps = remember(allApps, order, pinnedSet, chip, drawer) {
+        val matches = { a: LauncherApp -> chip.category == null || a.category == chip.category }
+        if (drawer) allApps.filter(matches) else orderPinned(allApps, order, pinnedSet).filter(matches)
+    }
     val requesters = remember { mutableMapOf<String, FocusRequester>() }
     val gesture = remember { OkGesture() }
     val listState = rememberLazyListState()
@@ -166,8 +169,10 @@ fun HomeScreen(
             scrollGuard.holding = false
         }
     }
-    val cells: List<Cell> = apps.map { Cell.App(it) } + if (drawer) emptyList() else listOf(Cell.All(allApps.size))
-    val gridRows = cells.chunked(COLUMNS)
+    val cells: List<Cell> = remember(apps, drawer, allApps.size) {
+        apps.map { Cell.App(it) } + if (drawer) emptyList() else listOf(Cell.All(allApps.size))
+    }
+    val gridRows = remember(cells) { cells.chunked(COLUMNS) }
     Box(modifier.fillMaxSize().background(colors.bg).dotGrid(colors.line)) {
         CompositionLocalProvider(LocalBringIntoViewSpec provides NoAutoScroll) {
         LazyColumn(
@@ -198,7 +203,7 @@ fun HomeScreen(
                 if (!drawer && apps.isEmpty() && chip == Chip.ALL) {
                     Text(
                         "Nothing is pinned yet. Open All apps, hold OK on an app and choose Pin to Home.",
-                        style = Field.type.body.copy(fontSize = 14.sp, lineHeight = 21.sp),
+                        style = Field.type.bodySmall,
                         color = colors.muted,
                         modifier = Modifier.padding(bottom = 14.dp),
                     )
@@ -304,7 +309,7 @@ private fun SectionHead(label: String) {
     Spacer(Modifier.height(10.dp))
     Text(
         label.uppercase(),
-        style = Field.type.label.copy(fontSize = 11.5.sp, lineHeight = 14.sp, letterSpacing = 0.08.em),
+        style = Field.type.sectionLabel,
         color = colors.muted,
     )
     Spacer(Modifier.height(8.dp))
@@ -315,7 +320,7 @@ private fun ChipPill(label: String, selected: Boolean, onClick: () -> Unit) {
     val colors = Field.colors
     Text(
         label,
-        style = Field.type.caption.copy(fontSize = 12.sp, lineHeight = 16.sp, letterSpacing = 0.04.em),
+        style = Field.type.chip,
         color = if (selected) colors.ink else colors.muted,
         modifier = Modifier
             .fieldTile(onClick, FieldShapes.chip)
@@ -398,12 +403,12 @@ private fun AppTile(
                 Column {
                     Text(
                         app.label,
-                        style = Field.type.bodyStrong.copy(fontSize = 14.sp, lineHeight = 17.sp),
+                        style = Field.type.tileTitle,
                         color = colors.ink, maxLines = 1, overflow = TextOverflow.Ellipsis,
                     )
                     Text(
                         app.category.name,
-                        style = Field.type.caption.copy(fontSize = 10.sp, lineHeight = 13.sp, letterSpacing = 0.06.em),
+                        style = Field.type.tileCaption,
                         color = colors.muted,
                     )
                 }
@@ -424,10 +429,10 @@ private fun AllAppsTile(count: Int, onClick: () -> Unit) {
     ) {
         Image(FieldIcons.Grid, null, Modifier.size(44.dp), colorFilter = ColorFilter.tint(colors.muted))
         Column {
-            Text("All apps", style = Field.type.bodyStrong.copy(fontSize = 14.sp, lineHeight = 17.sp), color = colors.ink)
+            Text("All apps", style = Field.type.tileTitle, color = colors.ink)
             Text(
                 "$count INSTALLED",
-                style = Field.type.caption.copy(fontSize = 10.sp, lineHeight = 13.sp, letterSpacing = 0.06.em),
+                style = Field.type.tileCaption,
                 color = colors.muted,
             )
         }
@@ -443,7 +448,7 @@ private fun SystemTileView(tile: SystemTile) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Image(tile.icon, null, Modifier.size(22.dp), colorFilter = ColorFilter.tint(colors.muted))
-        Text(tile.label, style = Field.type.bodyStrong.copy(fontSize = 13.sp, lineHeight = 16.sp), color = colors.ink, maxLines = 2)
+        Text(tile.label, style = Field.type.systemLabel, color = colors.ink, maxLines = 2)
     }
 }
 

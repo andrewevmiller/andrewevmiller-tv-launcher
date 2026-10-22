@@ -39,7 +39,7 @@ fun ClockHeader(title: String = "Home") {
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.Bottom,
     ) {
-        Text(title, style = Field.type.title.copy(fontSize = 30.sp, lineHeight = 32.sp), color = Field.colors.ink)
-        Text(now.format(formatter), style = Field.type.label.copy(fontSize = 13.sp), color = Field.colors.muted)
+        Text(title, style = Field.type.pageTitle, color = Field.colors.ink)
+        Text(now.format(formatter), style = Field.type.clock, color = Field.colors.muted)
     }
 }
