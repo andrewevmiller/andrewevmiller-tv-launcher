@@ -152,6 +152,21 @@ class MarginNoteRulesTest {
     }
 
     @Test
+    fun whileEditingASpaceAtTheEndIsKept() {
+        // Trimming here would eat the space the owner has just typed.
+        assertEquals("finish ", MarginNoteRules.limitWhileEditing("finish "))
+        assertEquals("   ", MarginNoteRules.limitWhileEditing("   "))
+    }
+
+    @Test
+    fun whileEditingControlCharactersAreStrippedAndTheLengthClamped() {
+        assertEquals("ab", MarginNoteRules.limitWhileEditing("a\tb"))
+        assertEquals(repeat("a", 80), MarginNoteRules.limitWhileEditing(repeat("a", 85)))
+        val emoji = "\uD83D\uDE00"
+        assertEquals(repeat(emoji, 80), MarginNoteRules.limitWhileEditing(repeat(emoji, 81)))
+    }
+
+    @Test
     fun aSanitisedNoteNeverExceedsTheLimit() {
         val sanitised = MarginNoteRules.sanitize(repeat("x y\t", 100))
         assertTrue(sanitised.codePointCount(0, sanitised.length) <= MarginNoteRules.MAX_LENGTH)

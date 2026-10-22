@@ -132,6 +132,8 @@ fun HomeScreen(
     screensaver: (@Composable () -> Unit)? = null,
     /** The Tools row (Sleep timer tile and its picker), under "Inputs & system". Null hides it. */
     tools: (@Composable () -> Unit)? = null,
+    /** The margin note line, between the header and the feature band (Home only). Null hides it. */
+    note: (@Composable () -> Unit)? = null,
     /** Scales the dot grid (Settings → Appearance), because panels crush near-black. */
     dotAlpha: Float = 1f,
 ) {
@@ -163,7 +165,7 @@ fun HomeScreen(
     val density = LocalDensity.current
     // Rows in list order, so a row that is off screen can be scrolled to by position.
     val itemKeys = listOfNotNull(
-        "header", "band".takeIf { (features.isNotEmpty() || nowPlaying != null) && !drawer }, "chips", "apps-head", "apps-grid",
+        "header", "note".takeIf { !drawer && note != null }, "band".takeIf { (features.isNotEmpty() || nowPlaying != null) && !drawer }, "chips", "apps-head", "apps-grid",
         "recent".takeIf { !drawer && recent.isNotEmpty() },
         "screensaver".takeIf { !drawer && screensaver != null },
         "system".takeIf { !drawer && systemTiles.isNotEmpty() },
@@ -236,6 +238,14 @@ fun HomeScreen(
             item("header") {
                 ClockHeader(if (drawer) "All apps" else "Home", onOpenSettings = onOpenSettings)
                 Spacer(Modifier.height(18.dp))
+            }
+            if (!drawer && note != null) {
+                item("note") {
+                    // The top of the page: landing on the note shows the header above it, like the band.
+                    Column(toTop) {
+                        CompositionLocalProvider(LocalSoundRow provides 0) { note() }
+                    }
+                }
             }
             if ((features.isNotEmpty() || nowPlaying != null) && !drawer) {
                 item("band") {

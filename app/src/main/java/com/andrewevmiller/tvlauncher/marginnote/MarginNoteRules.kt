@@ -32,6 +32,21 @@ object MarginNoteRules {
     }
 
     /**
+     * What the editor keeps while the owner types: control characters stripped and clamped to [MAX_LENGTH],
+     * but not trimmed, so a space typed in the middle of a word or at the end survives until Done.
+     */
+    fun limitWhileEditing(raw: String): String {
+        val stripped = StringBuilder(raw.length)
+        var i = 0
+        while (i < raw.length) {
+            val cp = raw.codePointAt(i)
+            if (!isStrippable(cp)) stripped.appendCodePoint(cp)
+            i += Character.charCount(cp)
+        }
+        return clamp(stripped.toString())
+    }
+
+    /**
      * The note Home shows: the stored note when it is non-empty after sanitising, otherwise the
      * secure-setting note (`field_launcher_note`, set from a laptop with scripts/note.sh), otherwise "".
      */
