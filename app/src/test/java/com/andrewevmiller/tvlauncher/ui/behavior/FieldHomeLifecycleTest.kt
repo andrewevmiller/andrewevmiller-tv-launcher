@@ -3,7 +3,6 @@ package com.andrewevmiller.tvlauncher.ui.behavior
 import androidx.activity.ComponentActivity
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.test.core.app.ApplicationProvider
@@ -38,13 +37,14 @@ class FieldHomeLifecycleTest {
     @Test
     fun leavingHomeEndsTheNowPlayingThread() {
         val container = ApplicationProvider.getApplicationContext<FieldApplication>().container
+        val ui = HomeUiState()
         val before = nowPlayingThreads()
 
         rule.setContentWithSound(sound) {
             if (homeShown) {
                 FieldHome(
                     container = container,
-                    ui = remember { HomeUiState() },
+                    ui = ui,
                     settings = LauncherSettings(),
                     onOpenSettings = {},
                 )
