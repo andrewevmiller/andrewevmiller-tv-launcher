@@ -519,12 +519,12 @@ h2 { font-family: var(--serif); font-weight: 700; letter-spacing: -0.01em; font-
   const AGENTS = [
     { id: 'I', name: 'Integrator', wave: 'Wave 1 + 3', desc: 'Theme tokens, fonts, focus style, dot grid, home frame and clock. Wires every row in at the end, and owns the shared contracts, the sleep timer\'s included.' },
     { id: 'A', name: 'Scripts & safety', wave: 'Wave 1', desc: 'probe, deploy and rescue scripts, crash fallback to the stock launcher. No UI of its own.' },
-    { id: 'B', name: 'Home core', wave: 'Wave 2', desc: 'Installed-apps repository, app grid and all-apps drawer, system tiles, pin / reorder / hide stored on the TV. Also the Tools row tiles.' },
+    { id: 'B', name: 'Home core', wave: 'Wave 2', desc: 'Installed-apps repository, app grid and all-apps drawer, system tiles, pin / reorder / hide stored on the TV. Also the Tools row tiles for the Viewing log and the Readout (the Sleep timer tile belongs to the sleep timer).' },
     { id: 'C', name: 'Components', wave: 'Wave 2', desc: 'Chips, feature band, timeline entries, tilted gallery tiles and the line-icon set.' },
     { id: 'D', name: 'Ambient', wave: 'Wave 2', desc: 'Oxyfield screensaver as a DreamService, frame-rate cap, reduced-motion still frame. Also the sleep timer\'s dim screen: the picture fades to near black over 45 s, then holds one still frame.' },
     { id: 'E', name: 'Watch Next spike', wave: 'Wave 2', desc: 'Tests whether the Hisense lets us read other apps\' rows, and whether we can start Google\'s photo screensaver on demand. Also, for the sleep timer, how to pause another app\'s media and whether a dim screen can be shown from the background.' },
     { id: 'F', name: 'Sound', wave: 'Wave 2', desc: 'Interface sound set rendered from a script, SoundPool playback, repeat throttling, on/off setting. No UI region. Also the sleep timer\'s closing sound.' },
-    { id: 'S', name: 'Sleep timer', wave: 'Wave 4', desc: 'Presets, deadline and countdown rules, the pause ladder and the end sequence: pause the media, play the closing sound, show the dim screen. Fired by an alarm so it works while another app is in front. The tile and picker are its only UI.' }
+    { id: 'S', name: 'Sleep timer', wave: 'Wave 4', desc: 'Presets, deadline and countdown rules, the pause ladder and the end sequence: pause the media, play the closing sound, show the dim screen. Fired by an alarm so it works while another app is in front. Its UI is the Sleep timer tile in the Tools row (Off, or Sleep · 42 min counting down), the inline picker under it (Off, 15 to 120 min, plus +15 min and Cancel while it runs) and a default length in Settings.' }
   ];
 
   /* view: 'home', 'drawer', 'readout', 'log' or 'settings'. r/c index into `rows` (visual rows), so a grid of N rows is N entries; code that
