@@ -126,9 +126,12 @@ class AppLoader(context: Context, private val publish: (List<LauncherApp>) -> Un
             val started = SystemClock.elapsedRealtime()
             val snapshot = runCatching { SnapshotCodec.decode(snapshotFile.readBytes()) }.getOrNull() ?: return
             last = ScanRecord(snapshot.signature, snapshot.savedAt)
+            // Home's artwork is what the first screen is waiting for, so decode it on several threads at once.
+            val cachedArt = decodeCachedInParallel(snapshot.entries.filter { it.pinned && it.art != ArtKind.NONE })
             val restoredHeld = LinkedHashMap<String, Held>()
             for (e in snapshot.entries) {
-                restoredHeld[e.packageName] = Held(e, appFor(e, if (e.pinned) artFor(e) else null))
+                val art = if (!e.pinned) null else cachedArt[e.packageName]?.asImageBitmap() ?: artFor(e)
+                restoredHeld[e.packageName] = Held(e, appFor(e, art))
             }
             held = restoredHeld
             publishNow()
@@ -260,6 +263,46 @@ class AppLoader(context: Context, private val publish: (List<LauncherApp>) -> Un
     }
 
     /**
+     * Decodes the cached files for [entries] on a few short-lived threads and returns what decoded, by package.
+     * Anything missing or unreadable is simply absent: the caller falls back to [artFor], one at a time.
+     * The first few bitmaps go straight to GPU memory, as many as the budget allows.
+     */
+    private fun decodeCachedInParallel(entries: List<SnapshotEntry>): Map<String, Bitmap> {
+        if (entries.isEmpty()) return emptyMap()
+        Trace.beginSection("AppLoader.decodeCachedInParallel")
+        val pool = Executors.newFixedThreadPool(DECODE_THREADS) { task ->
+            // Normal priority on purpose: this runs while the first frame is being built, and
+            // background-priority threads would get little of the CPU then.
+            Thread({
+                Process.setThreadPriority(Process.THREAD_PRIORITY_DEFAULT)
+                task.run()
+            }, "app-art-decode")
+        }
+        try {
+            val gpuSlots = ArtLimits.gpuSlots(hardwareCount)
+            val futures = entries.mapIndexed { i, e ->
+                pool.submit<Bitmap?> {
+                    val file = File(artDir, ArtFiles.name(e.packageName, e.lastUpdateTime))
+                    if (!file.exists()) return@submit null
+                    val options = BitmapFactory.Options()
+                    if (i < gpuSlots) options.inPreferredConfig = Bitmap.Config.HARDWARE
+                    runCatching { BitmapFactory.decodeFile(file.path, options) }.getOrNull()
+                }
+            }
+            val out = HashMap<String, Bitmap>()
+            entries.forEachIndexed { i, e ->
+                val bitmap = runCatching { futures[i].get() }.getOrNull() ?: return@forEachIndexed
+                if (bitmap.config == Bitmap.Config.HARDWARE) hardwareCount++
+                out[e.packageName] = bitmap
+            }
+            return out
+        } finally {
+            pool.shutdownNow()
+            Trace.endSection()
+        }
+    }
+
+    /**
      * The cached file if there is one, else render it from the package again (and cache that).
      * The result is a hardware bitmap when the budget allows, with no software copy kept.
      */
@@ -360,5 +403,6 @@ class AppLoader(context: Context, private val publish: (List<LauncherApp>) -> Un
 
     private companion object {
         const val TAG = "AppLoader"
+        const val DECODE_THREADS = 3
     }
 }
