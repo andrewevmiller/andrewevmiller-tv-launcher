@@ -8,7 +8,8 @@
   them as an accessibility service, which Android keeps switched off until you enable it. This does
   that over adb. The service reads nothing from the screen; it only sees key presses and acts on the
   ones listed in RemoteKeys (app/.../remote/RemoteKeyService.kt). `disable` puts every button back
-  exactly as it was. An update keeps the setting; an uninstall removes it, so run `enable` again.
+  exactly as it was. Installing a new build switches the service off again (as does an
+  uninstall), so run `enable` again after every install.
 
   Out of the box: Settings button -> notifications panel (with an Open Settings shortcut),
   Tuner button -> Stremio.

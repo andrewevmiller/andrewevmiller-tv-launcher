@@ -5,8 +5,8 @@
 .DESCRIPTION
   Android only lets an app read what other apps are playing if it is a notification listener, and the
   TV has no settings screen to grant that. This grants it over adb. The launcher never reads a
-  notification; the listener exists only to unlock media sessions. Updates keep the grant; an
-  uninstall removes it, so run `enable` again after reinstalling.
+  notification; the listener exists only to unlock media sessions. Installing a new build
+  switches it off again (as does an uninstall), so run `enable` again after every install.
 
 .EXAMPLE
   ./tools/now-playing.ps1 enable
