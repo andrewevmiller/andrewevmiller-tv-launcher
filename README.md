@@ -11,6 +11,8 @@ soft-purple accent. D-pad first, with a small generative sound system and two sc
 - **Sound:** near-silent navigation ticks; a voiced select/back; a short per-app launch motif generated from
   the app's package name. Seven waveforms, chosen in Settings.
 - **Screensavers:** our Oxyfield dot field, or Google TV's own ambient mode (your Google Photos albums).
+- **Sleep timer:** pick a length; when it runs out the launcher pauses what is playing, plays a short closing
+  sound and fades the picture to a dark dot field with a faint clock. It does not turn the TV off.
 - **Safety:** one script installs it as Home, one restores your previous home screen, and two crashes in a
   minute hand Home back automatically.
 
@@ -63,18 +65,57 @@ the next time you open it by hand. Run `./scripts/deploy.sh` to make it Home aga
 - **Home button** returns to Home from anywhere and resets it (filter cleared, Recent collapsed, focus on your apps).
 - **Menu key** on the remote, or the LAUNCHER SETTINGS chip top right, opens launcher Settings.
 - **Settings:** Appearance (dark/light, reduced motion, dot-grid brightness), Sound (on/off, waveform, per-app
-  motif re-roll and mute), Screensaver (Oxyfield / Google Photos, Start now), About. Every change applies
-  immediately.
+  motif re-roll and mute), Screensaver (Oxyfield / Google Photos, Start now), Sleep (default length), About.
+  Every change applies immediately.
 - **Sounds** follow the system "sound effects" setting as well as the launcher's own toggle.
 - **Screensaver tiles** on Home start Google Photos' ambient mode or Oxyfield right now. If the TV refuses an
   on-demand start, you get a short message and the screensaver runs when the TV idles.
 
-## Two on-device questions the spike answers
+### Sleep timer
+
+The **Sleep timer** tile is in the **Tools** row at the bottom of Home. Its caption reads "Off", or
+"Sleep · 42 min" counting down.
+
+- **OK on the tile** opens a row of lengths under it: Off, 15, 30, 45, 60, 90, 120 minutes. Focus starts on your
+  default length (Settings → Sleep → Default length; 45 until you change it). Pick one to start the timer.
+- **While it runs** the same row also offers **+15 min** (never more than 240 min from now) and **Cancel**. Back
+  closes the row.
+- **Key presses do not cancel the timer.** Use the tile.
+- **When it runs out,** with whatever app you were in still in front:
+  1. the launcher pauses the media (a pause key, then a retry, then audio focus; it checks that the audio stopped);
+  2. it plays a short descending closing sound (it follows the interface-sounds switch and the system
+     sound-effects setting);
+  3. it fades the picture to a near-black Oxyfield dot field over 45 s and holds one still frame, with a faint clock
+     to the minute (no seconds). Any key wakes it; the media stays paused.
+  If the TV is already off when the time comes, nothing happens.
+- **What it does not do:** it does not power the TV off (the launcher has no permission for that), and an LCD
+  backlight stays on behind the dark picture. Real power-off stays with the TV's own "turn off after" setting.
+  Our own dim screen also lets go by itself after 30 minutes.
+- **It survives the launcher being killed** while another app is in front (it is an Android alarm). A reboot or a
+  force-stop cancels the alarm; the launcher re-arms a timer that is still in the future the next time it starts,
+  which is at boot because it is Home. A reinstall (`deploy.sh`) may cancel one too, so install while no timer is running.
+- **Pausing depends on the app.** Some apps ignore a pause key from outside. Which method works best on this TV, and
+  whether the dim screen can start over another app without an extra permission, is what the spike answers (below).
+- **If it did not behave,** the log of the last run: `adb logcat -s FieldSleep`, or on a debug build
+  `adb shell run-as com.andrewevmiller.tvlauncher cat shared_prefs/field_sleep.xml`.
+
+The normal Oxyfield screensaver clock also shows seconds now.
+
+## Three on-device questions the spike answers
 
 `spike/` is a separate small app that checks (1) whether the TV lets a third-party app read other apps'
-"continue watching" rows, and (2) which method can start the screensaver on demand. Run it once; the steps and a
-decision table are in [`spike/README.md`](spike/README.md). Until then Recent and the feature band use the
-launcher's own launch history.
+"continue watching" rows, (2) which method can start the screensaver on demand, and (3) for the sleep timer, which
+method pauses another app's media and whether a dim screen can be shown from the background. Run it once; the steps
+and decision tables are in [`spike/README.md`](spike/README.md) (the sleep timer is section 6). Until then Recent
+and the feature band use the launcher's own launch history, and the sleep timer tries its default order.
+
+After the sleep-timer run, set `SleepConfig.PROVEN_PAUSE_RUNG` and `PROVEN_DIM_STRATEGY` in
+`sleep/SleepConfig.kt` to the winners and rebuild. If the spike says the dim screen cannot start from the
+background without it, grant the overlay appop once (and add it to `deploy.sh`):
+
+```bash
+adb shell appops set com.andrewevmiller.tvlauncher SYSTEM_ALERT_WINDOW allow
+```
 
 ## Developing
 
@@ -98,6 +139,11 @@ Things worth tuning by eye and ear on the TV:
 | First-tick latency after idle | `TAIL_MS` in `sound/FieldSoundEngine.kt` |
 | Dot-grid visibility | Settings → Appearance → Dot-grid brightness |
 | Banner sharpness | `BANNER_WIDTH_PX` / `BANNER_HEIGHT_PX` in `home/data/ArtworkLoader.kt` |
+| Sleep screen: faintest dots, fade length | `FLOOR` (0.05), `FADE_MILLIS` (45 s) in `ambient/SleepDimMath.kt` |
+| Sleep screen: how faint the clock is | `CLOCK_FLOOR` (0.15, about 35/255) in `ambient/SleepDimMath.kt` |
+| Closing sound loudness | `gain` in `FixedSounds.windDown()` (`sound/synth/FixedSounds.kt`) |
+| Pause method and dim method that go first | `PROVEN_PAUSE_RUNG`, `PROVEN_DIM_STRATEGY` in `sleep/SleepConfig.kt` |
+| Let the TV's own screen-off timeout run during the dim screen | `DIM_KEEPS_SCREEN_ON` (false) in `sleep/SleepConfig.kt` |
 
 ### Judging speed (release build)
 

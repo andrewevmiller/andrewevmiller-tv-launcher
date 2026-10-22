@@ -43,8 +43,11 @@ import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Text
 import com.andrewevmiller.tvlauncher.ambient.NoOpScreensaverController
 import com.andrewevmiller.tvlauncher.ambient.ScreensaverController
+import com.andrewevmiller.tvlauncher.home.SleepChip
+import com.andrewevmiller.tvlauncher.home.SleepToolsLogic
 import com.andrewevmiller.tvlauncher.home.data.AppsRepository
 import com.andrewevmiller.tvlauncher.home.data.FakeAppsRepository
+import com.andrewevmiller.tvlauncher.sleep.SleepPresets
 import com.andrewevmiller.tvlauncher.sound.FakeMotifOverrides
 import com.andrewevmiller.tvlauncher.sound.LocalFieldSound
 import com.andrewevmiller.tvlauncher.sound.LocalSoundRow
@@ -55,6 +58,7 @@ import com.andrewevmiller.tvlauncher.theme.Field
 import com.andrewevmiller.tvlauncher.theme.FieldDimens
 import com.andrewevmiller.tvlauncher.theme.FieldTheme
 import com.andrewevmiller.tvlauncher.theme.dotGrid
+import com.andrewevmiller.tvlauncher.ui.components.rowEdgeKeys
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -67,6 +71,7 @@ private const val ROW_SOUND = 1
 private const val ROW_SCREENSAVER = 2
 private const val ROW_ABOUT = 3
 private const val ROW_MOTIFS = 4
+private const val ROW_SLEEP = 5
 
 /** How long the "can't start on demand" message stays up. */
 private const val START_MESSAGE_MS = 6_000L
@@ -252,6 +257,14 @@ private fun SettingsContent(
                     startMessage = ScreensaverText.startNowMessage(screensaver.startNow())
                 },
             )
+            sleepSection(
+                current = current,
+                onChoose = { minutes ->
+                    confirm()
+                    edit { it.copy(sleepMinutes = SleepToolsLogic.clampMinutes(minutes)) }
+                },
+                onEdge = { sound.edge() },
+            )
             aboutSection(versionName)
             motifSection(motifRows, onReroll, onToggleMute, onReset)
         }
@@ -394,6 +407,34 @@ private fun LazyListScope.screensaverSection(
     if (startMessage != null) {
         rowItem("screensaver-message", ROW_SCREENSAVER) { Hint(startMessage) }
     }
+}
+
+/** Sleep: the default length the picker on Home opens on. A chip per preset; OK stores it. */
+private fun LazyListScope.sleepSection(
+    current: LauncherSettings,
+    onChoose: (Int) -> Unit,
+    onEdge: () -> Unit,
+) {
+    rowItem("sleep-header", ROW_SLEEP) { SectionHeader("Sleep") }
+    rowItem("sleep-label", ROW_SLEEP) { SubLabel("Default length · min") }
+    rowItem("sleep-chips", ROW_SLEEP) {
+        val selected = SleepToolsLogic.clampMinutes(current.sleepMinutes)
+        Row(
+            Modifier.padding(horizontal = RowInset + 16.dp, vertical = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            SleepPresets.minutes.forEachIndexed { index, minutes ->
+                SleepChip(
+                    label = minutes.toString(),
+                    selected = minutes == selected,
+                    onClick = { onChoose(minutes) },
+                    // The ends of the row are edges (the thud), not a leap to the waveform column above.
+                    modifier = Modifier.rowEdgeKeys(index, SleepPresets.minutes.size, onEdge),
+                )
+            }
+        }
+    }
+    rowItem("sleep-hint", ROW_SLEEP) { Hint("The sleep picker on Home opens on this length.") }
 }
 
 private fun LazyListScope.aboutSection(versionName: String?) {

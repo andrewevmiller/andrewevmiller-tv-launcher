@@ -47,5 +47,7 @@ object FieldIcons {
             "L2.6 8.58L4.34 5.57L6.77 6.77A7.4 7.4 0 0 1 10.08 4.85z",
     )
     val Wifi = icon("wifi", "M2.5 9a14 14 0 0 1 19 0M5.5 12.5a9.5 9.5 0 0 1 13 0M8.5 16a5 5 0 0 1 7 0", circle(12f, 19f, 0.8f))
+    /** Same path as `ui/icons/IconPaths.kt` "moon" and the mockup's `ICON.moon`. */
+    val Moon = icon("moon", "M20 14.2A8.5 8.5 0 1 1 9.8 4a8 8 0 0 0 10.2 10.2z")
     val Search = icon("search", circle(10.5f, 10.5f, 6f), "m15 15 5.5 5.5")
 }

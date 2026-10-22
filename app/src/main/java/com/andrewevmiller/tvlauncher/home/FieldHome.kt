@@ -81,6 +81,7 @@ fun FieldHome(
     var recentOpen by remember { mutableStateOf(false) }
     var editing by remember { mutableStateOf<String?>(null) }
     var menuApp by remember { mutableStateOf<LauncherApp?>(null) }
+    var sleepOpen by remember { mutableStateOf(false) }
 
     val open: (Intent) -> Unit = { intent ->
         sound.select()
@@ -105,7 +106,7 @@ fun FieldHome(
         }
     }
     // A launcher is the bottom of the stack: Back only closes the menu, ends a move, or leaves the drawer.
-    BackHandler(enabled = menuApp != null || editing != null || drawer) {
+    BackHandler(enabled = menuApp != null || editing != null || sleepOpen || drawer) {
         when {
             menuApp != null -> {
                 menuApp = null
@@ -114,6 +115,10 @@ fun FieldHome(
             editing != null -> {
                 editing = null
                 sound.select()
+            }
+            sleepOpen -> {
+                sleepOpen = false
+                sound.back()
             }
             else -> {
                 drawer = false
@@ -193,6 +198,7 @@ fun FieldHome(
         },
         onOpenDrawer = {
             sound.select()
+            sleepOpen = false
             drawer = true
             chip = Chip.ALL
         },
@@ -232,6 +238,14 @@ fun FieldHome(
                 settings = container.settings,
                 current = settings.screensaver,
                 onMessage = { ui.message = it },
+            )
+        },
+        tools = {
+            SleepTools(
+                controller = container.sleepTimer,
+                defaultMinutes = settings.sleepMinutes,
+                open = sleepOpen,
+                onOpenChange = { sleepOpen = it },
             )
         },
         dotAlpha = settings.dotGridAlpha,
