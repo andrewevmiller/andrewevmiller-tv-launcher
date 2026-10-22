@@ -73,14 +73,14 @@ fun PinMenu(app: LauncherApp, actions: List<MenuAction>, onPick: (MenuAction) ->
         ) {
             Text(
                 app.label.uppercase(),
-                style = Field.type.label.copy(fontSize = 11.5.sp, lineHeight = 14.sp, letterSpacing = 0.08.em),
+                style = Field.type.sectionLabel,
                 color = colors.muted, maxLines = 1,
             )
             Spacer(Modifier.height(10.dp))
             actions.forEachIndexed { i, action ->
                 Text(
                     action.label,
-                    style = Field.type.bodyStrong.copy(fontSize = 14.sp, lineHeight = 18.sp),
+                    style = Field.type.menuItem,
                     color = colors.ink,
                     modifier = Modifier
                         .fillMaxWidth()
