@@ -7,6 +7,9 @@
     <!-- Needed on API 30+ to enumerate other apps' launch activities. -->
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
 
+    <!-- Lets the quick settings show whether the TV is online. -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
     <application
         android:allowBackup="false"
         android:banner="@drawable/banner"
@@ -59,6 +62,20 @@
             <intent-filter>
                 <action android:name="android.service.notification.NotificationListenerService" />
             </intent-filter>
+        </service>
+
+        <!-- Takes over the Settings and Tuner remote buttons; off until enabled with tools/remote.ps1. -->
+        <service
+            android:name=".remote.RemoteKeyService"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/remote_key_service" />
         </service>
     </application>
 </manifest>
