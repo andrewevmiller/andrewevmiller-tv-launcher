@@ -16,6 +16,7 @@ current HOME: <previous-home>
 + ./gradlew installDebug (in the repo root)
 == 5. permission ==
 + adb shell pm grant com.andrewevmiller.tvlauncher android.permission.WRITE_SECURE_SETTINGS
++ adb shell appops set com.andrewevmiller.tvlauncher GET_USAGE_STATS allow
 == 6. previous home on the TV ==
 + adb shell settings put secure field_launcher_previous_home <previous-home>
 == 7. set HOME ==

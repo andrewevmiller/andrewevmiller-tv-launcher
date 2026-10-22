@@ -491,15 +491,15 @@ private fun LazyListScope.viewingLogSection(
     rowItem("viewing-log-hint", ROW_VIEWING_LOG) {
         Hint("Which app was in front, and for how long. Kept on this TV only.")
     }
+    // The armed prompt is the row's own label, so it is on screen while the row has focus.
     rowItem("viewing-log-clear", ROW_VIEWING_LOG) {
         ActionRow(
-            label = "Clear log",
+            label = if (clearArmed) "Press OK again to clear the log" else "Clear log",
             onClick = onClear,
             modifier = Modifier.onFocusChanged { if (!it.hasFocus) onDisarm() },
         )
     }
-    val message = if (clearArmed) "Press OK again to clear the log." else clearMessage
-    if (message != null) rowItem("viewing-log-message", ROW_VIEWING_LOG) { Hint(message) }
+    if (clearMessage != null) rowItem("viewing-log-message", ROW_VIEWING_LOG) { Hint(clearMessage) }
 }
 
 private fun LazyListScope.aboutSection(versionName: String?) {

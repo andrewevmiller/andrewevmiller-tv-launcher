@@ -84,6 +84,8 @@ test_deploy_dry_run() {
   local out="$WORK/dry.out" log="$WORK/dry.log"
   if ADB=/nonexistent/adb FAKE_ADB_LOG="$log" "$SCRIPTS_DIR/deploy.sh" --dry-run >"$out" 2>&1; then
     expect_file_eq "(b) deploy --dry-run output equals golden" "$GOLDEN/deploy-dry-run.txt" "$out"
+    expect_match "(b) deploy --dry-run grants usage access next to WRITE_SECURE_SETTINGS" \
+      'adb shell appops set com\.andrewevmiller\.tvlauncher GET_USAGE_STATS allow$' "$out"
   else
     fail "(b) deploy --dry-run exits 0 with no adb binary" "$(tail -n 3 "$out")"
   fi
