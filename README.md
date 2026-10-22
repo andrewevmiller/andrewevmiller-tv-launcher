@@ -53,7 +53,7 @@ The **Viewing log** needs usage access, the `GET_USAGE_STATS` appop, which Andro
 adb shell appops set com.andrewevmiller.tvlauncher GET_USAGE_STATS allow
 ```
 
-Without it the log shows an empty page with that command, and records nothing new. Nothing before the grant is recorded.
+Without it the log shows an empty page with that command, and records nothing new. The first time it runs after the grant it also copies in the last week or so of usage the TV itself kept, so the page is not empty on day one; anything older than that is not available.
 
 ### Getting your old home screen back
 
@@ -120,7 +120,7 @@ The chips switch between This week, Last week and Month. Back returns to Home wi
   Sessions of one app less than 2 minutes apart are joined, anything under 1 minute is dropped, and one session
   is capped at 8 hours. The launcher, system UI and the screensavers are not recorded.
 - **The honest limits:** this is time an app was in front, not time a video was playing. Music that plays in the
-  background shows only the time its app was on screen. Anything before the usage-access grant is not recorded.
+  background shows only the time its app was on screen. Usage from before the grant is only there if the TV still kept it (about a week), and the first sync copies that in; nothing older exists.
 - **Where it lives:** one file in the launcher's app storage on the TV, kept 90 days. Nothing leaves the TV.
   The log is on by default once usage access is granted. Settings → Viewing log turns it off (nothing is read or
   written while it is off), and Clear log (press OK twice) empties it.
