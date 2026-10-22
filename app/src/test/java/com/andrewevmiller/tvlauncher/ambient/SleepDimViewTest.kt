@@ -10,9 +10,11 @@ import android.view.View
 import android.view.ViewGroup
 import java.io.File
 import java.util.Calendar
+import java.util.TimeZone
 import java.util.concurrent.TimeUnit
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
@@ -71,10 +73,22 @@ class SleepDimViewTest {
             timeInMillis
         }
 
-    /** Delivers the system's minute tick to whatever the view registered. */
-    private fun SleepDimRig.minuteTick() {
-        activity.sendBroadcast(Intent(Intent.ACTION_TIME_TICK))
+    /** Delivers a system broadcast to whatever the view registered (and runs what is due on the main looper). */
+    private fun SleepDimRig.broadcast(action: String) {
+        activity.sendBroadcast(Intent(action))
         shadowOf(Looper.getMainLooper()).idle()
+    }
+
+    /** Delivers the system's minute tick. */
+    private fun SleepDimRig.minuteTick() = broadcast(Intent.ACTION_TIME_TICK)
+
+    /** What the clock should read for the rig's wall clock "now", in the JVM's default time zone. */
+    private fun SleepDimRig.expectedTimeText(withSeconds: Boolean = true): String {
+        val cal = Calendar.getInstance().apply { timeInMillis = wallMillis }
+        val hour = cal.get(Calendar.HOUR_OF_DAY)
+        val minute = cal.get(Calendar.MINUTE)
+        return if (withSeconds) OxyfieldClockText.time(hour, minute, cal.get(Calendar.SECOND), is24Hour)
+        else OxyfieldClockText.time(hour, minute, is24Hour)
     }
 
     private fun idleFor(millis: Long) = shadowOf(Looper.getMainLooper()).idleFor(millis, TimeUnit.MILLISECONDS)
@@ -206,25 +220,42 @@ class SleepDimViewTest {
     // ---- Reduced motion: a Handler repaints the clock once a second ----------------------------------------
 
     @Test
-    fun reducedMotionRepaintsTheClockOnceASecond() {
+    fun reducedMotionRepaintsRightAfterEveryWholeSecondAndNotBefore() {
         val rig = SleepDimRig(reducedMotion = true)
         rig.view.start() // the rig stopped it; the dream calls start() when dreaming begins
         shadowOf(Looper.getMainLooper()).idle()
         rig.render()
         assertEquals("19:42:07", rig.view.clockTimeText)
 
-        // Nothing repaints before the next whole second (the wall clock is 250 ms into one).
+        // The rig's wall clock moves with the looper and starts 250 ms into second 07, so the next whole second
+        // is 750 ms away and the timer is aimed a few ms (the slack) past it. A fixed one-second delay would
+        // fire at 1000 ms and fail the first check below.
+        val slack = OxyfieldClockText.TICK_SLACK_MILLIS
+        var elapsed = 0L
+        fun advanceTo(millis: Long) {
+            idleFor(millis - elapsed)
+            elapsed = millis
+        }
         rig.clearInvalidated()
-        idleFor(500L)
-        assertFalse("no repaint half a second in", rig.wasInvalidated())
+        advanceTo(749L)
+        assertFalse("no repaint 1 ms before the whole second", rig.wasInvalidated())
+        advanceTo(750L + slack + 1L)
+        assertTrue("repainted right after the whole second", rig.wasInvalidated())
+        rig.render()
+        assertEquals("19:42:08", rig.view.clockTimeText)
 
-        for (expected in listOf("19:42:08", "19:42:09", "19:42:10", "19:42:11")) {
+        // And again for the next several seconds: nothing until the boundary, a repaint just after it, and the
+        // text shown is always the rig clock's current second (no drift, no skipped or repeated second).
+        for (k in 1..5) {
+            val boundary = 750L + 1000L * k
             rig.clearInvalidated()
-            rig.wallMillis += 1000L
-            idleFor(1000L)
-            assertTrue("repainted for $expected", rig.wasInvalidated())
+            advanceTo(boundary - 1L)
+            assertFalse("no repaint 1 ms before second ${8 + k}", rig.wasInvalidated())
+            advanceTo(boundary + slack + 1L)
+            assertTrue("repaint right after second ${8 + k}", rig.wasInvalidated())
             rig.render()
-            assertEquals(expected, rig.view.clockTimeText)
+            assertEquals("19:42:%02d".format(8 + k), rig.view.clockTimeText)
+            assertEquals(rig.expectedTimeText(), rig.view.clockTimeText)
         }
     }
 
@@ -233,9 +264,9 @@ class SleepDimViewTest {
         val rig = SleepDimRig(reducedMotion = true)
         rig.view.start()
         val first = rig.render()
-        rig.wallMillis += 1000L
-        idleFor(1000L)
+        idleFor(1000L) // the rig clock moves on with the looper: 08.250
         val second = rig.render()
+        assertEquals("19:42:08", rig.view.clockTimeText)
         val changed = SleepDimRig.diffBounds(first, second)
         assertNotNull(changed)
         assertTrue("only the time text changes in reduced motion, changed ${changed!!.toList()}", inside(changed, timeRegion))
@@ -248,7 +279,6 @@ class SleepDimViewTest {
         idleFor(1000L)
         rig.view.stop()
         rig.clearInvalidated()
-        rig.wallMillis += 5000L
         idleFor(5000L)
         assertFalse("nothing repaints after stop()", rig.wasInvalidated())
 
@@ -266,9 +296,10 @@ class SleepDimViewTest {
         (rig.view.parent as ViewGroup).removeView(rig.view)
         shadowOf(Looper.getMainLooper()).idle()
         rig.clearInvalidated()
-        rig.wallMillis += 5000L
         idleFor(5000L)
         rig.minuteTick()
+        rig.broadcast(Intent.ACTION_TIME_CHANGED)
+        rig.broadcast(Intent.ACTION_TIMEZONE_CHANGED)
         assertFalse("a detached view never repaints", rig.wasInvalidated())
     }
 
@@ -527,7 +558,6 @@ class SleepDimViewTest {
         rig.view.start()
         rig.render()
         rig.clearInvalidated()
-        rig.wallMillis += 5000L
         idleFor(5000L)
         assertFalse("seconds are not shown on the sleep screen, so nothing ticks", rig.wasInvalidated())
     }
@@ -542,8 +572,7 @@ class SleepDimViewTest {
 
         rig.view.clearSleepDim()
         rig.clearInvalidated()
-        rig.wallMillis += 1000L
-        idleFor(1100L)
+        idleFor(1100L) // 07.250 -> 08.350 on the rig clock: the ticker fired at the whole second
         assertTrue(rig.wasInvalidated())
         rig.render()
         assertEquals("19:42:08", rig.view.clockTimeText)
@@ -560,8 +589,22 @@ class SleepDimViewTest {
         // Near-black overall, but not a flat fill: something is lit above the background.
         assertTrue("mean ${SleepDimRig.meanLevel(frame)}", SleepDimRig.meanLevel(frame) < 6.0)
         assertTrue("some dots above the background", SleepDimRig.countAbove(frame, bgLevel) > 100)
-        // Outside the clock (which is deliberately brighter than the dots, about 35) nothing is brighter than the floor allows.
-        assertEquals(0, SleepDimRig.countAbove(frame, 15, exclude = clockRegion))
+        // The clock is deliberately brighter than the dots (about 35 against 11 at most), so leave out just the two
+        // text lines, each at its measured bounds plus a small margin; a dot anywhere else is still checked.
+        val timeBox = SleepDimRig.brightBounds(frame, 20, within = timeRegion)
+        val dateBox = SleepDimRig.brightBounds(frame, 20, within = dateRegion)
+        assertNotNull("time text at the floor", timeBox)
+        assertNotNull("date text at the floor", dateBox)
+        val margin = 4
+        val excluded = listOf(timeBox!!, dateBox!!).map {
+            intArrayOf(it[0] - margin, it[1] - margin, it[2] + margin, it[3] + margin)
+        }
+        val excludedArea = excluded.sumOf { (it[2] - it[0]) * (it[3] - it[1]) }
+        val oldRectArea = (clockRegion[2] - clockRegion[0]) * (clockRegion[3] - clockRegion[1])
+        assertTrue("the excluded area ($excludedArea px) is well under the old clock rectangle ($oldRectArea px)", excludedArea < oldRectArea / 2)
+        assertEquals(0, SleepDimRig.countAbove(frame, 15, exclude = excluded))
+        // Without the exclusion the clock itself is of course found.
+        assertTrue(SleepDimRig.countAbove(frame, 15) > 300)
     }
 
     @Test
@@ -588,5 +631,156 @@ class SleepDimViewTest {
         assertTrue(rig.timeBrightness(frame) in 25..45)
         assertTrue(SleepDimRig.meanLevel(frame) < 6.0)
         assertEquals("19:42", rig.view.clockTimeText)
+    }
+
+    // ---- Motion mode: the Choreographer frame loop (started for real, frames run by the looper) ----------------
+    //
+    // Robolectric draws every frame a running loop invalidates, so these tests only let the loop run for a few frames
+    // of looper time. The 45 s fade is jumped by hand (advanceTo); the loop's own next frame then sees it settled.
+
+    /** The loop is running, the fade is over (by hand), and one real frame has stopped the loop as it settles. */
+    private fun SleepDimRig.settleWhileTheLoopRuns() {
+        view.start()
+        view.startSleepDim(startMillis)
+        advanceTo(45_000L)
+        assertTrue("settled by hand", view.isSleepSettled)
+        idleFor(200L) // the loop's next real frame finds the fade settled and stops itself
+    }
+
+    @Test
+    fun theFrameLoopRepaintsWhileStartedAndStopsWithStop() {
+        val rig = SleepDimRig()
+        // (Robolectric's fake vsync advances the clock for every frame the loop re-posts, so a live loop cannot be run
+        // for a stretch of looper time; the settle tests below run exactly one real frame instead.)
+        rig.clearInvalidated()
+        rig.view.start()
+        assertTrue("start() repaints at once", rig.wasInvalidated())
+
+        rig.view.stop()
+        rig.clearInvalidated()
+        idleFor(2000L)
+        assertFalse("and stops with stop()", rig.wasInvalidated())
+    }
+
+    @Test
+    fun theFrameLoopStopsOnceTheFadeSettlesAndAMinuteTickRepaintsWithoutRestartingIt() {
+        val rig = SleepDimRig()
+        rig.settleWhileTheLoopRuns()
+        rig.render()
+
+        // Settled: the loop has stopped by itself, so nothing repaints, however long it is left.
+        rig.clearInvalidated()
+        idleFor(5000L)
+        assertFalse("no frames once settled", rig.wasInvalidated())
+
+        // The minute ticks: one repaint, and the loop stays stopped.
+        rig.wallMillis += 60_000L
+        rig.clearInvalidated()
+        rig.minuteTick()
+        assertTrue("the minute tick repaints a settled frame", rig.wasInvalidated())
+        rig.render()
+        assertEquals(rig.expectedTimeText(withSeconds = false), rig.view.clockTimeText)
+        rig.clearInvalidated()
+        idleFor(5000L)
+        assertFalse("the tick must not restart the loop", rig.wasInvalidated())
+        assertTrue(rig.view.isSleepSettled)
+    }
+
+    @Test
+    fun startingAgainAfterTheFadeSettledOnlyRepaintsOnce() {
+        val rig = SleepDimRig()
+        rig.settleWhileTheLoopRuns()
+        rig.clearInvalidated()
+        idleFor(2000L)
+        assertFalse(rig.wasInvalidated())
+
+        // The host calls start() again (e.g. the window comes back): a settled frame is repainted once, not animated.
+        rig.view.start()
+        assertTrue("start() repaints the settled frame", rig.wasInvalidated())
+        rig.clearInvalidated()
+        idleFor(2000L)
+        assertFalse("but does not start the loop", rig.wasInvalidated())
+        assertTrue(rig.view.isSleepSettled)
+    }
+
+    @Test
+    fun leavingSleepModeBringsTheFrameLoopAndTheSecondsBack() {
+        val rig = SleepDimRig()
+        rig.settleWhileTheLoopRuns()
+        rig.render()
+        assertEquals("the sleep clock has no seconds", 5, rig.view.clockTimeText.length)
+
+        rig.view.clearSleepDim()
+        assertFalse(rig.view.isSleepDimming)
+        assertFalse(rig.view.isSleepSettled)
+        rig.clearInvalidated()
+        rig.view.start() // as the doc says: start() again to animate after a settled fade
+        assertTrue("start() repaints at once and the loop is armed", rig.wasInvalidated())
+        rig.view.stop() // render() idles the looper, which would chase a live loop's frames for ever
+        val frame = rig.render()
+        assertEquals(rig.palette.bg, frame.getPixel(3, 3))
+        assertTrue("full ink again", rig.timeBrightness(frame) >= 220)
+        assertEquals("and the seconds are back", rig.expectedTimeText(), rig.view.clockTimeText)
+        assertEquals(8, rig.view.clockTimeText.length)
+        rig.view.stop()
+    }
+
+    // ---- System time changes: the cached clock text is rebuilt ---------------------------------------------
+
+    @Test
+    fun aTimeChangeRepaintsAStillScreenWithTheNewTime() {
+        val rig = SleepDimRig()
+        rig.view.startSleepDim(rig.startMillis)
+        rig.advanceTo(60_000L)
+        rig.render()
+        assertEquals("19:42", rig.view.clockTimeText)
+
+        // The user sets the clock three hours on. The frame loop is stopped, so only the broadcast can repaint.
+        rig.wallMillis += 3L * 60L * 60L * 1000L
+        rig.clearInvalidated()
+        rig.broadcast(Intent.ACTION_TIME_CHANGED)
+        assertTrue("ACTION_TIME_CHANGED must repaint a settled frame", rig.wasInvalidated())
+        rig.render()
+        assertEquals("22:42", rig.view.clockTimeText)
+    }
+
+    @Test
+    fun aTimeZoneChangeRebuildsTheClockTextEvenThoughTheInstantIsTheSame() {
+        val saved = TimeZone.getDefault()
+        try {
+            val rig = SleepDimRig()
+            rig.view.startSleepDim(rig.startMillis)
+            rig.advanceTo(60_000L)
+            rig.render()
+            val before = rig.view.clockTimeText
+            assertEquals("19:42", before)
+
+            val other = TimeZone.getTimeZone(if (saved.id == "Asia/Kolkata") "America/Los_Angeles" else "Asia/Kolkata")
+            TimeZone.setDefault(other)
+            rig.clearInvalidated()
+            rig.broadcast(Intent.ACTION_TIMEZONE_CHANGED)
+            assertTrue("ACTION_TIMEZONE_CHANGED must repaint a settled frame", rig.wasInvalidated())
+            rig.render()
+
+            val cal = Calendar.getInstance(other).apply { timeInMillis = rig.wallMillis }
+            val expected = OxyfieldClockText.time(cal.get(Calendar.HOUR_OF_DAY), cal.get(Calendar.MINUTE), true)
+            assertEquals("the clock reads the new zone", expected, rig.view.clockTimeText)
+            assertNotEquals("a different zone, a different hour", before, rig.view.clockTimeText)
+        } finally {
+            TimeZone.setDefault(saved)
+        }
+    }
+
+    @Test
+    fun aTimeChangeInReducedMotionShowsTheNewTimeAtTheNextSecond() {
+        val rig = SleepDimRig(reducedMotion = true)
+        rig.view.start()
+        rig.render()
+        rig.wallMillis = wallAt(8, 5, 30, 100)
+        rig.clearInvalidated()
+        rig.broadcast(Intent.ACTION_TIME_CHANGED)
+        assertTrue("repainted at once, not at the next tick", rig.wasInvalidated())
+        rig.render()
+        assertEquals("08:05:30", rig.view.clockTimeText)
     }
 }

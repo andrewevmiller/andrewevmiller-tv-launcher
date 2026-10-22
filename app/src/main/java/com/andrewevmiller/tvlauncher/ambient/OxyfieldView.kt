@@ -25,8 +25,12 @@ import kotlin.random.Random
  *
  * Animation runs off Choreographer and only invalidates at [OxyfieldSpec.MAX_FPS]; it stops when the view
  * is detached or its window is hidden. The clock text is rebuilt once per second, not per frame. With
- * [reducedMotion] it paints one still frame and never loops; the clock alone repaints, once a second from a
- * main-looper Handler (a ticking number is information, not animation, so it is allowed under reduced motion).
+ * [reducedMotion] it paints one still frame and never loops. The view is invalidated (the whole view; Android
+ * ignores a dirty rect since API 21) once a second from a main-looper Handler, and only the clock text visibly
+ * changes: the dots are redrawn from the stored still frame, so they come out identical.
+ *
+ * The seconds keep ticking under reduced motion on purpose. The owner asked for them, and Home's ClockHeader
+ * already ticks every second with no reduced-motion check, so a ticking clock is treated as information, not motion.
  *
  * Sleep mode ([startSleepDim]) is a pure addition: the whole picture fades to near-black over
  * [SleepDimMath.FADE_MILLIS], the clock fades to a faint floor ([SleepDimMath.CLOCK_FLOOR]) sooner and stays, and
@@ -126,7 +130,9 @@ class OxyfieldView(
     private val handler = Handler(Looper.getMainLooper())
 
     // Reduced motion, normal screensaver: there is no frame loop, so the seconds come from a Handler aimed at each
-    // whole second. It is not used on the sleep screen (minute text), and stop() and detach remove it.
+    // whole second. Each tick invalidates the whole view; the dots are drawn from the stored still frame and come out
+    // the same, so only the clock text visibly changes. It is not used on the sleep screen (minute text), and stop()
+    // and detach remove it.
     private var secondTickerEnabled = false
     private val secondTick = object : Runnable {
         override fun run() {
